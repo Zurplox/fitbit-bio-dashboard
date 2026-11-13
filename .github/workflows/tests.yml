@@ -1,0 +1,39 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  offline-suite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Unit suite (no network, no credentials)
+        run: python -m unittest discover -s tests -t . -v
+
+      - name: Frontend syntax
+        run: |
+          node --check assets/app.js
+          node --check assets/charts.js
+
+      - name: The demo vault must decrypt through the Python path
+        run: |
+          python demo_data.py
+          DASHBOARD_PASS=ci-only python encrypt_data.py
+          python - <<'PY'
+          import json, encrypt_data
+          envelope = json.load(open("data/biometrics.enc.json"))
+          payload = json.loads(encrypt_data.decrypt_payload(envelope, "ci-only"))
+          assert payload["schema"] == 2
+          assert "today" in payload and "data_quality" in payload
+          print("vault round-trip ok:", payload["today"]["recovery"]["score"])
+          PY

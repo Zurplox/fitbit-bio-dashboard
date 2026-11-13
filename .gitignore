@@ -1,0 +1,28 @@
+# The only plaintext copy of the dataset. Never commit this.
+data/biometrics.json
+data/cache/
+
+# Local OAuth artefacts
+.tokens.json
+google-health-token.json
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Reference clone used while porting (not part of the project)
+ref/
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Local preview captures
+shot-*.png
+screenshot.png
+.server.log
+.server.pid

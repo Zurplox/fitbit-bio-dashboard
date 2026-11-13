@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Meridian Air — Fitbit bio-intelligence</title>
+  <meta name="description" content="A private, end-to-end encrypted dashboard for Fitbit data via the Google Health API." />
+  <meta name="color-scheme" content="dark light" />
+  <link rel="stylesheet" href="assets/theme.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230a0d12'/%3E%3Cpath d='M6 20h5l3-8 4 12 3-7h5' stroke='%236ee7c7' stroke-width='2.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+</head>
+<body>
+
+  <!-- ================================================================ lock -->
+  <div id="lock" class="lock">
+    <div class="lock-panel">
+      <div class="brand" style="justify-content:center;margin-bottom:22px">
+        <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true">
+          <path d="M4 20h6l3-9 4 13 3-7h8" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <span class="brand-name">Meridian <span>Air</span></span>
+      </div>
+      <h1>The vault is locked</h1>
+      <p>
+        Your biometrics are stored as AES-256-GCM ciphertext. The key is derived here, in this
+        tab, from your passphrase — it is never sent anywhere.
+      </p>
+      <form id="lockForm" class="lock-form" autocomplete="off">
+        <label class="sr-only" for="lockInput">Passphrase</label>
+        <input id="lockInput" type="password" placeholder="Passphrase" autocomplete="current-password" />
+        <button class="btn btn-primary" type="submit">Unlock</button>
+      </form>
+      <p id="lockError" class="lock-error" role="status"></p>
+      <p id="lockHint" class="lock-hint">
+        PBKDF2-HMAC-SHA256 · 600,000 iterations · decrypted in memory only
+      </p>
+    </div>
+  </div>
+
+  <!-- ================================================================= app -->
+  <div id="app" hidden>
+    <header class="topbar">
+      <div class="brand">
+        <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true">
+          <path d="M4 20h6l3-9 4 13 3-7h8" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <span class="brand-name">Meridian <span>Air</span></span>
+      </div>
+
+      <nav class="nav" aria-label="Sections">
+        <a href="#today" aria-current="true">Today</a>
+        <a href="#sleep">Sleep</a>
+        <a href="#heart">Heart</a>
+        <a href="#load">Load</a>
+        <a href="#patterns">Patterns</a>
+        <a href="#coach">Coach</a>
+      </nav>
+
+      <div class="actions">
+        <span id="demoChip" class="chip demo" hidden><span class="dot"></span>Demo data</span>
+        <span id="liveChip" class="chip"><span class="dot"></span>--/-- live</span>
+        <button id="btnRefresh" class="btn" type="button" title="Re-read the published vault">Refresh</button>
+        <button id="btnTheme" class="icon-btn" type="button" aria-label="Switch to light theme" title="Theme">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <circle cx="12" cy="12" r="4.2" />
+            <path d="M12 2.6v2.2M12 19.2v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.6 12h2.2M19.2 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6" stroke-linecap="round" />
+          </svg>
+        </button>
+        <button id="btnPrint" class="icon-btn" type="button" aria-label="Print or export as PDF" title="Print">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <path d="M7 9V4h10v5M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2" stroke-linecap="round" stroke-linejoin="round" />
+            <rect x="7" y="14" width="10" height="6" rx="1" />
+          </svg>
+        </button>
+        <button id="btnLock" class="icon-btn" type="button" aria-label="Lock the vault and purge data" title="Lock">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <rect x="4.5" y="10.5" width="15" height="10" rx="2" />
+            <path d="M8.5 10.5V7.8a3.5 3.5 0 0 1 7 0v2.7" stroke-linecap="round" />
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="shell">
+      <div id="staleBanner" class="stale-banner" hidden></div>
+
+      <!-- ------------------------------------------------------------ hero -->
+      <section id="today" class="hero">
+        <div>
+          <div class="hero-kicker">
+            <span class="mono">Fitbit Air</span>
+            <span class="faint">·</span>
+            <span class="mono" id="metaSource">Google Health API</span>
+          </div>
+          <h1>
+            <span id="athleteName">Athlete</span>, here is<br />
+            your body <em>today</em>.
+          </h1>
+          <p class="hero-lede" id="heroHeadline"></p>
+          <p class="hero-lede" id="heroLede" style="margin-top:10px;font-size:14px;color:var(--faint)"></p>
+
+          <dl class="hero-meta">
+            <div><dt>Device</dt><dd id="metaDevice">--</dd></div>
+            <div><dt>Last sync</dt><dd id="metaSync">--</dd></div>
+            <div><dt>Window</dt><dd id="metaWindow">--</dd></div>
+          </dl>
+        </div>
+
+        <div class="ring-card">
+          <div class="ring">
+            <svg viewBox="0 0 120 120" role="img" aria-label="Recovery score">
+              <circle class="track" cx="60" cy="60" r="54" fill="none" stroke-width="7" />
+              <circle id="ringArc" class="progress" cx="60" cy="60" r="54" fill="none" stroke-width="7"
+                      stroke-dasharray="339" stroke-dashoffset="339" />
+            </svg>
+            <div class="ring-center">
+              <div class="ring-score"><span id="ringScore">--</span><small>%</small></div>
+              <div class="ring-label" id="ringBand"></div>
+              <div class="secondary" id="ringSub" style="margin-top:6px"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------------------------------------------------------- vitals -->
+      <section id="vitals">
+        <div class="section-head">
+          <h2>Last night</h2>
+          <span class="section-note">Every value below is measured by the device, or reads --</span>
+        </div>
+        <div class="grid grid-4">
+          <article class="card reveal">
+            <div class="card-head"><span class="card-title">Sleep</span></div>
+            <div class="primary-value" id="kpiSleep">--</div>
+            <div class="secondary" id="kpiSleepSub">--</div>
+            <div id="kpiSleepBand" style="margin-top:10px"></div>
+          </article>
+          <article class="card reveal">
+            <div class="card-head"><span class="card-title">Overnight HRV</span></div>
+            <div class="primary-value"><span id="kpiHrv">--</span><span class="unit">ms</span></div>
+            <div class="secondary" id="kpiHrvSub">--</div>
+            <div id="kpiHrvBand" style="margin-top:10px"></div>
+          </article>
+          <article class="card reveal">
+            <div class="card-head"><span class="card-title">Resting rate</span></div>
+            <div class="primary-value"><span id="kpiRhr">--</span><span class="unit">bpm</span></div>
+            <div class="secondary" id="kpiRhrSub">--</div>
+            <div id="kpiRhrBand" style="margin-top:10px"></div>
+          </article>
+          <article class="card reveal">
+            <div class="card-head"><span class="card-title">Blood oxygen</span></div>
+            <div class="primary-value" id="kpiSpo2">--</div>
+            <div class="secondary" id="kpiSpo2Sub">--</div>
+            <div id="kpiSpo2Band" style="margin-top:10px"></div>
+          </article>
+        </div>
+      </section>
+
+      <!-- ----------------------------------------------------------- sleep -->
+      <section id="sleep">
+        <div class="section-head">
+          <h2>Sleep architecture</h2>
+          <span class="section-note">Last 21 nights · from sleep stages reported by the device</span>
+        </div>
+
+        <div class="grid grid-2">
+          <article class="card reveal" style="grid-column:1 / -1">
+            <div class="card-head">
+              <span class="card-title">Nightly stages</span>
+              <span class="spacer"></span>
+              <span class="chip">hover to inspect</span>
+            </div>
+            <div class="chart-wrap">
+              <canvas id="sleepChart" height="210"></canvas>
+              <div id="sleepTooltip" class="tooltip"></div>
+            </div>
+            <div class="chart-legend">
+              <span><i style="background:var(--sleep)"></i>Deep</span>
+              <span><i style="background:var(--neutral)"></i>Light</span>
+              <span><i style="background:var(--hrv)"></i>REM</span>
+              <span><i style="background:var(--bad)"></i>Awake</span>
+            </div>
+          </article>
+
+          <article class="card reveal">
+            <div class="card-head"><span class="card-title">Last night</span></div>
+            <div class="primary-value"><span id="sleepScoreBig">--</span><span class="unit">/ 100</span></div>
+            <div class="secondary" id="sleepScoreBand">--</div>
+            <div class="stage-bars" style="margin-top:18px">
+              <div class="stage-row">
+                <span class="name">Deep</span>
+                <div class="track"><div class="fill" id="stageDeep"></div></div>
+                <span class="mins" id="stageDeepMins">--</span>
+              </div>
+              <div class="stage-row">
+                <span class="name">Light</span>
+                <div class="track"><div class="fill" id="stageLight"></div></div>
+                <span class="mins" id="stageLightMins">--</span>
+              </div>
+              <div class="stage-row">
+                <span class="name">REM</span>
+                <div class="track"><div class="fill" id="stageRem"></div></div>
+                <span class="mins" id="stageRemMins">--</span>
+              </div>
+              <div class="stage-row">
+                <span class="name">Awake</span>
+                <div class="track"><div class="fill" id="stageAwake"></div></div>
+                <span class="mins" id="stageAwakeMins">--</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="card reveal">
+            <div class="card-head"><span class="card-title">The night in clocks</span></div>
+            <div class="ask">
+              <div class="ask-row"><span class="k">Fell asleep</span><span class="v" id="sleepBed">--</span></div>
+              <div class="ask-row"><span class="k">Woke</span><span class="v" id="sleepWake">--</span></div>
+              <div class="ask-row"><span class="k">Efficiency</span><span class="v" id="sleepEfficiency">--</span></div>
+              <div class="ask-row"><span class="k">Need tonight</span><span class="v" id="sleepNeed">--</span></div>
+              <div class="ask-row"><span class="k">Accumulated debt</span><span class="v" id="sleepDebt">--</span></div>
+              <div class="ask-row"><span class="k">Bedtime target</span><span class="v" id="circadianTarget">--</span></div>
+            </div>
+            <p class="chart-hint" id="sleepNeedSource">--</p>
+          </article>
+
+          <article class="card reveal">
+            <div class="card-head">
+              <span class="card-title">Circadian timing</span>
+              <span class="spacer"></span>
+              <button class="info-btn" data-info="circadian-note" aria-expanded="false" aria-label="How this is measured">i</button>
+            </div>
+            <div class="ask">
+              <div class="ask-row"><span class="k">Median sleep onset</span><span class="v" id="circadianOnset">--</span></div>
+              <div class="ask-row"><span class="k">Night-to-night spread</span><span class="v" id="circadianSpread">--</span></div>
+              <div class="ask-row"><span class="k">Nights within 45 min</span><span class="v" id="circadianAlign">--</span></div>
+            </div>
+            <div class="disclosure" id="circadian-note">
+              Onsets are shifted onto an evening-anchored scale first, so a 12:40 AM bedtime reads
+              as late rather than as very early. The median and the spread come from your own
+              nights — this dashboard never assumes a bedtime.
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- ----------------------------------------------------------- heart -->
+      <section id="heart">
+        <div class="section-head">
+          <h2>Heart</h2>
+          <span class="section-note">Dashed line is your own 30-night median</span>
+        </div>
+
+        <div class="grid grid-2">
+          <article class="card reveal">
+            <div class="card-head"><span class="card-title">Overnight HRV</span><span class="spacer"></span><span class="mono">last 60 nights</span></div>
+            <div class="chart-wrap">
+              <canvas id="hrvChart" height="190"></canvas>
+              <div id="hrvTooltip" class="tooltip"></div>
+            </div>
+            <p class="chart-hint">Root mean square of successive differences (RMSSD), measured during sleep.</p>
+          </article>
+
+          <article class="card reveal">
+            <div class="card-head"><span class="card-title">Resting heart rate</span><span class="spacer"></span><span class="mono">last 60 days</span></div>
+            <div class="chart-wrap">
+              <canvas id="rhrChart" height="190"></canvas>
+              <div id="rhrTooltip" class="tooltip"></div>
+            </div>
+            <p class="chart-hint">The device's own daily resting estimate, read against your median.</p>
+          </article>
+
+          <article class="card reveal" style="grid-column:1 / -1">
+            <div class="card-head"><span class="card-title">Today's heart rate</span><span class="spacer"></span><span class="mono">hourly averages, last 24 h</span></div>
+            <div class="chart-wrap">
+              <canvas id="hrChart" height="150"></canvas>
+            </div>
+            <p class="chart-hint" id="hrEmpty" hidden>No intraday samples came back for this window.</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- ------------------------------------------------------------ load -->
+      <section id="load">
+        <div class="section-head">
+          <h2>Load &amp; movement</h2>
+          <span class="section-note">Acute against chronic training minutes, the ratio the research reads</span>
+        </div>
+
+        <div class="grid grid-2">
+          <article class="card reveal">
+            <div class="card-head">
+              <span class="card-title">Workload balance</span>
+              <span class="spacer"></span>
+              <button class="info-btn" data-info="acwr-note" aria-expanded="false" aria-label="What the ratio means">i</button>
+            </div>
+            <div class="dial-wrap">
+              <div class="dial">
+                <svg id="loadDial" viewBox="0 0 150 88" aria-hidden="true"></svg>
+                <div class="dial-value"><b id="loadScore">--</b><span>ratio</span></div>
+              </div>
+              <div>
+                <div id="loadBand"></div>
+                <p class="secondary" id="loadText" style="margin-top:10px"></p>
+                <p class="chart-hint" id="loadNote"></p>
+              </div>
+            </div>
+            <div class="disclosure" id="acwr-note">
+              Acute is the minutes you trained in the last 7 days. Chronic is the last 28 days
+              divided by four, so both sides are per-week. The ratio is their quotient: under 0.8
+              is detraining, 0.8-1.3 is the range the research supports, and above 1.5 is where
+              injury risk concentrates.
+            </div>
+          </article>
+
+          <article class="card reveal">
+            <div class="card-head"><span class="card-title">This week</span></div>
+            <div class="ask">
+              <div class="ask-row"><span class="k">Active minutes today</span><span class="v" id="activeToday">--</span></div>
+              <div class="ask-row"><span class="k">Active minutes this week</span><span class="v" id="activeWeek">--</span></div>
+              <div class="ask-row"><span class="k">Calories today</span><span class="v" id="caloriesToday">--</span></div>
+              <div class="ask-row"><span class="k">Calories, 7-day mean</span><span class="v" id="caloriesMean">--</span></div>
+              <div class="ask-row"><span class="k">Cardio fitness (VO2 max)</span><span class="v" id="vo2max">--</span></div>
+            </div>
+            <div style="margin-top:16px">
+              <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px">
+                <span>Against the 150-minute weekly floor</span><span id="activePct">--</span>
+              </div>
+              <div class="track" style="height:8px;border-radius:999px;background:var(--surface-2);overflow:hidden">
+                <div id="activeBar" class="fill" style="height:100%;width:0;border-radius:999px;background:var(--accent);transition:width 1s cubic-bezier(.22,1,.36,1)"></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="card reveal">
+            <div class="card-head"><span class="card-title">Steps</span><span class="spacer"></span><span class="mono">last 30 days</span></div>
+            <div class="primary-value"><span id="stepsBig">--</span><span class="unit" id="stepsGoal">today</span></div>
+            <div class="secondary" id="stepsMean">--</div>
+            <div class="chart-wrap" style="margin-top:12px">
+              <canvas id="stepsChart" height="175"></canvas>
+              <div id="stepsTooltip" class="tooltip"></div>
+            </div>
+          </article>
+
+          <article class="card reveal">
+            <div class="card-head"><span class="card-title">Training consistency</span><span class="spacer"></span><span class="mono">13 weeks</span></div>
+            <div id="heatmap" class="heatmap" role="img" aria-label="Training minutes per day for the last 13 weeks"></div>
+            <p class="chart-hint">A blank cell means no session was logged that day — not that the day was wasted.</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- --------------------------------------------------------- patterns -->
+      <section id="patterns">
+        <div class="section-head">
+          <h2>Patterns in your own data</h2>
+          <span class="section-note" id="patternNote">--</span>
+        </div>
+        <article class="card reveal">
+          <div class="card-head">
+            <span class="card-title">Correlations</span>
+            <span class="spacer"></span>
+            <button class="info-btn" data-info="corr-method" aria-expanded="false" aria-label="How to read a correlation">i</button>
+          </div>
+          <div id="patterns"></div>
+          <div class="disclosure" id="corr-method">
+            <strong>How to read this.</strong> <span id="patternMethod"></span> Every row is an
+            association across your own days, not a cause: the mechanism note explains why the two
+            might move together, and the direction shown is the one your data measured — including
+            when that contradicts what the research would expect.
+          </div>
+        </article>
+      </section>
+
+      <!-- ------------------------------------------------------------ coach -->
+      <section id="coach">
+        <div class="section-head">
+          <h2>What to do about it</h2>
+          <span class="section-note">Each card cites the study it came from and what that study does not settle</span>
+        </div>
+        <div id="coach" class="grid grid-2"></div>
+      </section>
+
+      <!-- ------------------------------------------------------- provenance -->
+      <section id="provenance-section">
+        <div class="section-head">
+          <h2>Where these numbers came from</h2>
+          <span class="section-note">A missing group is named rather than filled in</span>
+        </div>
+        <div id="provenance" class="provenance"></div>
+      </section>
+
+      <footer>
+        <span>Meridian Air · Fitbit data via Google Health API v4 · AES-256-GCM vault</span>
+        <span id="footerMeta">--</span>
+        <span>Synced <span id="footerSync">--</span> · <span id="footerTz">--</span></span>
+      </footer>
+    </main>
+  </div>
+
+  <script src="assets/charts.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

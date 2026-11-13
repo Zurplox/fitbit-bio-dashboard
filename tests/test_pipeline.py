@@ -1,0 +1,402 @@
+"""Offline tests: no network, no credentials, no published vault required."""
+
+from __future__ import annotations
+
+import base64
+import json
+import os
+import sys
+import unittest
+from datetime import date, timedelta
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import bio_analytics as analytics
+import bio_correlate
+import bio_policy as policy
+import clinical_engine
+import demo_data
+import encrypt_data
+import sync
+from provenance import DataQuality
+
+
+def night(minutes=450, efficiency=92.0, deep=75, rem=100, day="2026-11-01"):
+    return {
+        "date": day,
+        "minutes_asleep": minutes,
+        "minutes_in_period": round(minutes / (efficiency / 100)) if efficiency else None,
+        "efficiency": efficiency,
+        "stages": {"deep": deep, "light": minutes - deep - rem, "rem": rem, "awake": 20},
+        "bed_minutes": 23 * 60 + 15,
+        "wake_minutes": 7 * 60,
+        "is_main": True,
+    }
+
+
+class ClockTests(unittest.TestCase):
+    def test_twelve_hour_clock(self):
+        self.assertEqual(policy.format_clock(0), "12:00 AM")
+        self.assertEqual(policy.format_clock(13 * 60 + 5), "1:05 PM")
+        self.assertEqual(policy.format_clock(23 * 60 + 30), "11:30 PM")
+        self.assertEqual(policy.format_clock(12 * 60), "12:00 PM")
+
+    def test_bedtime_target_wraps(self):
+        # 07:00 wake with a 7h30m need means 23:30 the night before.
+        self.assertEqual(policy.bed_time_target(450, 7 * 60), 23 * 60 + 30)
+
+    def test_local_minutes_uses_recorded_offset(self):
+        # 22:00Z at +8h is 06:00 local, whatever the machine's own timezone is.
+        self.assertEqual(analytics.minutes_after_midnight("2026-11-01T22:00:00Z", 8 * 3600), 6 * 60)
+
+
+class BandTests(unittest.TestCase):
+    def test_recovery_bands_are_ordered(self):
+        self.assertEqual(policy.recovery_band(90)["key"], "primed")
+        self.assertEqual(policy.recovery_band(72)["key"], "ready")
+        self.assertEqual(policy.recovery_band(30)["key"], "depleted")
+
+    def test_unmeasured_is_its_own_band(self):
+        band = policy.recovery_band(None)
+        self.assertEqual(band["key"], policy.UNMEASURED)
+        self.assertEqual(band["tone"], "neutral")
+
+    def test_every_band_has_a_sentence_and_a_known_tone(self):
+        ladders = [
+            policy.RECOVERY_BANDS,
+            policy.SLEEP_BANDS,
+            policy.SLEEP_EFFICIENCY_BANDS,
+            policy.HRV_DELTA_BANDS,
+            policy.RHR_DELTA_BANDS,
+            policy.SPO2_BANDS,
+            policy.RESP_DELTA_BANDS,
+            policy.ACWR_BANDS,
+            policy.LOAD_BANDS,
+            policy.READINESS_BANDS,
+        ]
+        for ladder in ladders:
+            for _, band in ladder:
+                self.assertIn(band["tone"], policy.TONE_NAMES)
+                self.assertTrue(band["plain"])
+                self.assertTrue(band["label"])
+
+    def test_hrv_delta_bands(self):
+        self.assertEqual(policy.hrv_band(12)["key"], "above")
+        self.assertEqual(policy.hrv_band(0)["key"], "at")
+        self.assertEqual(policy.hrv_band(-12)["key"], "below")
+        self.assertEqual(policy.hrv_band(-30)["key"], "well_below")
+
+    def test_acwr_sweet_spot_is_inside_optimal(self):
+        low, high = policy.ACWR_SWEET_SPOT
+        self.assertEqual(policy.acwr_band(1.0)["key"], "optimal")
+        self.assertEqual(policy.acwr_band(1.6)["key"], "high")
+        self.assertEqual(policy.acwr_band(0.5)["key"], "detraining")
+        self.assertTrue(low < 1.0 < high)
+
+
+class SleepTests(unittest.TestCase):
+    def test_summary_computes_efficiency_and_stages(self):
+        summary = analytics.summarise_night(
+            {
+                "date": "2026-11-01",
+                "minutes_asleep": 420,
+                "minutes_in_period": 480,
+                "stages": {"deep": 80, "light": 240, "rem": 100, "awake": 60},
+                "onset_minutes": 1380,
+                "wake_minutes": 420,
+            }
+        )
+        self.assertEqual(summary["efficiency"], 87.5)
+        self.assertEqual(summary["stages"]["deep"], 80)
+
+    def test_summary_without_stages_keeps_none(self):
+        summary = analytics.summarise_night(
+            {"date": "2026-11-01", "minutes_asleep": 400, "minutes_in_period": 430}
+        )
+        self.assertIsNone(summary["stages"]["deep"])
+
+    def test_score_is_monotone_in_duration(self):
+        need = 480
+        scores = [
+            analytics.sleep_score(night(minutes=minutes), need)
+            for minutes in (300, 360, 420, 480, 540)
+        ]
+        self.assertEqual(scores, sorted(scores))
+
+    def test_score_is_monotone_in_efficiency(self):
+        low = analytics.sleep_score(night(minutes=420, efficiency=70), 450)
+        high = analytics.sleep_score(night(minutes=420, efficiency=96), 450)
+        self.assertGreater(high, low)
+
+    def test_score_is_bounded(self):
+        self.assertLessEqual(analytics.sleep_score(night(minutes=2000), 400), 100)
+        self.assertGreaterEqual(analytics.sleep_score(night(minutes=10), 480), 0)
+
+    def test_score_without_efficiency_renormalises(self):
+        partial = analytics.summarise_night({"date": "2026-11-01", "minutes_asleep": 450})
+        score = analytics.sleep_score(partial, 450)
+        self.assertIsNotNone(score)
+        self.assertLessEqual(score, 100)
+
+    def test_need_never_exceeds_the_cap(self):
+        history = [night(minutes=240, day=f"2026-10-{d:02d}") for d in range(1, 15)]
+        need = analytics.sleep_need(history)
+        self.assertLessEqual(
+            need["minutes"],
+            policy.SLEEP_NEED_BASE_MINUTES + policy.SLEEP_NEED_MAX_EXTRA_MINUTES,
+        )
+        self.assertGreater(need["debt_minutes"], 0)
+
+    def test_need_with_no_history_is_the_floor(self):
+        need = analytics.sleep_need([])
+        self.assertEqual(need["minutes"], policy.SLEEP_NEED_BASE_MINUTES)
+        self.assertEqual(need["debt_minutes"], 0)
+
+    def test_onset_after_midnight_is_late_not_early(self):
+        history = [
+            dict(night(minutes=420, day=f"2026-10-{d:02d}"), bed_minutes=40, wake_minutes=7 * 60)
+            for d in range(1, 15)
+        ]
+        result = analytics.circadian(history)
+        self.assertTrue(result["available"])
+        self.assertEqual(result["median_onset"], "12:40 AM")
+
+
+class LoadTests(unittest.TestCase):
+    def test_acwr_math(self):
+        today = date(2026, 11, 13)
+        sessions = []
+        # Seven 28-minute sessions, every fourth day: 56 min acute, 196 min over
+        # 28 days -> a 49 min/week chronic line, so the ratio is 1.14.
+        for offset in range(0, 28, 4):
+            sessions.append({"date": (today - timedelta(days=offset)).isoformat(), "duration_minutes": 28})
+        load = analytics.training_load(sessions, today=today)
+        self.assertEqual(load["acute_minutes"], 56)
+        self.assertEqual(load["chronic_minutes"], 49)
+        self.assertAlmostEqual(load["acwr"], 1.14, places=2)
+
+    def test_acwr_is_none_without_sessions(self):
+        load = analytics.training_load([], today=date(2026, 11, 13))
+        self.assertIsNone(load["acwr"])
+
+    def test_day_load_is_bounded(self):
+        self.assertEqual(analytics.day_load(0, 0, 0), 0)
+        self.assertLessEqual(analytics.day_load(50_000, 300, 300), 100)
+
+    def test_day_load_unmeasured(self):
+        self.assertIsNone(analytics.day_load(None, None, None))
+
+
+class ScoreTests(unittest.TestCase):
+    def test_recovery_renormalises_over_measured_parts(self):
+        full = analytics.recovery(
+            {"hrv_delta_pct": 0, "rhr_delta_bpm": 0, "sleep_score": 80, "resp_delta": 0}
+        )
+        partial = analytics.recovery({"hrv_delta_pct": 0, "rhr_delta_bpm": 0, "sleep_score": 80})
+        self.assertTrue(full["measured"])
+        self.assertTrue(partial["measured"])
+        self.assertEqual(sum(f["weight"] for f in partial["factors"]), 100)
+        self.assertLessEqual(abs(full["score"] - partial["score"]), 5)
+
+    def test_recovery_with_nothing_measured(self):
+        result = analytics.recovery({})
+        self.assertFalse(result["measured"])
+        self.assertIsNone(result["score"])
+
+    def test_bad_signals_lower_recovery(self):
+        good = analytics.recovery(
+            {"hrv_delta_pct": 15, "rhr_delta_bpm": -3, "sleep_score": 92, "resp_delta": 0}
+        )
+        bad = analytics.recovery(
+            {"hrv_delta_pct": -25, "rhr_delta_bpm": 6, "sleep_score": 45, "resp_delta": 2}
+        )
+        self.assertGreater(good["score"], bad["score"])
+
+    def test_readiness_penalises_a_spike(self):
+        calm = analytics.readiness(80, 1.0)
+        spiked = analytics.readiness(80, 1.8)
+        self.assertGreater(calm, spiked)
+        self.assertLessEqual(calm, 100)
+
+
+class TrendTests(unittest.TestCase):
+    def test_latest_is_not_positional(self):
+        rows = [{"date": "2026-11-01"}, {"date": "2026-11-03"}, {"date": "2026-11-02"}]
+        self.assertEqual(analytics.latest(rows)["date"], "2026-11-03")
+
+    def test_pct_change(self):
+        self.assertEqual(analytics.pct_change(50, 40), 25.0)
+        self.assertIsNone(analytics.pct_change(None, 40))
+        self.assertIsNone(analytics.pct_change(50, 0))
+
+    def test_weekly_active_minutes_ignores_other_weeks(self):
+        today = date(2026, 11, 13)  # a Friday
+        daily = [
+            {"date": "2026-11-09", "active_minutes": 30},
+            {"date": "2026-11-11", "active_minutes": 20},
+            {"date": "2026-11-02", "active_minutes": 90},
+        ]
+        week = analytics.weekly_active_minutes(daily, today=today)
+        self.assertEqual(week["minutes"], 50)
+
+
+class CorrelationTests(unittest.TestCase):
+    def test_pearson_perfect(self):
+        self.assertAlmostEqual(bio_correlate.pearson([(1, 2), (2, 4), (3, 6)]), 1.0, places=6)
+        self.assertAlmostEqual(bio_correlate.pearson([(1, 6), (2, 4), (3, 2)]), -1.0, places=6)
+
+    def test_pearson_handles_flat_series(self):
+        self.assertIsNone(bio_correlate.pearson([(1, 1), (1, 2), (1, 3)]))
+
+    def test_weak_pair_is_refused(self):
+        channels = [
+            {"date": f"2026-09-{d:02d}", "sleep_minutes": 400 + d, "hrv": 40 + (d % 2) * 20}
+            for d in range(1, 29)
+        ]
+        result = bio_correlate.build_correlations(channels)
+        self.assertEqual(result["findings"], [])
+        self.assertEqual(result["tested_pairs"], len(bio_correlate.CURATED_PAIRS))
+
+    def test_strong_pair_is_published_with_a_sentence(self):
+        channels = [
+            {"date": f"d{d}", "sleep_minutes": 300 + d * 10, "hrv": 30 + d * 1.5}
+            for d in range(30)
+        ]
+        result = bio_correlate.build_correlations(channels)
+        self.assertTrue(result["findings"])
+        finding = result["findings"][0]
+        self.assertGreaterEqual(finding["n"], policy.CORRELATION_MIN_PAIRED_DAYS)
+        self.assertGreaterEqual(abs(finding["r"]), policy.CORRELATION_MIN_R)
+        self.assertTrue(finding["plain"])
+        self.assertIn(finding["direction"], ("up", "down"))
+
+
+class ProvenanceTests(unittest.TestCase):
+    def test_gate_blocks_missing_core(self):
+        dq = DataQuality()
+        dq.record("sleep", True, "10 nights", "Sleep")
+        dq.record("rhr", False, "none", "Resting heart rate")
+        dq.record("hrv", True, "10 nights", "Overnight HRV")
+        self.assertFalse(dq.publishable())
+        self.assertEqual(dq.as_dict()["core_degraded"], ["Resting heart rate"])
+
+    def test_gate_allows_complete_core(self):
+        dq = DataQuality()
+        for key in ("sleep", "rhr", "hrv"):
+            dq.record(key, True, "ok", key)
+        dq.record("spo2", False, "sparse", "Blood oxygen")
+        self.assertTrue(dq.publishable())
+        self.assertEqual(dq.as_dict()["live_count"], 3)
+        self.assertEqual(dq.as_dict()["total_count"], 4)
+
+
+class EncryptionTests(unittest.TestCase):
+    def test_round_trip(self):
+        envelope = encrypt_data.encrypt_payload('{"hello":"world"}', "passphrase", 1000)
+        self.assertEqual(envelope["format"], "aes-256-gcm-pbkdf2")
+        self.assertEqual(envelope["iterations"], 1000)
+        self.assertEqual(
+            encrypt_data.decrypt_payload(envelope, "passphrase"), '{"hello":"world"}'
+        )
+
+    def test_wrong_passphrase_fails(self):
+        envelope = encrypt_data.encrypt_payload('{"hello":"world"}', "passphrase", 1000)
+        with self.assertRaises(Exception):
+            encrypt_data.decrypt_payload(envelope, "wrong")
+
+    def test_tampered_ciphertext_fails(self):
+        envelope = encrypt_data.encrypt_payload('{"hello":"world"}', "passphrase", 1000)
+        raw = bytearray(base64.b64decode(envelope["data"]))
+        raw[0] ^= 0x01
+        envelope["data"] = base64.b64encode(bytes(raw)).decode()
+        with self.assertRaises(Exception):
+            encrypt_data.decrypt_payload(envelope, "passphrase")
+
+    def test_no_default_passphrase_in_module(self):
+        with open(encrypt_data.__file__, encoding="utf-8") as handle:
+            source = handle.read()
+        self.assertNotIn('DEFAULT_PASS = "', source)
+
+
+class PayloadTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        dq = DataQuality()
+        for key in (
+            "sleep",
+            "rhr",
+            "hrv",
+            "spo2",
+            "resp",
+            "steps",
+            "calories",
+            "active_minutes",
+            "vo2max",
+            "exercise",
+            "heart_rate",
+            "profile",
+            "identity",
+        ):
+            dq.record(key, True, "synthetic", key)
+        cls.payload = sync.build_payload(demo_data.synthetic_fetch(), dq, demo=True)
+
+    def test_envelope(self):
+        self.assertEqual(self.payload["schema"], 2)
+        self.assertTrue(self.payload["demo"])
+        self.assertIn("policy", self.payload)
+        self.assertIn("data_quality", self.payload)
+
+    def test_bands_are_resolved_not_thresholds(self):
+        today = self.payload["today"]
+        for key in ("sleep", "hrv", "rhr", "spo2", "resp", "recovery", "readiness"):
+            self.assertIn("band", today[key])
+            self.assertIn("tone", today[key]["band"])
+            self.assertIn(today[key]["band"]["tone"], policy.TONE_NAMES)
+
+    def test_scores_are_in_range(self):
+        today = self.payload["today"]
+        for key in ("recovery", "readiness"):
+            score = today[key]["score"]
+            self.assertGreaterEqual(score, 0)
+            self.assertLessEqual(score, 100)
+
+    def test_history_is_chronological(self):
+        for key in ("sleep", "hrv", "rhr", "steps"):
+            dates = [row["date"] for row in self.payload["history"][key]]
+            self.assertEqual(dates, sorted(dates))
+
+    def test_every_coaching_card_states_its_evidence(self):
+        cards = self.payload["coaching"]["cards"]
+        self.assertTrue(cards)
+        for card in cards:
+            for field in ("reading", "action", "progress", "back_off", "evidence"):
+                self.assertTrue(card[field], f"{card['key']} is missing {field}")
+            self.assertTrue(card["evidence"]["cite"])
+
+    def test_clinical_narrative_is_two_voices(self):
+        for paragraph in self.payload["clinical"]["paragraphs"]:
+            self.assertTrue(paragraph["clinical"])
+            self.assertTrue(paragraph["plain"])
+        self.assertEqual(self.payload["clinical"]["score_source"], "deterministic")
+
+    def test_json_serialisable(self):
+        json.dumps(self.payload)
+
+
+class NarrativeTests(unittest.TestCase):
+    def test_illness_needs_more_than_one_driver(self):
+        one = clinical_engine.illness_signal({"rhr_delta_bpm": 7, "resp_delta": 0})
+        two = clinical_engine.illness_signal({"rhr_delta_bpm": 7, "resp_delta": 2.4})
+        self.assertEqual(one["level"], "watch")
+        self.assertEqual(two["level"], "elevated")
+
+    def test_illness_none_when_stable(self):
+        self.assertEqual(clinical_engine.illness_signal({})["level"], "none")
+
+    def test_missing_sleep_is_stated_not_invented(self):
+        text = clinical_engine._overnight_plain({"sleep_score": None})
+        self.assertIn("no sleep reading", text.lower())
+
+
+if __name__ == "__main__":
+    unittest.main()

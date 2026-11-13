@@ -1,0 +1,56 @@
+name: daily sync
+
+on:
+  schedule:
+    # 08:00 and 08:30 Asia/Singapore, so a single missed run does not leave the
+    # dashboard a day behind.
+    - cron: "0 0 * * *"
+    - cron: "30 0 * * *"
+  workflow_dispatch:
+
+# Two runs must never race to push the same vault.
+concurrency:
+  group: daily-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Fetch, analyse and gate
+        env:
+          GOOGLE_HEALTH_CLIENT_ID: ${{ secrets.GOOGLE_HEALTH_CLIENT_ID }}
+          GOOGLE_HEALTH_CLIENT_SECRET: ${{ secrets.GOOGLE_HEALTH_CLIENT_SECRET }}
+          GOOGLE_HEALTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_HEALTH_REFRESH_TOKEN }}
+          ATHLETE_NAME: ${{ secrets.ATHLETE_NAME }}
+          DASHBOARD_TZ: Asia/Singapore
+        run: python sync.py
+
+      - name: Encrypt the vault
+        env:
+          DASHBOARD_PASS: ${{ secrets.DASHBOARD_PASS }}
+        run: python encrypt_data.py
+
+      - name: Commit the ciphertext
+        run: |
+          git config user.name  "meridian-sync"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/biometrics.enc.json data/status.json
+          if git diff --cached --quiet; then
+            echo "No change to publish."
+          else
+            git commit -m "data: sync $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push
+          fi
