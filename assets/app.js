@@ -424,38 +424,41 @@
     const container = $("heatmap");
     if (!container) return;
 
-    // 13 weeks ending today, Monday-first, from measured sessions only. An empty
-    // cell means no session was logged, not that the day was bad for you.
+    // 13 weeks of columns, Monday-first, ending with this week. Built in UTC so
+    // a timezone ahead of UTC cannot shift every cell by a day, and anchored to
+    // a Monday so the 7-row grid reads as weeks rather than as stripes.
     const byDate = {};
     ((data.history && data.history.exercise) || []).forEach((session) => {
       if (!session.date) return;
       byDate[session.date] = (byDate[session.date] || 0) + (session.minutes || 0);
     });
 
-    const today = new Date((data.today && data.today.date) || Date.now());
-    const weeks = 13;
-    const days = weeks * 7;
-    const start = new Date(today);
-    start.setDate(start.getDate() - (days - 1));
-
-    const cells = [];
-    for (let index = 0; index < days; index += 1) {
-      const day = new Date(start);
-      day.setDate(start.getDate() + index);
-      const iso = day.toISOString().slice(0, 10);
-      cells.push({ date: iso, minutes: byDate[iso] || 0 });
-    }
+    const todayISO = (data.today && data.today.date) || new Date().toISOString().slice(0, 10);
+    const [year, month, dayOfMonth] = todayISO.split("-").map(Number);
+    const todayUTC = Date.UTC(year, month - 1, dayOfMonth);
+    const dayOfWeek = new Date(todayUTC).getUTCDay(); // 0 = Sunday
+    const mondayOfThisWeek = todayUTC - ((dayOfWeek + 6) % 7) * 86400000;
+    const startUTC = mondayOfThisWeek - 12 * 7 * 86400000;
 
     container.innerHTML = "";
-    cells.forEach((row) => {
+    for (let index = 0; index < 13 * 7; index += 1) {
+      const stamp = startUTC + index * 86400000;
+      const iso = new Date(stamp).toISOString().slice(0, 10);
       const cell = document.createElement("div");
-      const minutes = row.minutes;
-      const level = minutes === 0 ? 0 : minutes < 25 ? 1 : minutes < 45 ? 2 : minutes < 70 ? 3 : 4;
       cell.className = "heat-cell";
-      cell.dataset.level = String(level);
-      cell.title = `${row.date} — ${minutes ? minutes + " min trained" : "no session logged"}`;
+
+      if (stamp > todayUTC) {
+        cell.dataset.level = "0";
+        cell.style.opacity = "0.35";
+        cell.title = `${iso} — not yet`;
+      } else {
+        const minutes = byDate[iso] || 0;
+        const level = minutes === 0 ? 0 : minutes < 25 ? 1 : minutes < 45 ? 2 : minutes < 70 ? 3 : 4;
+        cell.dataset.level = String(level);
+        cell.title = `${iso} — ${minutes ? minutes + " min trained" : "no session logged"}`;
+      }
       container.appendChild(cell);
-    });
+    }
   }
 
   /* ---------------------------------------------------------------- load --- */
@@ -646,11 +649,13 @@
       document.querySelectorAll(".reveal").forEach((el) => el.classList.add("in"));
       return;
     }
+    let revealed = 0;
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             entry.target.classList.add("in");
+            revealed += 1;
             observer.unobserve(entry.target);
           }
         });
@@ -658,6 +663,14 @@
       { rootMargin: "-40px 0px -8% 0px", threshold: 0.02 }
     );
     document.querySelectorAll(".reveal:not(.in)").forEach((el) => observer.observe(el));
+
+    // Failsafe, not a schedule: if the observer has revealed nothing at all the
+    // animation is broken, so publish every card. A working observer keeps the
+    // reveal tied to the reader's scroll instead of firing on a timer.
+    window.setTimeout(() => {
+      if (revealed > 0) return;
+      document.querySelectorAll(".reveal:not(.in)").forEach((el) => el.classList.add("in"));
+    }, 2500);
   }
 
   /* -------------------------------------------------------------- session -- */
@@ -673,10 +686,41 @@
     return data;
   }
 
+  // Everything the render pass writes into, so locking can actually empty it.
+  // Hiding a container is not purging: the text would still sit in the DOM.
+  const RENDERED_IDS = [
+    "ringScore", "ringBand", "ringSub", "heroHeadline", "heroLede", "metaDevice", "metaSync",
+    "metaSource", "metaWindow", "kpiSleep", "kpiSleepSub", "kpiSleepBand", "kpiHrv", "kpiHrvSub",
+    "kpiHrvBand", "kpiRhr", "kpiRhrSub", "kpiRhrBand", "kpiSpo2", "kpiSpo2Sub", "kpiSpo2Band",
+    "sleepScoreBig", "sleepScoreBand", "stageDeepMins", "stageLightMins", "stageRemMins",
+    "stageAwakeMins", "sleepBed", "sleepWake", "sleepEfficiency", "sleepNeed", "sleepDebt",
+    "sleepNeedSource", "circadianOnset", "circadianSpread", "circadianAlign", "circadianTarget",
+    "loadScore", "loadBand", "loadText", "loadNote", "stepsBig", "stepsGoal", "stepsMean",
+    "activeToday", "activeWeek", "activePct", "caloriesToday", "caloriesMean", "vo2max",
+    "patternNote", "patternMethod", "footerMeta", "footerSync", "footerTz",
+  ];
+
+  function purgeRendered() {
+    ["patterns", "coach", "provenance", "heatmap"].forEach((id) => {
+      const node = $(id);
+      if (node) node.innerHTML = "";
+    });
+    RENDERED_IDS.forEach((id) => setText(id, DASH));
+    const dial = $("loadDial");
+    if (dial) dial.innerHTML = "";
+    const bar = $("activeBar");
+    if (bar) bar.style.width = "0%";
+    ["stageDeep", "stageLight", "stageRem", "stageAwake"].forEach((id) => {
+      const fill = $(id);
+      if (fill) fill.style.width = "0%";
+    });
+  }
+
   function lock() {
     state.passphrase = null;
     state.payload = null;
     if (window.Viz) window.Viz.reset();
+    purgeRendered();
     $("app").hidden = true;
     $("lock").hidden = false;
     $("lockInput").value = "";

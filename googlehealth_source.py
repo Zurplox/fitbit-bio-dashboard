@@ -259,15 +259,13 @@ class GoogleHealthClient:
             time.sleep(0.1)
         return points
 
-    def rollup(self, data_type, start, end, window):
+    def rollup(self, data_type, start_iso, end_iso, window):
+        """Aggregate over physical time. Both bounds are full RFC3339 stamps."""
         return self.request(
             "POST",
             f"/users/me/dataTypes/{data_type}/dataPoints:rollUp",
             body={
-                "range": {
-                    "startTime": f"{start}T00:00:00Z",
-                    "endTime": f"{end}T23:59:59Z",
-                },
+                "range": {"startTime": start_iso, "endTime": end_iso},
                 "windowSize": window,
             },
         )
@@ -316,22 +314,37 @@ def _rollup_value(point, data_type):
         ]
 
     for value in candidates:
-        if isinstance(value, dict):
-            for inner_key, inner_value in value.items():
-                lowered = inner_key.lower()
-                if lowered.endswith(("sum", "avg", "average", "count")):
-                    number = _num(inner_value)
-                    if number is not None:
-                        return number
-            for inner_value in value.values():
-                number = _num(inner_value)
+        number = _find_number(value)
+        if number is not None:
+            return number
+    return None
+
+
+def _find_number(value):
+    """Depth-first search for the first additive number in a rollup value.
+
+    Rollups nest differently per data type — `{"countSum": "8430"}`,
+    `{"activeMinutesByActivityLevel": [{"activeMinutes": "31"}]}` — so the
+    shape is walked rather than guessed, with sum/average keys preferred.
+    """
+    if isinstance(value, dict):
+        for key, inner in value.items():
+            if key.lower().endswith(("sum", "avg", "average", "count")):
+                number = _num(inner)
                 if number is not None:
                     return number
-        else:
-            number = _num(value)
+        for inner in value.values():
+            number = _find_number(inner)
             if number is not None:
                 return number
-    return None
+        return None
+    if isinstance(value, list):
+        for item in value:
+            number = _find_number(item)
+            if number is not None:
+                return number
+        return None
+    return _num(value)
 
 
 def _point_date(point):
@@ -369,14 +382,18 @@ def fetch_profile(client, dq=None):
 
     try:
         weights = client.list_points("weight", max_pages=3)
-        values = [
-            _num((p.get("weight") or {}).get("weightGrams"))
-            for p in weights
-            if (p.get("weight") or {}).get("weightGrams") is not None
-        ]
-        values = [v for v in values if v]
-        if values:
-            profile["weight_kg"] = round(values[0] / 1000, 1)  # newest first
+        dated = []
+        for point in weights:
+            body = point.get("weight") or {}
+            grams = _num(body.get("weightGrams"))
+            sample = body.get("sampleTime") or {}
+            stamp = sample.get("physicalTime") or _civil(sample.get("civilTime")) or ""
+            if grams:
+                dated.append((stamp, grams))
+        if dated:
+            # Ordering is not promised by the API; take the newest by timestamp.
+            dated.sort(key=lambda item: item[0])
+            profile["weight_kg"] = round(dated[-1][1] / 1000, 1)
     except Exception as error:  # noqa: BLE001
         print(f"   weight unavailable: {error}")
 
@@ -604,9 +621,11 @@ def fetch_daily_active_minutes(client, days=90, dq=None):
 def fetch_exercise(client, days=90, dq=None):
     today = local_today()
     since = today - timedelta(days=days)
+    # Filter on physical time: session intervals report `start_time`, and a
+    # civil-time filter is only documented for the interval data types.
     points = client.list_points(
         "exercise",
-        filter_expr=f'exercise.interval.civil_start_time >= "{since.isoformat()}"',
+        filter_expr=f'exercise.interval.start_time >= "{since.isoformat()}T00:00:00Z"',
         max_pages=max(4, days // 15),
     )
 
@@ -660,8 +679,8 @@ def fetch_exercise(client, days=90, dq=None):
 def fetch_intraday_hr(client, hours=24, dq=None):
     """Hourly heart rate for the last day, from the aggregation endpoint."""
     now = datetime.now(timezone.utc)
-    start = (now - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:00:00")
-    end = now.strftime("%Y-%m-%dT%H:59:59")
+    start = (now - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:00:00Z")
+    end = now.strftime("%Y-%m-%dT%H:59:59Z")
     payload = client.rollup("heart-rate", start, end, "3600s")
 
     series = []

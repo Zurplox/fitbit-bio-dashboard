@@ -32,24 +32,42 @@ def utc_now_iso():
     return datetime.now(timezone.utc).isoformat()
 
 
+def _attempt(dq, key, label, fetcher, default, unit):
+    """Run one optional fetcher so its failure cannot take the whole run down.
+
+    An unsupported data type returns 400/404 and would otherwise abort a sync
+    that has every other measurement in hand. Core groups still fail the run at
+    the publish gate, which is where that decision belongs.
+    """
+    try:
+        return fetcher()
+    except Exception as error:  # noqa: BLE001 - recorded, then published as missing
+        print(f"   {label} unavailable: {error}")
+        dq.record(key, False, f"fetch failed ({type(error).__name__})", label)
+        return default
+
+
 def collect(client, dq):
     today = source.local_today()
     print(f"fetching {FETCH_DAYS} days ending {today.isoformat()} ...")
 
     identity = source.fetch_identity(client, dq)
-    profile = source.fetch_profile(client, dq)
+    profile = _attempt(
+        dq, "profile", "Body metrics", lambda: source.fetch_profile(client, dq),
+        {"height_cm": None, "weight_kg": None}, "profile",
+    )
 
-    sleep = source.fetch_sleep(client, days=FETCH_DAYS, dq=dq)
-    rhr = source.fetch_daily_rhr(client, days=FETCH_DAYS, dq=dq)
-    hrv = source.fetch_daily_hrv(client, days=FETCH_DAYS, dq=dq)
-    spo2 = source.fetch_daily_spo2(client, days=FETCH_DAYS, dq=dq)
-    resp = source.fetch_daily_resp(client, days=FETCH_DAYS, dq=dq)
-    vo2max = source.fetch_daily_vo2max(client, days=FETCH_DAYS, dq=dq)
-    steps = source.fetch_daily_steps(client, days=FETCH_DAYS, dq=dq)
-    calories = source.fetch_daily_calories(client, days=FETCH_DAYS, dq=dq)
-    active = source.fetch_daily_active_minutes(client, days=FETCH_DAYS, dq=dq)
-    exercise = source.fetch_exercise(client, days=FETCH_DAYS, dq=dq)
-    hr_intraday = source.fetch_intraday_hr(client, hours=24, dq=dq)
+    sleep = _attempt(dq, "sleep", "Sleep", lambda: source.fetch_sleep(client, days=FETCH_DAYS, dq=dq), [], "sleep")
+    rhr = _attempt(dq, "rhr", "Resting heart rate", lambda: source.fetch_daily_rhr(client, days=FETCH_DAYS, dq=dq), [], "rhr")
+    hrv = _attempt(dq, "hrv", "Overnight HRV", lambda: source.fetch_daily_hrv(client, days=FETCH_DAYS, dq=dq), [], "hrv")
+    spo2 = _attempt(dq, "spo2", "Blood oxygen", lambda: source.fetch_daily_spo2(client, days=FETCH_DAYS, dq=dq), [], "spo2")
+    resp = _attempt(dq, "resp", "Breathing rate", lambda: source.fetch_daily_resp(client, days=FETCH_DAYS, dq=dq), [], "resp")
+    vo2max = _attempt(dq, "vo2max", "Cardio fitness", lambda: source.fetch_daily_vo2max(client, days=FETCH_DAYS, dq=dq), [], "vo2max")
+    steps = _attempt(dq, "steps", "Steps", lambda: source.fetch_daily_steps(client, days=FETCH_DAYS, dq=dq), [], "steps")
+    calories = _attempt(dq, "calories", "Calories", lambda: source.fetch_daily_calories(client, days=FETCH_DAYS, dq=dq), [], "calories")
+    active = _attempt(dq, "active_minutes", "Active minutes", lambda: source.fetch_daily_active_minutes(client, days=FETCH_DAYS, dq=dq), [], "active minutes")
+    exercise = _attempt(dq, "exercise", "Workouts", lambda: source.fetch_exercise(client, days=FETCH_DAYS, dq=dq), [], "workouts")
+    hr_intraday = _attempt(dq, "heart_rate", "Heart rate", lambda: source.fetch_intraday_hr(client, hours=24, dq=dq), [], "heart rate")
 
     return {
         "today": today.isoformat(),
@@ -201,7 +219,10 @@ def build_payload(fetched, dq, demo=False):
     signals["recovery"] = recovery
     signals["readiness"] = analytics.readiness(recovery["score"], load.get("acwr"))
 
-    step_goal = int(os.environ.get("STEP_GOAL", policy.DEFAULT_STEP_GOAL))
+    try:
+        step_goal = int(os.environ.get("STEP_GOAL") or policy.DEFAULT_STEP_GOAL)
+    except ValueError:
+        step_goal = policy.DEFAULT_STEP_GOAL
     today_steps = next((r for r in steps_series if r["date"] == today), None)
     today_active = next((r for r in active_series if r["date"] == today), None)
     today_calories = next((r for r in calories_series if r["date"] == today), None)
@@ -349,14 +370,16 @@ def build_payload(fetched, dq, demo=False):
         "schema": 2,
         "generated_at": utc_now_iso(),
         "demo": demo,
-        "timezone": os.environ.get("DASHBOARD_TZ", "Asia/Singapore"),
+        "timezone": os.environ.get("DASHBOARD_TZ") or "Asia/Singapore",
         "device": {
             "name": _device_name(fetched["sleep"]) or "Fitbit",
             "platform": "FITBIT",
             "api": "Google Health API v4",
         },
         "athlete": {
-            "name": os.environ.get("ATHLETE_NAME", "Athlete"),
+            # `or` and not a default argument: an unset GitHub secret arrives as an
+            # empty string, which would otherwise put a blank name on the page.
+            "name": os.environ.get("ATHLETE_NAME") or "Athlete",
             "height_cm": fetched["profile"].get("height_cm"),
             "weight_kg": fetched["profile"].get("weight_kg"),
         },
@@ -432,11 +455,11 @@ def main():
 
     try:
         client = source.authenticated_client()
+        fetched = collect(client, dq)
     except source.AuthError as error:
         print(f"\nauthentication failed: {error}\n")
         sys.exit(2)
 
-    fetched = collect(client, dq)
     payload = build_payload(fetched, dq)
 
     out_file = DATA_DIR / "biometrics.json"

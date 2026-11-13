@@ -515,6 +515,8 @@ footer {
 
 @media print {
   .topbar, .actions, .lock, .info-btn { display: none !important; }
+  /* Never print a card that the scroll observer has not reached yet. */
+  .reveal { opacity: 1 !important; transform: none !important; }
   body { background: #fff; color: #000; }
   body::before { display: none; }
   .card { break-inside: avoid; border-color: #ddd; }

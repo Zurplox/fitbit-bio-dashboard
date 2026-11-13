@@ -178,15 +178,21 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the ownership rules and the payload c
 ## Tests
 
 ```bash
-python -m unittest discover -s tests -t . -v     # 48 tests, offline
+python -m unittest discover -s tests -t . -v     # 66 tests, offline
 node --check assets/app.js && node --check assets/charts.js
 ```
 
-Covered: band ordering and tone vocabulary, 12-hour clock, timestamp offsets, sleep-score
-monotonicity and bounds, the sleep-need cap, recovery weight renormalisation, ACWR arithmetic,
-day-load bounds, onset handling across midnight, correlation floors, the provenance gate, the
-encryption envelope (round-trip, wrong key, tampering, absence of a default passphrase), and full
-payload assembly from synthetic data.
+`tests/test_pipeline.py` covers the arithmetic: band ordering and tone vocabulary, the 12-hour
+clock, timestamp offsets, sleep-score monotonicity and bounds, the sleep-need cap, recovery weight
+renormalisation, ACWR arithmetic, day-load bounds, onset handling across midnight, correlation
+floors, the provenance gate, the encryption envelope (round-trip, wrong key, tampering, absence of
+a default passphrase), and full payload assembly from synthetic data.
+
+`tests/test_source.py` pins the API contract against documented response shapes: rollup request
+bodies carry full RFC3339 timestamps, rollup values are found through nested and list-shaped
+payloads, sleep sessions are de-duplicated to one main sleep per night with offset-correct local
+clocks, paging filters are built correctly, a single failing data type cannot abort the run, and an
+unset secret (which arrives as an empty string) falls back instead of blanking the page.
 
 ---
 

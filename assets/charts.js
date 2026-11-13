@@ -1,14 +1,23 @@
 /* ==========================================================================
    Meridian Air — canvas chart kit
-   No dependencies. Every chart is a pure draw function over a payload slice;
-   the page owns the data, this file owns pixels. Charts re-render on resize
-   and on theme change, and each one reports the nearest point on hover.
+   No dependencies. Every chart is one `paint(highlight)` function over a
+   payload slice; the page owns the data, this file owns pixels.
+
+   Two rules learned the hard way:
+   * hover listeners are bound once per canvas, because `paint` runs on every
+     resize and a listener per paint is a leak;
+   * a hover repaints the whole chart, because drawing a marker over the
+     previous marker leaves a picket fence behind the pointer.
    ========================================================================== */
 (function () {
   "use strict";
 
   const Viz = {};
   const registry = [];
+  const hoverBound = new WeakSet();
+  // The canvas keeps one listener; the holder behind it is swapped on every
+  // paint, so a re-render cannot leave hover reading the previous payload.
+  const holders = new WeakMap();
 
   const css = (name, fallback) => {
     const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -17,11 +26,17 @@
 
   function prep(canvas, height) {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const width = canvas.parentElement.clientWidth || canvas.clientWidth || 480;
-    canvas.width = Math.round(width * dpr);
-    canvas.height = Math.round(height * dpr);
+    const width = Math.max(120, canvas.parentElement.clientWidth || canvas.clientWidth || 320);
+    const pixelWidth = Math.round(width * dpr);
+    const pixelHeight = Math.round(height * dpr);
+
+    if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+      canvas.width = pixelWidth;
+      canvas.height = pixelHeight;
+    }
     canvas.style.width = "100%";
     canvas.style.height = height + "px";
+
     const ctx = canvas.getContext("2d");
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
@@ -35,8 +50,7 @@
       min -= 1;
       max += 1;
     }
-    const span = max - min;
-    const raw = span / Math.max(1, count);
+    const raw = (max - min) / Math.max(1, count);
     const mag = Math.pow(10, Math.floor(Math.log10(raw)));
     const norm = raw / mag;
     const step = (norm >= 5 ? 10 : norm >= 2 ? 5 : norm >= 1 ? 2 : 1) * mag;
@@ -75,51 +89,58 @@
     };
   }
 
-  function tooltipFor(canvas, el) {
-    if (!el) return null;
-    return {
-      show(html, x, y) {
-        el.innerHTML = html;
-        const rect = canvas.getBoundingClientRect();
-        el.style.left = Math.max(60, Math.min(rect.width - 60, x)) + "px";
-        el.style.top = Math.max(40, y) + "px";
-        el.classList.add("on");
-      },
-      hide() {
-        el.classList.remove("on");
-      },
-    };
+  function showTip(element, canvas, html, x, y) {
+    if (!element) return;
+    element.innerHTML = html;
+    element.style.left = Math.max(64, Math.min(canvas.clientWidth - 64, x)) + "px";
+    element.style.top = Math.max(44, y) + "px";
+    element.classList.add("on");
   }
 
-  function attachHover(canvas, positions, onIndex) {
-    const move = (event) => {
+  function hideTip(element) {
+    if (element) element.classList.remove("on");
+  }
+
+  /**
+   * Bind hover once per canvas. `holder.positions` and `holder.onIndex` are
+   * replaced by each paint, so the listener always reads current geometry.
+   */
+  function bindHover(canvas, holder) {
+    holders.set(canvas, holder);
+    if (hoverBound.has(canvas)) return;
+    hoverBound.add(canvas);
+
+    const nearest = (clientX) => {
+      const holder = holders.get(canvas);
+      if (!holder) return -1;
       const rect = canvas.getBoundingClientRect();
-      const x = event.clientX - rect.left;
+      const x = clientX - rect.left;
       let best = -1;
-      let bestDistance = Infinity;
-      positions.forEach((point, index) => {
-        const distance = Math.abs(point.x - x);
-        if (distance < bestDistance) {
-          bestDistance = distance;
+      let distance = Infinity;
+      (holder.positions || []).forEach((point, index) => {
+        const d = Math.abs(point.x - x);
+        if (d < distance) {
+          distance = d;
           best = index;
         }
       });
-      if (best >= 0 && bestDistance < 40) onIndex(best, positions[best]);
-      else onIndex(-1, null);
+      return best >= 0 && distance < 44 ? best : -1;
     };
-    canvas.addEventListener("mousemove", move);
-    canvas.addEventListener("mouseleave", () => onIndex(-1, null));
+
+    canvas.addEventListener("mousemove", (event) => {
+      const holder = holders.get(canvas);
+      if (holder && holder.onIndex) holder.onIndex(nearest(event.clientX));
+    });
+    canvas.addEventListener("mouseleave", () => {
+      const holder = holders.get(canvas);
+      if (holder && holder.onIndex) holder.onIndex(-1);
+    });
     canvas.addEventListener(
       "touchmove",
       (event) => {
-        if (event.touches.length) {
-          const rect = canvas.getBoundingClientRect();
-          const x = event.touches[0].clientX - rect.left;
-          let best = 0;
-          positions.forEach((point, index) => {
-            if (Math.abs(point.x - x) < Math.abs(positions[best].x - x)) best = index;
-          });
-          onIndex(best, positions[best]);
+        const holder = holders.get(canvas);
+        if (event.touches.length && holder && holder.onIndex) {
+          holder.onIndex(nearest(event.touches[0].clientX));
         }
       },
       { passive: true }
@@ -154,103 +175,108 @@
     min -= padY;
     max += padY;
 
-    const { ctx, w, h } = prep(canvas, height);
-    const bx = box(w, h, pad);
-    const { ticks, low, high } = niceTicks(min, max, 4);
-    grid(ctx, bx, ticks, low, high, format);
+    const holder = { positions: [], onIndex: null };
 
-    const xAt = (index) =>
-      bx.left + (points.length === 1 ? bx.width / 2 : (index / (points.length - 1)) * bx.width);
-    const yAt = (value) => bx.bottom - ((value - low) / (high - low)) * bx.height;
+    const paint = (highlight = -1) => {
+      const { ctx, w, h } = prep(canvas, height);
+      const bx = box(w, h, pad);
+      const { ticks, low, high } = niceTicks(min, max, 4);
+      grid(ctx, bx, ticks, low, high, format);
 
-    // Baseline band: the athlete's own median, with a soft corridor around it.
-    if (band && band.value !== null && band.value !== undefined) {
-      const y = yAt(band.value);
-      ctx.save();
-      ctx.setLineDash([4, 4]);
-      ctx.strokeStyle = css("--line-strong", "rgba(255,255,255,.2)");
-      ctx.beginPath();
-      ctx.moveTo(bx.left, y);
-      ctx.lineTo(bx.right, y);
-      ctx.stroke();
-      ctx.restore();
-    }
+      const xAt = (index) =>
+        bx.left + (points.length === 1 ? bx.width / 2 : (index / (points.length - 1)) * bx.width);
+      const yAt = (value) => bx.bottom - ((value - low) / (high - low)) * bx.height;
 
-    if (goal !== null && goal !== undefined) {
-      const y = yAt(goal);
-      ctx.save();
-      ctx.setLineDash([2, 5]);
-      ctx.strokeStyle = css("--faint", "#777");
-      ctx.beginPath();
-      ctx.moveTo(bx.left, y);
-      ctx.lineTo(bx.right, y);
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    // Area fill
-    const gradient = ctx.createLinearGradient(0, bx.top, 0, bx.bottom);
-    gradient.addColorStop(0, color + "40");
-    gradient.addColorStop(1, color + "00");
-    ctx.beginPath();
-    points.forEach((row, index) => {
-      const x = xAt(index);
-      const y = yAt(row[key]);
-      if (index === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    });
-    ctx.lineTo(xAt(points.length - 1), bx.bottom);
-    ctx.lineTo(xAt(0), bx.bottom);
-    ctx.closePath();
-    ctx.fillStyle = gradient;
-    ctx.fill();
-
-    // Line
-    ctx.beginPath();
-    points.forEach((row, index) => {
-      const x = xAt(index);
-      const y = yAt(row[key]);
-      if (index === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    });
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    ctx.lineJoin = "round";
-    ctx.stroke();
-
-    // Newest point
-    const last = points.length - 1;
-    ctx.beginPath();
-    ctx.arc(xAt(last), yAt(points[last][key]), 3.5, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.fill();
-
-    // Date labels, first and last
-    ctx.fillStyle = css("--faint", "#666");
-    ctx.textAlign = "left";
-    ctx.fillText(points[0].date.slice(5), bx.left, h - 8);
-    ctx.textAlign = "right";
-    ctx.fillText(points[last].date.slice(5), bx.right, h - 8);
-
-    const tip = tooltipFor(canvas, tipEl);
-    const positions = points.map((_, index) => ({ x: xAt(index), y: bx.top }));
-
-    attachHover(canvas, positions, (index, position) => {
-      if (index < 0) {
-        tip && tip.hide();
-        return;
+      if (band && band.value !== null && band.value !== undefined) {
+        const y = yAt(band.value);
+        ctx.save();
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = css("--line-strong", "rgba(255,255,255,.2)");
+        ctx.beginPath();
+        ctx.moveTo(bx.left, y);
+        ctx.lineTo(bx.right, y);
+        ctx.stroke();
+        ctx.restore();
       }
-      // Redraw without dimming: draw a marker line over the point.
-      const x = positions[index].x;
-      ctx.save();
-      ctx.strokeStyle = css("--line-strong", "rgba(255,255,255,.2)");
+
+      if (goal !== null && goal !== undefined) {
+        const y = yAt(goal);
+        ctx.save();
+        ctx.setLineDash([2, 5]);
+        ctx.strokeStyle = css("--faint", "#777");
+        ctx.beginPath();
+        ctx.moveTo(bx.left, y);
+        ctx.lineTo(bx.right, y);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      const gradient = ctx.createLinearGradient(0, bx.top, 0, bx.bottom);
+      gradient.addColorStop(0, color + "40");
+      gradient.addColorStop(1, color + "00");
       ctx.beginPath();
-      ctx.moveTo(x, bx.top);
-      ctx.lineTo(x, bx.bottom);
+      points.forEach((row, index) => {
+        const x = xAt(index);
+        const y = yAt(row[key]);
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.lineTo(xAt(points.length - 1), bx.bottom);
+      ctx.lineTo(xAt(0), bx.bottom);
+      ctx.closePath();
+      ctx.fillStyle = gradient;
+      ctx.fill();
+
+      ctx.beginPath();
+      points.forEach((row, index) => {
+        const x = xAt(index);
+        const y = yAt(row[key]);
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.lineJoin = "round";
       ctx.stroke();
-      ctx.restore();
-      if (tip) tip.show(tipHTML(index, points[index]), x, positions[index].y + 10);
-    });
+
+      const last = points.length - 1;
+      ctx.beginPath();
+      ctx.arc(xAt(last), yAt(points[last][key]), 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+
+      ctx.fillStyle = css("--faint", "#666");
+      ctx.textAlign = "left";
+      ctx.fillText(points[0].date.slice(5), bx.left, h - 8);
+      ctx.textAlign = "right";
+      ctx.fillText(points[last].date.slice(5), bx.right, h - 8);
+
+      if (highlight >= 0) {
+        const x = xAt(highlight);
+        ctx.save();
+        ctx.strokeStyle = css("--line-strong", "rgba(255,255,255,.25)");
+        ctx.beginPath();
+        ctx.moveTo(x, bx.top);
+        ctx.lineTo(x, bx.bottom);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(x, yAt(points[highlight][key]), 4, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.restore();
+      }
+
+      holder.positions = points.map((_, index) => ({ x: xAt(index), y: bx.top }));
+    };
+
+    holder.onIndex = (index) => {
+      paint(index);
+      if (index < 0) return hideTip(tipEl);
+      showTip(tipEl, canvas, tipHTML(index, points[index]), holder.positions[index].x, 18);
+    };
+
+    bindHover(canvas, holder);
+    paint();
   };
 
   /* -------------------------------------------------------- stacked bars --- */
@@ -266,48 +292,55 @@
       tipHTML = () => "",
     } = options;
 
-    const data = (rows || []).filter((row) => row && row.minutes !== null);
+    const data = (rows || []).filter((row) => row && row.minutes !== null && row.minutes !== undefined);
     if (!data.length) return;
 
-    const totals = data.map((row) =>
-      keys.reduce((sum, key) => sum + (row[key] || 0), 0)
-    );
-    const { ctx, w, h } = prep(canvas, height);
-    const bx = box(w, h, pad);
-    const { ticks, low, high } = niceTicks(0, Math.max(...totals), 3);
-    grid(ctx, bx, ticks, low, high, format);
+    const totals = data.map((row) => keys.reduce((sum, key) => sum + (row[key] || 0), 0));
+    const holder = { positions: [], onIndex: null };
 
-    const slot = bx.width / data.length;
-    const barWidth = Math.max(2, Math.min(14, slot - 2));
+    const paint = () => {
+      const { ctx, w, h } = prep(canvas, height);
+      const bx = box(w, h, pad);
+      const { ticks, low, high } = niceTicks(0, Math.max(...totals), 3);
+      grid(ctx, bx, ticks, low, high, format);
 
-    data.forEach((row, index) => {
-      const x = bx.left + slot * index + (slot - barWidth) / 2;
-      let cursor = bx.bottom;
-      keys.forEach((key, keyIndex) => {
-        const value = row[key] || 0;
-        if (!value) return;
-        const heightPx = (value / (high - low)) * bx.height;
-        cursor -= heightPx;
-        ctx.fillStyle = colors[keyIndex];
-        const radius = 2;
-        ctx.beginPath();
-        ctx.roundRect(x, cursor, barWidth, heightPx, [radius, radius, 0, 0]);
-        ctx.fill();
+      const slot = bx.width / data.length;
+      const barWidth = Math.max(2, Math.min(14, slot - 2));
+
+      data.forEach((row, index) => {
+        const x = bx.left + slot * index + (slot - barWidth) / 2;
+        let cursor = bx.bottom;
+        keys.forEach((key, keyIndex) => {
+          const value = row[key] || 0;
+          if (!value) return;
+          const heightPx = (value / (high - low)) * bx.height;
+          cursor -= heightPx;
+          ctx.fillStyle = colors[keyIndex];
+          ctx.beginPath();
+          ctx.roundRect(x, cursor, barWidth, heightPx, [2, 2, 0, 0]);
+          ctx.fill();
+        });
       });
-    });
 
-    ctx.fillStyle = css("--faint", "#666");
-    ctx.textAlign = "left";
-    ctx.fillText(data[0].date.slice(5), bx.left, h - 8);
-    ctx.textAlign = "right";
-    ctx.fillText(data[data.length - 1].date.slice(5), bx.right, h - 8);
+      ctx.fillStyle = css("--faint", "#666");
+      ctx.textAlign = "left";
+      ctx.fillText(data[0].date.slice(5), bx.left, h - 8);
+      ctx.textAlign = "right";
+      ctx.fillText(data[data.length - 1].date.slice(5), bx.right, h - 8);
 
-    const tip = tooltipFor(canvas, tipEl);
-    const positions = data.map((_, index) => ({ x: bx.left + slot * index + slot / 2, y: bx.top }));
-    attachHover(canvas, positions, (index, position) => {
-      if (index < 0) return tip && tip.hide();
-      if (tip) tip.show(tipHTML(index, data[index]), position.x, position.y + 10);
-    });
+      holder.positions = data.map((_, index) => ({
+        x: bx.left + slot * index + slot / 2,
+        y: bx.top,
+      }));
+    };
+
+    holder.onIndex = (index) => {
+      if (index < 0) return hideTip(tipEl);
+      showTip(tipEl, canvas, tipHTML(index, data[index]), holder.positions[index].x, 18);
+    };
+
+    bindHover(canvas, holder);
+    paint();
   };
 
   /* ---------------------------------------------------------------- bars --- */
@@ -327,45 +360,55 @@
     if (!data.length) return;
 
     const maxValue = Math.max(...data.map((row) => row[key]), goal || 0) * 1.15;
-    const { ctx, w, h } = prep(canvas, height);
-    const bx = box(w, h, { left: 40, right: 10, top: 14, bottom: 24 });
-    const { ticks, low, high } = niceTicks(0, maxValue, 3);
-    grid(ctx, bx, ticks, low, high, format);
+    const holder = { positions: [], onIndex: null };
 
-    const slot = bx.width / data.length;
-    const barWidth = Math.max(2, Math.min(10, slot - 2));
+    const paint = () => {
+      const { ctx, w, h } = prep(canvas, height);
+      const bx = box(w, h, { left: 40, right: 10, top: 14, bottom: 24 });
+      const { ticks, low, high } = niceTicks(0, maxValue, 3);
+      grid(ctx, bx, ticks, low, high, format);
 
-    data.forEach((row, index) => {
-      const value = row[key];
-      const heightPx = (value / (high - low)) * bx.height;
-      const x = bx.left + slot * index + (slot - barWidth) / 2;
-      ctx.fillStyle = value >= (goal || Infinity) ? color : color + "99";
-      ctx.beginPath();
-      ctx.roundRect(x, bx.bottom - heightPx, barWidth, heightPx, [2, 2, 0, 0]);
-      ctx.fill();
-    });
+      const slot = bx.width / data.length;
+      const barWidth = Math.max(2, Math.min(10, slot - 2));
 
-    if (goal) {
-      const y = bx.bottom - (goal / (high - low)) * bx.height;
-      ctx.save();
-      ctx.setLineDash([3, 4]);
-      ctx.strokeStyle = css("--line-strong", "rgba(255,255,255,.25)");
-      ctx.beginPath();
-      ctx.moveTo(bx.left, y);
-      ctx.lineTo(bx.right, y);
-      ctx.stroke();
-      ctx.restore();
-      ctx.fillStyle = css("--faint", "#777");
-      ctx.textAlign = "right";
-      ctx.fillText(format(goal), bx.right, y - 8);
-    }
+      data.forEach((row, index) => {
+        const value = row[key];
+        const heightPx = (value / (high - low)) * bx.height;
+        const x = bx.left + slot * index + (slot - barWidth) / 2;
+        ctx.fillStyle = value >= (goal || Infinity) ? color : color + "99";
+        ctx.beginPath();
+        ctx.roundRect(x, bx.bottom - heightPx, barWidth, heightPx, [2, 2, 0, 0]);
+        ctx.fill();
+      });
 
-    const tip = tooltipFor(canvas, tipEl);
-    const positions = data.map((_, index) => ({ x: bx.left + slot * index + slot / 2, y: bx.top }));
-    attachHover(canvas, positions, (index, position) => {
-      if (index < 0) return tip && tip.hide();
-      if (tip) tip.show(tipHTML(index, data[index]), position.x, position.y + 10);
-    });
+      if (goal) {
+        const y = bx.bottom - (goal / (high - low)) * bx.height;
+        ctx.save();
+        ctx.setLineDash([3, 4]);
+        ctx.strokeStyle = css("--line-strong", "rgba(255,255,255,.25)");
+        ctx.beginPath();
+        ctx.moveTo(bx.left, y);
+        ctx.lineTo(bx.right, y);
+        ctx.stroke();
+        ctx.restore();
+        ctx.fillStyle = css("--faint", "#777");
+        ctx.textAlign = "right";
+        ctx.fillText(format(goal), bx.right, y - 8);
+      }
+
+      holder.positions = data.map((_, index) => ({
+        x: bx.left + slot * index + slot / 2,
+        y: bx.top,
+      }));
+    };
+
+    holder.onIndex = (index) => {
+      if (index < 0) return hideTip(tipEl);
+      showTip(tipEl, canvas, tipHTML(index, data[index]), holder.positions[index].x, 18);
+    };
+
+    bindHover(canvas, holder);
+    paint();
   };
 
   /* ---------------------------------------------------------------- area --- */
@@ -424,7 +467,7 @@
   Viz.dial = function (svg, options) {
     const { value, max = 100, color = css("--accent"), trackColor = css("--line") } = options;
     const radius = 62;
-    const circumference = Math.PI * radius; // half circle
+    const circumference = Math.PI * radius;
     svg.setAttribute("viewBox", "0 0 150 88");
     svg.innerHTML = "";
 
@@ -443,27 +486,32 @@
     svg.appendChild(arc(trackColor, `${circumference}`, 9));
     const ratio = Math.max(0, Math.min(1, (value || 0) / max));
     const filled = arc(color, `${circumference * ratio} ${circumference}`, 9);
-    filled.style.transition = "stroke-dasharray 1s cubic-bezier(.22,1,.36,1)";
     svg.appendChild(filled);
   };
 
   /* ------------------------------------------------------------ registry --- */
   Viz.register = function (canvas, draw) {
-    registry.push({ canvas, draw });
-    if (typeof ResizeObserver !== "undefined") {
-      let frame = null;
-      const observer = new ResizeObserver(() => {
-        if (frame) cancelAnimationFrame(frame);
-        frame = requestAnimationFrame(() => {
-          try {
-            draw();
-          } catch (error) {
-            console.warn("chart redraw failed", error);
-          }
-        });
+    const entry = { canvas, draw, observer: null };
+    registry.push(entry);
+    if (typeof ResizeObserver === "undefined") return;
+    let frame = null;
+    let lastWidth = 0;
+    const observer = new ResizeObserver((entries) => {
+      const width = Math.round(entries[0].contentRect.width);
+      // A redraw cannot change a chart's own width; bail if it did not move.
+      if (width === lastWidth) return;
+      lastWidth = width;
+      if (frame) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        try {
+          draw();
+        } catch (error) {
+          console.warn("chart redraw failed", error);
+        }
       });
-      observer.observe(canvas.parentElement);
-    }
+    });
+    observer.observe(canvas.parentElement);
+    entry.observer = observer;
   };
 
   Viz.redrawAll = function () {
@@ -477,6 +525,12 @@
   };
 
   Viz.reset = function () {
+    // Disconnect, or every lock/re-render leaves a live observer behind that
+    // redraws a canvas the page no longer shows.
+    registry.forEach((entry) => {
+      if (entry.observer) entry.observer.disconnect();
+      entry.canvas.getContext("2d").clearRect(0, 0, entry.canvas.width, entry.canvas.height);
+    });
     registry.length = 0;
   };
 
