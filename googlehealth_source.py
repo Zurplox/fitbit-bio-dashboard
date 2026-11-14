@@ -523,10 +523,13 @@ def _daily_series(client, data_type, field, days, extractor, dq, label, note_uni
     points = client.list_points(data_type, max_pages=max(3, days // 20))
     records = []
     for point in points:
-        day = _civil(point.get("date"))
+        # The civil date travels inside the type's own body
+        # (`dailyRestingHeartRate.date`), not beside it.
+        body = point.get(field) or {}
+        day = _civil(body.get("date"))
         if not day:
             continue
-        value = extractor(point.get(field) or {})
+        value = extractor(body)
         if value is None:
             continue
         records.append({"date": day, "value": value})

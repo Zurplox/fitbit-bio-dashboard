@@ -181,10 +181,12 @@ class DailySeriesTests(unittest.TestCase):
         fake = FakeClient(
             points={
                 "daily-resting-heart-rate": [
-                    {"date": {"year": 2026, "month": 11, "day": 2},
-                     "dailyRestingHeartRate": {"beatsPerMinute": "52"}},
-                    {"date": {"year": 2026, "month": 11, "day": 3},
-                     "dailyRestingHeartRate": {"beatsPerMinute": "54"}},
+                    {"dailyRestingHeartRate": {
+                        "date": {"year": 2026, "month": 11, "day": 2},
+                        "beatsPerMinute": "52"}},
+                    {"dailyRestingHeartRate": {
+                        "date": {"year": 2026, "month": 11, "day": 3},
+                        "beatsPerMinute": "54"}},
                 ]
             }
         )
@@ -198,13 +200,22 @@ class DailySeriesTests(unittest.TestCase):
         fake = FakeClient(
             points={
                 "daily-heart-rate-variability": [
-                    {"date": {"year": 2026, "month": 11, "day": 2},
-                     "dailyHeartRateVariability": {"averageHeartRateVariabilityMilliseconds": 44.5}}
+                    {"dailyHeartRateVariability": {
+                        "date": {"year": 2026, "month": 11, "day": 2},
+                        "averageHeartRateVariabilityMilliseconds": 44.5}},
                 ]
             }
         )
         rows = source.fetch_daily_hrv(fake, days=30)
         self.assertEqual(rows[0]["value"], 44.5)
+
+    def test_a_point_with_no_civil_date_is_not_dated_by_guesswork(self):
+        fake = FakeClient(points={"daily-resting-heart-rate": [
+            {"dailyRestingHeartRate": {"beatsPerMinute": "52"}},
+        ]})
+        dq = DataQuality()
+        self.assertEqual(source.fetch_daily_rhr(fake, days=30, dq=dq), [])
+        self.assertEqual(dq.as_dict()["metrics"]["rhr"]["source"], "missing")
 
     def test_steps_are_chunked_not_one_giant_request(self):
         fake = FakeClient(rollup_points=[
