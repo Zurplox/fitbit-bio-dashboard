@@ -48,7 +48,8 @@
       </div>
 
       <nav class="nav" aria-label="Sections">
-        <a href="#today" aria-current="true">Today</a>
+        <a href="#band" aria-current="true">Recovery</a>
+        <a href="#today">Today</a>
         <a href="#sleep">Sleep</a>
         <a href="#heart">Heart</a>
         <a href="#load">Load</a>
@@ -83,6 +84,69 @@
 
     <main class="shell">
       <div id="staleBanner" class="stale-banner" hidden></div>
+
+      <!-- ------------------------------------------------- whoop ring band -->
+      <section id="band" aria-label="Recovery, strain and sleep at a glance">
+        <div class="rings">
+          <article class="ringcard reveal" style="--hue:var(--good)">
+            <div class="ringwrap">
+              <svg viewBox="0 0 150 150" role="img" aria-labelledby="rcRecTitle">
+                <title id="rcRecTitle">Recovery</title>
+                <circle class="trk" cx="75" cy="75" r="63" fill="none" stroke-width="11" />
+                <circle id="rcRecArc" class="val" cx="75" cy="75" r="63" fill="none" stroke-width="11"
+                        stroke-dasharray="395.8" stroke-dashoffset="395.8" />
+              </svg>
+              <div class="center">
+                <div class="big"><span id="rcRecScore">--</span><small>%</small></div>
+                <div class="hue">Recovery</div>
+              </div>
+            </div>
+            <div class="bandname" id="rcRecBand">--</div>
+            <div class="ringfoot" id="rcRecFoot">--</div>
+          </article>
+
+          <article class="ringcard reveal" style="--hue:var(--strain)">
+            <div class="ringwrap">
+              <svg viewBox="0 0 150 150" role="img" aria-labelledby="rcStrTitle">
+                <title id="rcStrTitle">Strain</title>
+                <circle class="trk" cx="75" cy="75" r="63" fill="none" stroke-width="11" />
+                <circle id="rcStrArc" class="val" cx="75" cy="75" r="63" fill="none" stroke-width="11"
+                        stroke-dasharray="395.8" stroke-dashoffset="395.8" />
+              </svg>
+              <div class="center">
+                <div class="big" id="rcStrScore">--</div>
+                <div class="hue">Strain</div>
+              </div>
+            </div>
+            <div class="bandname" id="rcStrBand">--</div>
+            <div class="ringfoot" id="rcStrFoot">--</div>
+          </article>
+
+          <article class="ringcard reveal" style="--hue:var(--sleep)">
+            <div class="ringwrap">
+              <svg viewBox="0 0 150 150" role="img" aria-labelledby="rcSlpTitle">
+                <title id="rcSlpTitle">Sleep</title>
+                <circle class="trk" cx="75" cy="75" r="63" fill="none" stroke-width="11" />
+                <circle id="rcSlpArc" class="val" cx="75" cy="75" r="63" fill="none" stroke-width="11"
+                        stroke-dasharray="395.8" stroke-dashoffset="395.8" />
+              </svg>
+              <div class="center">
+                <div class="big"><span id="rcSlpScore">--</span><small>%</small></div>
+                <div class="hue">Sleep</div>
+              </div>
+            </div>
+            <div class="bandname" id="rcSlpBand">--</div>
+            <div class="ringfoot" id="rcSlpFoot">--</div>
+          </article>
+        </div>
+
+        <div class="strip" id="strip" role="list" aria-label="Today's vitals"></div>
+
+        <p class="band-note">
+          Strain is your acute-to-chronic training ratio scaled to 0–21, not WHOOP's proprietary
+          heart-rate integral — the API returns hourly averages here, not second-by-second data.
+        </p>
+      </section>
 
       <!-- ------------------------------------------------------------ hero -->
       <section id="today" class="hero">

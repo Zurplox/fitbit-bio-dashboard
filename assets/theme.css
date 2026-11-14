@@ -26,6 +26,9 @@
   --rhr: #ff8a9e;
   --steps: #b6e36a;
   --spo2: #6fd2f0;
+  /* Strain is its own hue: recovery and sleep already own green and violet, and
+     the middle ring has to read as effort rather than as a second recovery. */
+  --strain: #ff5c5c;
 
   --accent: #6ee7c7;
   --accent-ink: #06110e;
@@ -60,6 +63,7 @@
   --rhr: #d64b52;
   --steps: #5f8c12;
   --spo2: #1b7fa8;
+  --strain: #d64b52;
 
   --accent: #0f9c74;
   --accent-ink: #ffffff;
@@ -286,8 +290,100 @@ section { padding-top: clamp(40px, 6vw, 68px); }
 .ring-score small { font-size: 0.38em; color: var(--muted); font-weight: 500; letter-spacing: 0; }
 .ring-label { margin-top: 6px; }
 
-/* -------------------------------------------------------------------- card */
-.card {
+/* --------------------------------------------------------- whoop ring band */
+#band { padding-top: clamp(24px, 4vw, 40px); }
+
+.rings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+  gap: 14px;
+}
+
+.ringcard {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px 18px 18px;
+  text-align: center;
+  transition: border-color 0.2s ease;
+}
+.ringcard:hover { border-color: var(--line-strong); }
+.ringcard::before {
+  /* A single hairline of hue across the top: which ring you are looking at,
+     without a coloured panel behind everything. */
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--hue), transparent);
+  opacity: 0.55;
+}
+
+.ringwrap { position: relative; width: 150px; height: 150px; margin: 0 auto; }
+.ringwrap svg { display: block; width: 100%; height: 100%; transform: rotate(-90deg); }
+.ringwrap .trk { stroke: var(--surface-3); }
+.ringwrap .val {
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1.1s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.big {
+  font-size: 42px;
+  font-weight: 620;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.big small { font-size: 17px; font-weight: 500; color: var(--muted); margin-left: 1px; }
+.hue {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-top: 7px;
+}
+.bandname { font-size: 14px; font-weight: 580; margin-top: 8px; color: var(--hue); }
+.ringfoot { font-size: 12px; color: var(--muted); margin-top: 8px; min-height: 34px; line-height: 1.45; }
+.ringfoot b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1px;
+  margin-top: 14px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.cell { background: var(--surface); padding: 13px 15px; }
+.cell .k {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.cell .v { font-size: 21px; font-weight: 600; letter-spacing: -0.02em; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.cell .v u { text-decoration: none; font-size: 12px; color: var(--muted); font-weight: 450; margin-left: 3px; }
+.cell .d { font-size: 11.5px; margin-top: 2px; color: var(--muted); }
+.up { color: var(--good); }
+.down { color: var(--bad); }
+.flat { color: var(--muted); }
+
+.band-note { margin-top: 14px; font-size: 11.5px; color: var(--faint); max-width: 72ch; }
+
   position: relative;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -511,6 +607,16 @@ footer {
   .pattern { grid-template-columns: minmax(0, 1fr); }
   .pattern .r { text-align: left; }
   .brand-name span { display: none; }
+  /* Three rings side by side is the point of the band; on a phone they stack
+     and shrink rather than becoming three screens of scrolling. */
+  .rings { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .ringcard { display: grid; grid-template-columns: 118px minmax(0, 1fr); align-items: center; gap: 14px; padding: 14px 16px; text-align: left; }
+  .ringwrap { width: 118px; height: 118px; margin: 0; }
+  .big { font-size: 32px; }
+  .big small { font-size: 14px; }
+  .bandname { margin-top: 0; }
+  .ringfoot { min-height: 0; }
+  .strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media print {

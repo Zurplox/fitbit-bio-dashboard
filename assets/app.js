@@ -224,6 +224,120 @@
     }
   }
 
+  /* --------------------------------------------------------- whoop ring band -- */
+  const RING_CIRCUMFERENCE = 2 * Math.PI * 63;
+
+  function setRing(arcId, ratio, color) {
+    const arc = $(arcId);
+    if (!arc) return;
+    arc.setAttribute("stroke-dasharray", String(RING_CIRCUMFERENCE));
+    // A missing value leaves the ring empty: an unfilled arc is honest, a
+    // zero-length one at full opacity would read as a measurement of nothing.
+    const bounded = ratio === null || ratio === undefined ? 0 : Math.max(0, Math.min(1, ratio));
+    arc.setAttribute("stroke-dashoffset", String(RING_CIRCUMFERENCE * (1 - bounded)));
+    arc.style.stroke = color;
+  }
+
+  /** WHOOP shows strain on a 0-21 scale. The payload holds ACWR and minutes, so
+   *  the ratio is mapped onto that span and labelled as what it is. */
+  function strainFrom(load) {
+    if (load.acwr === null || load.acwr === undefined) return null;
+    return Math.max(0, Math.min(21, (load.acwr / 2) * 21));
+  }
+
+  function renderBand(data) {
+    const today = data.today || {};
+    const load = data.load || {};
+    const recovery = today.recovery || {};
+    const sleep = today.sleep || {};
+    const hrv = today.hrv || {};
+    const rhr = today.rhr || {};
+    const spo2 = today.spo2 || {};
+
+    const toneColor = (band) => {
+      const tone = bandTone(band);
+      return cssVar(tone === "neutral" ? "--accent" : `--${tone}`);
+    };
+
+    // ---- Recovery ring
+    setRing("rcRecArc", (recovery.score ?? null) === null ? null : recovery.score / 100, toneColor(recovery.band));
+    setText("rcRecScore", recovery.score === null || recovery.score === undefined ? DASH : Math.round(recovery.score));
+    setText("rcRecBand", bandLabel(recovery.band));
+    setHTML(
+      "rcRecFoot",
+      `HRV <b>${signed(hrv.delta_pct, 0, "%")}</b> vs your median<br/>` +
+        `RHR <b>${num(rhr.bpm)}</b> bpm · SpO₂ <b>${num(spo2.pct, 1)}%</b>`
+    );
+
+    // ---- Strain ring
+    const strain = strainFrom(load);
+    setRing("rcStrArc", strain === null ? null : strain / 21, cssVar("--strain"));
+    setText("rcStrScore", strain === null ? DASH : strain.toFixed(1));
+    setText("rcStrBand", bandLabel(load.acwr_band));
+    setHTML(
+      "rcStrFoot",
+      load.acwr === null || load.acwr === undefined
+        ? "No sessions in the window"
+        : `ACWR <b>${load.acwr.toFixed(2)}</b> · ${hm(load.acute_minutes)} trained this week`
+    );
+
+    // ---- Sleep ring: need met, not the device's composite score
+    const needPct =
+      sleep.minutes !== null && sleep.minutes !== undefined && sleep.need_minutes
+        ? Math.min(100, (sleep.minutes / sleep.need_minutes) * 100)
+        : null;
+    setRing("rcSlpArc", needPct === null ? null : needPct / 100, cssVar("--sleep"));
+    setText("rcSlpScore", needPct === null ? DASH : Math.round(needPct));
+    setText("rcSlpBand", needPct === null ? DASH : needPct >= 100 ? "Fully repaid" : sleep.debt_minutes ? "In debt" : "At baseline");
+    setHTML(
+      "rcSlpFoot",
+      `${hm(sleep.minutes)} of <b>${hm(sleep.need_minutes)}</b> need<br/>` +
+        (sleep.debt_minutes ? `Debt <b>${hm(sleep.debt_minutes)}</b> over 14 nights` : `No accumulated debt`)
+    );
+
+    renderStrip(data);
+  }
+
+  function deltaCell(value, unit, invert) {
+    // For HRV higher is better; for resting rate lower is better. `invert`
+    // flips which colour means good, so both read as movement plus meaning.
+    if (value === null || value === undefined) return '<div class="d flat">no baseline</div>';
+    const good = invert ? value <= 0 : value >= 0;
+    const arrow = value > 0 ? "▲" : value < 0 ? "▼" : "•";
+    const cls = value === 0 ? "flat" : good ? "up" : "down";
+    return `<div class="d ${cls}">${arrow} ${Math.abs(value).toFixed(unit === "%" ? 0 : 1)}${unit}</div>`;
+  }
+
+  function renderStrip(data) {
+    const container = $("strip");
+    if (!container) return;
+    const today = data.today || {};
+    const steps = today.steps || {};
+    const resp = today.resp || {};
+    const readiness = today.readiness || {};
+
+    const cells = [
+      {
+        k: "Readiness",
+        v: readiness.score === null || readiness.score === undefined ? DASH : `${num(readiness.score)}<u>/100</u>`,
+        d: `<div class="d ${bandTone(readiness.band) === "good" ? "up" : bandTone(readiness.band) === "bad" ? "down" : "flat"}">${escapeHTML(bandLabel(readiness.band))}</div>`,
+      },
+      { k: "Resting HR", v: `${num(today.rhr && today.rhr.bpm)}<u>bpm</u>`, d: deltaCell(today.rhr && today.rhr.delta, " bpm", true) },
+      { k: "HRV", v: `${num(today.hrv && today.hrv.ms, 1)}<u>ms</u>`, d: deltaCell(today.hrv && today.hrv.delta_pct, "%", false) },
+      { k: "Breathing", v: `${num(resp.brpm, 1)}<u>brpm</u>`, d: deltaCell(resp.delta, " brpm", true) },
+      { k: "SpO₂", v: `${num(today.spo2 && today.spo2.pct, 1)}<u>%</u>`, d: `<div class="d flat">${num(today.spo2 && today.spo2.nights_recorded)} of ${num(today.spo2 && today.spo2.window_days)} nights</div>` },
+      {
+        k: "Steps",
+        v: num(steps.count),
+        d: steps.pct === null || steps.pct === undefined ? '<div class="d flat">not measured</div>' : `<div class="d ${steps.pct >= 100 ? "up" : "flat"}">${num(steps.pct)}% of ${num(steps.goal)}</div>`,
+      },
+    ];
+
+    container.innerHTML = cells
+      .map((cell) => `<div class="cell" role="listitem"><div class="k">${cell.k}</div><div class="v">${cell.v}</div>${cell.d}</div>`)
+      .join("");
+  }
+
   /* --------------------------------------------------------------- vitals -- */
   function renderVitals(data) {
     const today = data.today || {};
@@ -620,6 +734,7 @@
   /* ---------------------------------------------------------------- render -- */
   function render(data) {
     state.payload = data;
+    renderBand(data);
     renderHero(data);
     renderVitals(data);
     renderLoad(data);
@@ -689,6 +804,8 @@
   // Everything the render pass writes into, so locking can actually empty it.
   // Hiding a container is not purging: the text would still sit in the DOM.
   const RENDERED_IDS = [
+    "rcRecScore", "rcRecBand", "rcRecFoot", "rcStrScore", "rcStrBand", "rcStrFoot",
+    "rcSlpScore", "rcSlpBand", "rcSlpFoot",
     "ringScore", "ringBand", "ringSub", "heroHeadline", "heroLede", "metaDevice", "metaSync",
     "metaSource", "metaWindow", "kpiSleep", "kpiSleepSub", "kpiSleepBand", "kpiHrv", "kpiHrvSub",
     "kpiHrvBand", "kpiRhr", "kpiRhrSub", "kpiRhrBand", "kpiSpo2", "kpiSpo2Sub", "kpiSpo2Band",
@@ -706,6 +823,9 @@
       if (node) node.innerHTML = "";
     });
     RENDERED_IDS.forEach((id) => setText(id, DASH));
+    ["rcRecArc", "rcStrArc", "rcSlpArc"].forEach((id) => setRing(id, 0, cssVar("--line-strong")));
+    const strip = $("strip");
+    if (strip) strip.innerHTML = "";
     const dial = $("loadDial");
     if (dial) dial.innerHTML = "";
     const bar = $("activeBar");
