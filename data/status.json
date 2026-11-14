@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-11-13T15:46:03.182430+00:00",
-  "demo": true,
+  "updated_at": "2026-11-14T14:02:25.920292+00:00",
+  "demo": false,
   "device": "Fitbit Air",
-  "metrics_live": 14,
+  "metrics_live": 13,
   "metrics_total": 14,
   "version": 2
 }
