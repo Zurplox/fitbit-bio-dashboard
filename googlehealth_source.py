@@ -501,6 +501,24 @@ def _local_minutes(iso_timestamp, offset_seconds):
     return local.hour * 60 + local.minute
 
 
+def _key_paths(obj, prefix="", depth=0):
+    """Field names only, never values: enough to see where a payload diverges."""
+    if depth > 2:
+        return []
+    if isinstance(obj, dict):
+        paths = []
+        for key, value in obj.items():
+            here = f"{prefix}.{key}" if prefix else key
+            if isinstance(value, (dict, list)):
+                paths.extend(_key_paths(value, here, depth + 1))
+            else:
+                paths.append(here)
+        return paths
+    if isinstance(obj, list) and obj:
+        return _key_paths(obj[0], f"{prefix}[]", depth + 1)
+    return []
+
+
 def _daily_series(client, data_type, field, days, extractor, dq, label, note_unit):
     points = client.list_points(data_type, max_pages=max(3, days // 20))
     records = []
@@ -513,6 +531,14 @@ def _daily_series(client, data_type, field, days, extractor, dq, label, note_uni
             continue
         records.append({"date": day, "value": value})
     ordered = _chronological(records)
+
+    # Zero rows out of a 200 is the one failure mode that looks like a quiet
+    # account. Name the fields the API did send, so the shape is diagnosable
+    # from the log without printing a measurement.
+    if not ordered:
+        fields = ", ".join(_key_paths(points[0])) if points else "no data points"
+        print(f"   {data_type}: 0 usable of {len(points)} - fields: {fields[:400]}")
+
     if dq:
         dq.record(label[0], bool(ordered), f"{len(ordered)} {note_unit}" if ordered else "none returned", label[1])
     return ordered
@@ -621,11 +647,12 @@ def fetch_daily_active_minutes(client, days=90, dq=None):
 def fetch_exercise(client, days=90, dq=None):
     today = local_today()
     since = today - timedelta(days=days)
-    # Filter on physical time: session intervals report `start_time`, and a
-    # civil-time filter is only documented for the interval data types.
+    # Filter on civil time: the physical `start_time` member is rejected by the
+    # API for this data type, and only the civil members are documented as
+    # filterable on interval types.
     points = client.list_points(
         "exercise",
-        filter_expr=f'exercise.interval.start_time >= "{since.isoformat()}T00:00:00Z"',
+        filter_expr=f'exercise.interval.civil_start_time >= "{since.isoformat()}"',
         max_pages=max(4, days // 15),
     )
 
