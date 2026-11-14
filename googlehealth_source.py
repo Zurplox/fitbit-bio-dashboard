@@ -47,6 +47,11 @@ ROLLUP_MAX_DAYS_DEFAULT = 90
 
 LIST_PAGE_SIZE = 25  # the API's documented maximum
 
+# `dataPoints.list` has no documented sort direction, so a daily series is
+# read to the end and then windowed by date. 60 pages is 1,500 points — over
+# four years of a once-a-day type before this binds.
+LIST_PAGE_CEILING = 60
+
 
 class AuthError(RuntimeError):
     """Configuration or token problems. Always fatal: nothing can be fetched."""
@@ -520,7 +525,7 @@ def _key_paths(obj, prefix="", depth=0):
 
 
 def _daily_series(client, data_type, field, days, extractor, dq, label, note_unit):
-    points = client.list_points(data_type, max_pages=max(3, days // 20))
+    points = client.list_points(data_type, max_pages=LIST_PAGE_CEILING)
     records = []
     for point in points:
         # The civil date travels inside the type's own body
@@ -533,7 +538,10 @@ def _daily_series(client, data_type, field, days, extractor, dq, label, note_uni
         if value is None:
             continue
         records.append({"date": day, "value": value})
-    ordered = _chronological(records)
+    # Sorted by date, then windowed: an unfiltered read would otherwise hand the
+    # dashboard the oldest N readings and label the last one "today", whichever
+    # order the pages happen to arrive in.
+    ordered = _chronological(records)[-days:]
 
     # Zero rows out of a 200 is the one failure mode that looks like a quiet
     # account. Name the fields the API did send, so the shape is diagnosable

@@ -201,7 +201,8 @@ unset secret (which arrives as an empty string) falls back instead of blanking t
 * **Testing-mode tokens.** While the OAuth consent screen is unpublished, Google expires refresh
   tokens after **7 days**. Either publish the app or re-run `scripts/authorize.py` weekly; the
   sync fails with an `invalid_grant` message that says exactly this.
-* **Page size 25.** Long daily series are paged; the code caps pages per series deliberately.
+* **Page size 25.** Long daily series are paged to a 1,500-point ceiling and then windowed
+  by date, so the newest readings survive whichever order the pages arrive in.
 * **Rollup caps.** Calories and active minutes are fetched in 14-day chunks, steps in 90-day
   chunks, and stitched.
 * **Intraday heart rate** is a 24-hour window of hourly averages, not historical minute data.

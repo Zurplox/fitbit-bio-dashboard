@@ -217,6 +217,18 @@ class DailySeriesTests(unittest.TestCase):
         self.assertEqual(source.fetch_daily_rhr(fake, days=30, dq=dq), [])
         self.assertEqual(dq.as_dict()["metrics"]["rhr"]["source"], "missing")
 
+    def test_the_window_keeps_the_newest_readings(self):
+        # The list endpoint does not promise a sort order, so a window filled
+        # by truncation would be the *oldest* days whenever it returns ascending.
+        fake = FakeClient(points={"daily-resting-heart-rate": [
+            {"dailyRestingHeartRate": {
+                "date": {"year": 2026, "month": 11, "day": day},
+                "beatsPerMinute": str(50 + day)}}
+            for day in (1, 2, 3)
+        ]})
+        rows = source.fetch_daily_rhr(fake, days=2)
+        self.assertEqual([r["date"] for r in rows], ["2026-11-02", "2026-11-03"])
+
     def test_steps_are_chunked_not_one_giant_request(self):
         fake = FakeClient(rollup_points=[
             {"civilStartTime": {"date": {"year": 2026, "month": 8, "day": 1}},
