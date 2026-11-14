@@ -478,7 +478,10 @@ def main():
         f"  recovery     : {today['recovery']['score']}% ({today['recovery']['band']['label']})"
         f" | readiness {today['readiness']['score']}"
     )
-    print(f"  load ratio   : {payload['load']['acwr']} ({payload['load']['acwr_band']})")
+    print(
+        f"  load ratio   : {payload['load']['acwr']} "
+        f"({(payload['load']['acwr_band'] or {}).get('label')})"
+    )
     print(
         f"  provenance   : {quality['live_count']}/{quality['total_count']} groups live "
         f"({quality['live_pct']}%)"
