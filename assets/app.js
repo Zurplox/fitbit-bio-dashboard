@@ -334,8 +334,20 @@
       `<span class="inline-band ${bandTone(sleep.band)}"><i></i>${escapeHTML(bandLabel(sleep.band))}</span>`
     );
 
+    // A median is only a baseline once it has nights behind it. The payload
+    // carries how many it used, so say so rather than letting two nights read
+    // like a month.
+    const hrvNights = (data.baselines && data.baselines.hrv_nights) || null;
+    const hrvBasis =
+      hrvNights !== null && hrvNights < 7
+        ? ` from ${hrvNights} ${hrvNights === 1 ? "night" : "nights"}`
+        : "";
+
     setText("kpiHrv", `${num(hrv.ms, 1)}`);
-    setText("kpiHrvSub", `median ${num(hrv.baseline, 1)} ms · ${signed(hrv.delta_pct, 0, "%")}`);
+    setText(
+      "kpiHrvSub",
+      `median ${num(hrv.baseline, 1)} ms${hrvBasis} · ${signed(hrv.delta_pct, 0, "%")}`
+    );
     setHTML(
       "kpiHrvBand",
       `<span class="inline-band ${bandTone(hrv.band)}"><i></i>${escapeHTML(bandLabel(hrv.band))}</span>`
@@ -608,7 +620,7 @@
   /* ------------------------------------------------------------- patterns -- */
   function renderPatterns(data) {
     const corr = data.correlations || {};
-    const container = $("patterns");
+    const container = $("patternList");
     if (!container) return;
     setText(
       "patternNote",
@@ -652,7 +664,7 @@
 
   /* ---------------------------------------------------------------- coach -- */
   function renderCoach(data) {
-    const container = $("coach");
+    const container = $("coachGrid");
     if (!container) return;
     const coaching = data.coaching || {};
     container.innerHTML = "";
@@ -912,7 +924,7 @@
   ];
 
   function purgeRendered() {
-    ["patterns", "coach", "provenance", "heatmap"].forEach((id) => {
+    ["patternList", "coachGrid", "provenance", "heatmap"].forEach((id) => {
       const node = $(id);
       if (node) node.innerHTML = "";
     });
