@@ -788,16 +788,130 @@
     }, 2500);
   }
 
+  /* ------------------------------------------------------- remembered vault -- */
+  // "Remember this browser" reopens the vault without retyping the passphrase.
+  // The passphrase is what is kept, sealed under a device key generated here;
+  // that key is non-extractable and lives in IndexedDB, so a copy of the browser
+  // profile holds ciphertext plus a key only this origin can use. Keeping the
+  // passphrase rather than the derived AES key is deliberate: every sync
+  // re-encrypts the vault under a fresh salt, and a stored key would stop
+  // opening it the next morning.
+  const REMEMBER = {
+    db: "meridian-air-vault",
+    store: "device",
+    key: "device-key",
+    wrapped: "wrapped-passphrase",
+    days: 30,
+  };
+
+  function idbOpen() {
+    return new Promise((resolve, reject) => {
+      if (!window.indexedDB) {
+        reject(new Error("IndexedDB is unavailable in this browser"));
+        return;
+      }
+      const request = indexedDB.open(REMEMBER.db, 1);
+      request.onupgradeneeded = () => request.result.createObjectStore(REMEMBER.store);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  function idbRun(mode, run) {
+    return idbOpen().then(
+      (db) =>
+        new Promise((resolve, reject) => {
+          const tx = db.transaction(REMEMBER.store, mode);
+          const request = run(tx.objectStore(REMEMBER.store));
+          tx.oncomplete = () => {
+            db.close();
+            resolve(request ? request.result : undefined);
+          };
+          tx.onerror = () => {
+            db.close();
+            reject(tx.error);
+          };
+          tx.onabort = () => {
+            db.close();
+            reject(tx.error);
+          };
+        })
+    );
+  }
+
+  async function deviceKey(create) {
+    const existing = await idbRun("readonly", (store) => store.get(REMEMBER.key));
+    if (existing) return existing;
+    if (!create) return null;
+    const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, [
+      "encrypt",
+      "decrypt",
+    ]);
+    await idbRun("readwrite", (store) => store.put(key, REMEMBER.key));
+    return key;
+  }
+
+  async function rememberPassphrase(passphrase) {
+    try {
+      const key = await deviceKey(true);
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const sealed = await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv },
+        key,
+        new TextEncoder().encode(passphrase)
+      );
+      await idbRun("readwrite", (store) =>
+        store.put(
+          { iv: Array.from(iv), sealed: Array.from(new Uint8Array(sealed)), at: Date.now() },
+          REMEMBER.wrapped
+        )
+      );
+    } catch (error) {
+      // Private mode, or a denied store: the passphrase is simply asked for again.
+    }
+  }
+
+  async function recallPassphrase() {
+    try {
+      const record = await idbRun("readonly", (store) => store.get(REMEMBER.wrapped));
+      if (!record) return null;
+      if (Date.now() - record.at > REMEMBER.days * 86400000) {
+        await forgetPassphrase();
+        return null;
+      }
+      const key = await deviceKey(false);
+      if (!key) return null;
+      const plain = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: new Uint8Array(record.iv) },
+        key,
+        new Uint8Array(record.sealed)
+      );
+      return new TextDecoder().decode(plain);
+    } catch (error) {
+      // The record no longer opens, so it is of no further use.
+      await forgetPassphrase();
+      return null;
+    }
+  }
+
+  async function forgetPassphrase() {
+    try {
+      await idbRun("readwrite", (store) => store.delete(REMEMBER.wrapped));
+    } catch (error) {
+      /* nothing stored, nothing to forget */
+    }
+  }
+
   /* -------------------------------------------------------------- session -- */
-  async function unlock(passphrase) {
+  async function unlock(passphrase, persist) {
     const data = await decryptVault(passphrase);
-    // Held in memory for this page's lifetime only, so Refresh can re-read the
-    // vault without re-prompting. It is never written to storage and never sent
-    // anywhere: the only network request is the vault itself.
+    // Held in memory for this page's lifetime so Refresh can re-read the vault
+    // without re-prompting. The only network request is the vault itself.
     state.passphrase = passphrase;
     $("lock").hidden = true;
     $("app").hidden = false;
     render(data);
+    if (persist) await rememberPassphrase(passphrase);
     return data;
   }
 
@@ -839,13 +953,17 @@
   function lock() {
     state.passphrase = null;
     state.payload = null;
+    // A manual lock means locked: leaving the remembered record behind would
+    // reopen the vault on the next reload and make the button a lie.
+    forgetPassphrase();
     if (window.Viz) window.Viz.reset();
     purgeRendered();
     $("app").hidden = true;
     $("lock").hidden = false;
     $("lockInput").value = "";
     $("lockError").textContent = "";
-    $("lockHint").textContent = "Data purged from this tab. Enter the passphrase to read it again.";
+    $("lockHint").textContent =
+      "Data purged from this tab and this browser forgotten. Enter the passphrase to read it again.";
   }
 
   async function refresh() {
@@ -889,7 +1007,10 @@
       if (!value) return;
       $("lockError").textContent = "";
       try {
-        await unlock(value);
+        const box = $("rememberDevice");
+        const persist = box ? box.checked : false;
+        if (!persist) await forgetPassphrase();
+        await unlock(value, persist);
       } catch (error) {
         $("lockError").textContent =
           error.name === "OperationError"
@@ -932,10 +1053,19 @@
   async function boot() {
     initTheme();
     initControls();
-    // The vault is the first paint's only source; there is no cached plaintext
-    // anywhere in the page, so a reload always starts at the lock screen.
     $("lock").hidden = false;
     $("app").hidden = true;
+
+    // A remembered browser opens straight to the data. If the record no longer
+    // opens the vault it is dropped and the lock screen simply stays up, which
+    // is the same thing the reader would do by hand.
+    const remembered = await recallPassphrase();
+    if (!remembered) return;
+    try {
+      await unlock(remembered, true);
+    } catch (error) {
+      await forgetPassphrase();
+    }
   }
 
   document.addEventListener("DOMContentLoaded", boot);

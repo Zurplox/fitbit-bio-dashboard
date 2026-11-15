@@ -26,3 +26,6 @@ shot-*.png
 screenshot.png
 .server.log
 .server.pid
+
+# local demo copy used for visual checks
+.demo-preview/

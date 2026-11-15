@@ -110,10 +110,16 @@ invalidate existing ciphertext.
 | Stops casual scraping of a public URL | ✅ the JSON is not human-readable |
 | Confidential against someone who reads this repo | ✅ **only if `DASHBOARD_PASS` is a real secret** — there is deliberately no fallback, and `encrypt_data.py` exits non-zero without it |
 | Protected from the repository host | ❌ GitHub Actions holds the passphrase as a secret while encrypting |
+| Remembered browser (opt-in) | ⚠️ the passphrase is stored sealed under a non-extractable key in IndexedDB; a script running on this page's own origin could still ask for it |
 
-The passphrase is held **in memory only** for the session, never in localStorage, a cookie or a
-URL. Lock destroys the in-memory data and every chart instance. `data/status.json` is public and
-carries only a timestamp, the device name and metric counts.
+The passphrase is held **in memory** for the session, and only there unless you tick **Keep this
+browser unlocked for 30 days**. With that ticked it is stored sealed under an AES-GCM device key
+that is itself non-extractable and kept in IndexedDB, so a copy of the browser profile holds
+ciphertext plus a key the browser will not hand back. The record holds the passphrase rather than
+a derived key on purpose: every sync re-encrypts the vault under a fresh salt, and a stored key
+would stop opening it the next morning. **Lock deletes the record** along with the DOM, so pressing
+`L` really does mean locked. `data/status.json` is public and carries only a timestamp, the device
+name and metric counts.
 
 ---
 
