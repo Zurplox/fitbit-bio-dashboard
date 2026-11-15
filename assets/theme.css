@@ -556,6 +556,44 @@ section[id] { scroll-margin-top: 76px; }
 .disclosure.open { display: block; }
 .disclosure strong { color: var(--text); font-weight: 560; }
 
+/* ---------------------------------------------------------------- sources */
+/* Attribution, not decoration: Health Connect relays more than one app into the
+   same series, so a card has to be able to say who produced the number. */
+.src {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+.src[hidden] { display: none; }
+
+.sources {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.source-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+}
+.source-item .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; align-self: center; }
+.source-item .dot.own { background: var(--good); }
+.source-item .dot.relay { background: var(--neutral); }
+.source-item b { font-weight: 560; white-space: nowrap; }
+.source-item b::after { content: "·"; margin-left: 7px; color: var(--faint); }
+.source-item span:last-child { color: var(--faint); font-size: 11.5px; min-width: 0; }
+
 /* ------------------------------------------------------------- provenance */
 .provenance { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
 .prov-item { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); }

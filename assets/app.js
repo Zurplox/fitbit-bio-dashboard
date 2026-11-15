@@ -156,7 +156,16 @@
         "No narrative in this payload."
     );
 
-    setText("metaDevice", (data.device && data.device.name) || DASH);
+    // Health Connect can relay several apps into the same series, so the device
+    // line names them instead of implying one watch produced everything.
+    const deviceSources = ((data.device && data.device.sources) || []).filter(
+      (label) => label !== (data.device && data.device.name)
+    );
+    setText(
+      "metaDevice",
+      ((data.device && data.device.name) || DASH) +
+        (deviceSources.length ? " · " + deviceSources.join(", ") : "")
+    );
     setText(
       "metaSync",
       data.generated_at ? new Date(data.generated_at).toLocaleString() : DASH
@@ -698,6 +707,50 @@
   }
 
   /* ----------------------------------------------------------- provenance -- */
+  // Which app or device produced each metric. Fitbit writes its own points;
+  // Garmin, Google Fit and the phone's step counter arrive relayed by Health
+  // Connect, and the API hands them over as one series without saying so.
+  function renderSources(data) {
+    const metrics = (data.sources && data.sources.metrics) || {};
+
+    const chip = (key, id) => {
+      const node = $(id);
+      if (!node) return;
+      const entry = metrics[key];
+      if (!entry) {
+        node.hidden = true;
+        node.textContent = "";
+        return;
+      }
+      const others = entry.sources.length - 1;
+      node.hidden = false;
+      node.textContent = others > 0 ? `${entry.dominant} +${others}` : entry.dominant;
+      node.title =
+        entry.sources.map((source) => `${source.label}: ${source.points}`).join(" · ") +
+        ` (of ${entry.sampled} sampled)`;
+    };
+
+    chip("sleep", "srcSleep");
+    chip("hrv", "srcHrv");
+    chip("rhr", "srcRhr");
+    chip("spo2", "srcSpo2");
+    chip("steps", "srcSteps");
+
+    const box = $("sources");
+    if (!box) return;
+    const devices = (data.sources && data.sources.devices) || [];
+    box.innerHTML = devices
+      .map(
+        (device) =>
+          `<div class="source-item"><span class="dot ${
+            device.platform === "FITBIT" ? "own" : "relay"
+          }"></span><b>${escapeHTML(device.label)}</b><span>${escapeHTML(
+            device.metrics.join(" · ")
+          )}</span></div>`
+      )
+      .join("");
+  }
+
   function renderProvenance(data) {
     const container = $("provenance");
     if (!container) return;
@@ -732,6 +785,7 @@
     renderLoad(data);
     renderPatterns(data);
     renderCoach(data);
+    renderSources(data);
     renderProvenance(data);
     renderCharts(data);
     attachDisclosures();
@@ -921,10 +975,11 @@
     "loadScore", "loadBand", "loadText", "loadNote", "stepsBig", "stepsGoal", "stepsMean",
     "activeToday", "activeWeek", "activePct", "caloriesToday", "caloriesMean", "vo2max",
     "patternNote", "patternMethod", "footerMeta", "footerSync", "footerTz",
+    "srcSleep", "srcHrv", "srcRhr", "srcSpo2", "srcSteps",
   ];
 
   function purgeRendered() {
-    ["patternList", "coachGrid", "provenance", "heatmap"].forEach((id) => {
+    ["patternList", "coachGrid", "sources", "provenance", "heatmap"].forEach((id) => {
       const node = $(id);
       if (node) node.innerHTML = "";
     });

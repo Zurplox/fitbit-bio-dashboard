@@ -69,6 +69,15 @@ def collect(client, dq):
     exercise = _attempt(dq, "exercise", "Workouts", lambda: source.fetch_exercise(client, days=FETCH_DAYS, dq=dq), [], "workouts")
     hr_intraday = _attempt(dq, "heart_rate", "Heart rate", lambda: source.fetch_intraday_hr(client, hours=24, dq=dq), [], "heart rate")
 
+    # Attribution is a footnote, so it is attempted outside the data-quality
+    # gate: losing it must not mark a metric missing, and the page copes with an
+    # empty block by simply saying nothing.
+    try:
+        sources = source.fetch_sources(client, days=FETCH_DAYS)
+    except Exception as error:  # noqa: BLE001 - see above
+        print(f"   source attribution unavailable: {error}")
+        sources = {"metrics": {}, "devices": []}
+
     return {
         "today": today.isoformat(),
         "identity": identity,
@@ -84,6 +93,7 @@ def collect(client, dq):
         "active_minutes": active,
         "exercise": exercise,
         "hr_intraday": hr_intraday,
+        "sources": sources,
     }
 
 
@@ -375,6 +385,13 @@ def build_payload(fetched, dq, demo=False):
             "name": _device_name(fetched["sleep"]) or "Fitbit",
             "platform": "FITBIT",
             "api": "Google Health API v4",
+            "sources": [
+                entry["label"]
+                for entry in (fetched.get("sources") or {}).get("devices", [])
+                # A point with no device, app or platform name is not a source a
+                # reader can act on, so it stays out of the device line.
+                if entry["label"] and entry["label"] != "Unknown source"
+            ],
         },
         "athlete": {
             # `or` and not a default argument: an unset GitHub secret arrives as an
@@ -384,6 +401,7 @@ def build_payload(fetched, dq, demo=False):
             "weight_kg": fetched["profile"].get("weight_kg"),
         },
         "today": today_block,
+        "sources": fetched.get("sources") or {"metrics": {}, "devices": []},
         "baselines": {
             "hrv_ms": signals["hrv_baseline"],
             "hrv_nights": min(len(hrv_series), policy.HRV_BASELINE_NIGHTS),

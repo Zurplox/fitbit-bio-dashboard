@@ -744,3 +744,114 @@ def authenticated_client():
     client = GoogleHealthClient()
     client.access_token()  # raises AuthError with instructions when misconfigured
     return client
+
+
+# ---------------------------------------------------------------- attribution --
+# Every data point carries the app and device that produced it. Fitbit writes
+# under platform FITBIT; anything Health Connect relays — Garmin, Google Fit, the
+# phone's own step counter — arrives under HEALTH_CONNECT. The dashboard reads
+# those points as one series, so without this a Garmin night and a Fitbit night
+# are the same night.
+SOURCE_APPS = {
+    "com.garmin.android.apps.connectmobile": "Garmin Connect",
+    "com.google.android.apps.fitness": "Google Fit",
+    "com.android.healthconnect.phone": "Android phone",
+    "com.fitbit.FitbitMobile": "Fitbit app",
+}
+
+SOURCE_METRICS = [
+    ("sleep", "sleep", "Sleep"),
+    ("steps", "steps", "Steps"),
+    ("daily-resting-heart-rate", "rhr", "Resting heart rate"),
+    ("daily-heart-rate-variability", "hrv", "Overnight HRV"),
+    ("daily-oxygen-saturation", "spo2", "Blood oxygen"),
+    ("daily-respiratory-rate", "resp", "Breathing rate"),
+    ("active-minutes", "active_minutes", "Active minutes"),
+    ("exercise", "exercise", "Workouts"),
+    ("heart-rate", "heart_rate", "Heart rate"),
+    ("daily-vo2-max", "vo2max", "Cardio fitness"),
+]
+
+
+def source_of(point):
+    """(label, platform) for one data point."""
+    data_source = point.get("dataSource") or {}
+    device = data_source.get("device") or {}
+    application = data_source.get("application") or {}
+    platform = data_source.get("platform") or "UNKNOWN"
+
+    name = device.get("displayName")
+    if name:
+        return name, platform
+
+    package = (application.get("packageName") or "").strip()
+    if package in SOURCE_APPS:
+        return SOURCE_APPS[package], platform
+
+    maker = device.get("manufacturer")
+    form = (device.get("formFactor") or "").replace("_", " ").lower()
+    if maker:
+        return " ".join(part for part in (maker, form) if part).strip(), platform
+    if package:
+        return package.rsplit(".", 1)[-1].replace("_", " ").title(), platform
+    return "Unknown source", platform
+
+
+def fetch_sources(client, days=90, sample_pages=3):
+    """Which app or device produced each metric.
+
+    The counts are a sample of the most recent points, not the full window, so
+    they are published as `sampled` rather than dressed up as a census. A data
+    type that refuses the list call simply has no attribution, and the page
+    then says nothing rather than guessing.
+    """
+    metrics = {}
+    devices = {}
+
+    for data_type, key, label in SOURCE_METRICS:
+        try:
+            points = client.list_points(data_type, max_pages=sample_pages)
+        except Exception:  # noqa: BLE001 - a footnote must not fail a sync
+            continue
+
+        counts = {}
+        for point in points:
+            counts[source_of(point)] = counts.get(source_of(point), 0) + 1
+        if not counts:
+            continue
+
+        ordered = sorted(counts.items(), key=lambda item: -item[1])
+        total = sum(counts.values())
+        entries = [
+            {"label": name, "platform": platform, "points": count}
+            for (name, platform), count in ordered
+        ]
+        metrics[key] = {
+            "label": label,
+            "dominant": entries[0]["label"],
+            "share": round(entries[0]["points"] / total, 2),
+            "sources": entries,
+            "sampled": total,
+        }
+        for entry in entries:
+            # A source with no name is not something a reader can act on, so it
+            # stays out of the device list while remaining in the tooltip.
+            if entry["label"] == "Unknown source":
+                continue
+            bucket = devices.setdefault(
+                entry["label"],
+                {
+                    "label": entry["label"],
+                    "platform": entry["platform"],
+                    "points": 0,
+                    "metrics": [],
+                },
+            )
+            bucket["points"] += entry["points"]
+            if label not in bucket["metrics"]:
+                bucket["metrics"].append(label)
+
+    return {
+        "metrics": metrics,
+        "devices": sorted(devices.values(), key=lambda d: -d["points"]),
+    }
