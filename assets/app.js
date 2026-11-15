@@ -147,10 +147,6 @@
   /* ---------------------------------------------------------------- hero -- */
   function renderHero(data) {
     const today = data.today || {};
-    const recovery = today.recovery || {};
-    const band = recovery.band || {};
-    const score = recovery.score;
-
     setText("athleteName", (data.athlete && data.athlete.name) || "Athlete");
     setText("heroHeadline", data.clinical ? data.clinical.headline : "");
     setText(
@@ -160,22 +156,6 @@
         "No narrative in this payload."
     );
 
-    const ring = $("ringArc");
-    if (ring) {
-      const radius = 54;
-      const circumference = 2 * Math.PI * radius;
-      ring.setAttribute("stroke-dasharray", String(circumference));
-      const ratio = Math.max(0, Math.min(1, (score || 0) / 100));
-      ring.setAttribute("stroke-dashoffset", String(circumference * (1 - ratio)));
-      ring.style.stroke = `var(--${bandTone(band) === "neutral" ? "accent" : bandTone(band)})`;
-    }
-
-    setText("ringScore", score === null || score === undefined ? DASH : Math.round(score));
-    setHTML(
-      "ringBand",
-      `<span class="inline-band ${bandTone(band)}"><i></i>${escapeHTML(bandLabel(band))}</span>`
-    );
-    setText("ringSub", `Readiness ${num(today.readiness && today.readiness.score)} / 100`);
     setText("metaDevice", (data.device && data.device.name) || DASH);
     setText(
       "metaSync",
@@ -920,7 +900,7 @@
   const RENDERED_IDS = [
     "rcRecScore", "rcRecBand", "rcRecFoot", "rcStrScore", "rcStrBand", "rcStrFoot",
     "rcSlpScore", "rcSlpBand", "rcSlpFoot",
-    "ringScore", "ringBand", "ringSub", "heroHeadline", "heroLede", "metaDevice", "metaSync",
+    "heroHeadline", "heroLede", "metaDevice", "metaSync",
     "metaSource", "metaWindow", "kpiSleep", "kpiSleepSub", "kpiSleepBand", "kpiHrv", "kpiHrvSub",
     "kpiHrvBand", "kpiRhr", "kpiRhrSub", "kpiRhrBand", "kpiSpo2", "kpiSpo2Sub", "kpiSpo2Band",
     "sleepScoreBig", "sleepScoreBand", "stageDeepMins", "stageLightMins", "stageRemMins",
