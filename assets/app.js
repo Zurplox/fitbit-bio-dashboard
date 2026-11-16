@@ -147,7 +147,6 @@
   /* ---------------------------------------------------------------- hero -- */
   function renderHero(data) {
     const today = data.today || {};
-    setText("athleteName", (data.athlete && data.athlete.name) || "Athlete");
     setText("heroHeadline", data.clinical ? data.clinical.headline : "");
     setText(
       "heroLede",
@@ -304,12 +303,16 @@
     const steps = today.steps || {};
     const resp = today.resp || {};
     const readiness = today.readiness || {};
+    const sleep = today.sleep || {};
+    const active = today.active_minutes || {};
+    const week = active.week || {};
 
     const cells = [
       {
         k: "Readiness",
         v: readiness.score === null || readiness.score === undefined ? DASH : `${num(readiness.score)}<u>/100</u>`,
-        d: `<div class="d ${bandTone(readiness.band) === "good" ? "up" : bandTone(readiness.band) === "bad" ? "down" : "flat"}">${escapeHTML(bandLabel(readiness.band))}</div>`,
+        d: `<div class="d ${escapeHTML(bandTone(readiness.band))}">${escapeHTML(bandLabel(readiness.band))}</div>`,
+        sourceKeys: [], derived: true,
       },
       { k: "Resting HR", v: `${num(today.rhr && today.rhr.bpm)}<u>bpm</u>`, d: deltaCell(today.rhr && today.rhr.delta, " bpm", true) },
       { k: "HRV", v: `${num(today.hrv && today.hrv.ms, 1)}<u>ms</u>`, d: deltaCell(today.hrv && today.hrv.delta_pct, "%", false) },
@@ -318,7 +321,21 @@
       {
         k: "Steps",
         v: num(steps.count),
-        d: steps.pct === null || steps.pct === undefined ? '<div class="d flat">not measured</div>' : `<div class="d ${steps.pct >= 100 ? "up" : "flat"}">${num(steps.pct)}% of ${num(steps.goal)}</div>`,
+        d: steps.pct === null || steps.pct === undefined ? '<div class="d flat">not measured</div>' : `<div class="d ${steps.pct >= 100 ? "up" : "warn"}">${num(steps.pct)}% of ${num(steps.goal)} target</div>`,
+      },
+      {
+        k: "Sleep",
+        v: hm(sleep.minutes),
+        d: sleep.score === null || sleep.score === undefined
+          ? '<div class="d flat">score not measured</div>'
+          : `<div class="d ${escapeHTML(bandTone(sleep.band))}">Score ${num(sleep.score)}/100 · ${escapeHTML(bandLabel(sleep.band))}</div>`,
+      },
+      {
+        k: "Active minutes",
+        v: active.today === null || active.today === undefined ? DASH : `${num(active.today)}<u>min</u>`,
+        d: week.minutes === null || week.minutes === undefined
+          ? '<div class="d flat">week total not measured</div>'
+          : `<div class="d flat">${num(week.minutes)} of ${num(week.target)} min this week</div>`,
       },
     ];
 
@@ -606,6 +623,32 @@
         : "Not enough logged sessions to compute a ratio."
     );
     setText("loadNote", band.plain || "");
+    const dailyTraining = $("loadDaily");
+    if (dailyTraining) {
+      dailyTraining.replaceChildren();
+      const days = Array.isArray(load.daily) ? load.daily : [];
+      const exerciseMeasured = data.data_quality?.metrics?.exercise?.source === "live";
+      const maxMinutes = Math.max(0, ...days.map((day) => Number(day.minutes) || 0));
+      if (!exerciseMeasured) {
+        const empty = document.createElement("span");
+        empty.className = "load-empty";
+        empty.textContent = "Training history unavailable";
+        dailyTraining.appendChild(empty);
+      } else days.forEach((day) => {
+        const minutes = Math.max(0, Number(day.minutes) || 0);
+        const bar = document.createElement("span");
+        bar.className = minutes ? "load-day" : "load-day empty";
+        bar.style.height = maxMinutes ? `${Math.max(3, (minutes / maxMinutes) * 100)}%` : "0%";
+        bar.title = `${day.date}: ${minutes ? `${minutes} min trained` : "no session"}`;
+        dailyTraining.appendChild(bar);
+      });
+      dailyTraining.setAttribute(
+        "aria-label",
+        exerciseMeasured
+          ? `${days.length} days of training minutes. Bars run from 28 days ago on the left to today on the right.`
+          : "Training history is unavailable."
+      );
+    }
 
     const steps = today.steps || {};
     setText("stepsBig", num(steps.count));
@@ -648,6 +691,8 @@
     (corr.findings || []).forEach((finding) => {
       const row = document.createElement("div");
       row.className = "pattern";
+      const channelSource = { sleep_minutes: "sleep", hrv: "hrv", steps: "steps", rhr: "rhr", resp: "resp", spo2: "spo2" };
+      row.dataset.sourceKeys = [channelSource[finding.a], channelSource[finding.b]].filter(Boolean).join(",");
       row.innerHTML = `
         <div>
           <div class="line">
@@ -656,12 +701,13 @@
             <span>${escapeHTML(finding.b_label)}</span>
           </div>
           <div class="note">${escapeHTML(finding.plain)}</div>
-          <button class="info-btn" data-info="why-${escapeHTML(finding.a)}-${escapeHTML(finding.b)}" aria-expanded="false" aria-label="Why these two move together">i</button>
-          <div class="disclosure" id="why-${escapeHTML(finding.a)}-${escapeHTML(finding.b)}">${escapeHTML(
-        finding.why
-      )} <strong>This is an association, not a cause.</strong></div>
+          <div class="pattern-meta">${finding.r >= 0 ? "Positive" : "Negative"} association · ${num(finding.n)} paired days</div>
+          <button class="info-btn" data-info="why-${escapeHTML(finding.a)}-${escapeHTML(finding.b)}" aria-expanded="false" aria-label="How to read this correlation">i</button>
+          <div class="disclosure" id="why-${escapeHTML(finding.a)}-${escapeHTML(finding.b)}">
+            <strong>How to read it:</strong> r = ${finding.r.toFixed(2)}. Correlation ranges from −1 (opposite movement) to +1 (movement together); values nearer 0 indicate a weaker linear relationship. n = ${num(finding.n)} days when both measures were recorded. ${escapeHTML(finding.why)} This is an association, not proof that one measure caused the other.
+          </div>
         </div>
-        <div class="r"><b>${finding.r.toFixed(2)}</b><span>r · n=${finding.n}</span></div>`;
+        <div class="r"><b>${finding.r.toFixed(2)}</b><span>correlation</span></div>`;
       container.appendChild(row);
     });
 
@@ -681,6 +727,13 @@
     (coaching.cards || []).forEach((card) => {
       const el = document.createElement("article");
       el.className = "card coach-card reveal";
+      const coachingSources = {
+        load: ["exercise"],
+        sleep: ["sleep"],
+        steps: ["steps", "active_minutes"],
+        strength: ["vo2max"],
+      };
+      el.dataset.sourceKeys = (coachingSources[card.key] || []).join(",");
       const evidence = card.evidence || {};
       el.innerHTML = `
         <div class="card-head">
@@ -692,10 +745,10 @@
         </div>
         <p class="reading">${escapeHTML(card.reading)}</p>
         <p class="action">${escapeHTML(card.action)}</p>
-        <div class="lines">
+        <dl class="lines">
           <div><dt>Progress</dt><dd>${escapeHTML(card.progress)}</dd></div>
           <div><dt>Back off</dt><dd>${escapeHTML(card.back_off)}</dd></div>
-        </div>
+        </dl>
         <button class="info-btn" data-info="ev-${escapeHTML(card.key)}" aria-expanded="false" aria-label="Evidence behind this rule">i</button>
         <div class="disclosure" id="ev-${escapeHTML(card.key)}">
           <strong>${escapeHTML(evidence.cite || "No citation")}</strong> found that ${escapeHTML(
@@ -711,30 +764,100 @@
   // Garmin, Google Fit and the phone's step counter arrive relayed by Health
   // Connect, and the API hands them over as one series without saying so.
   function renderSources(data) {
+    document.querySelectorAll(".source-badges").forEach((node) => node.remove());
     const metrics = (data.sources && data.sources.metrics) || {};
 
-    const chip = (key, id) => {
-      const node = $(id);
-      if (!node) return;
-      const entry = metrics[key];
-      if (!entry) {
-        node.hidden = true;
-        node.textContent = "";
-        return;
-      }
-      const others = entry.sources.length - 1;
-      node.hidden = false;
-      node.textContent = others > 0 ? `${entry.dominant} +${others}` : entry.dominant;
-      node.title =
-        entry.sources.map((source) => `${source.label}: ${source.points}`).join(" · ") +
-        ` (of ${entry.sampled} sampled)`;
-    };
 
-    chip("sleep", "srcSleep");
-    chip("hrv", "srcHrv");
-    chip("rhr", "srcRhr");
-    chip("spo2", "srcSpo2");
-    chip("steps", "srcSteps");
+
+    // Attribute each visible metric group. Never infer a make/model when the
+    // Google Health API did not return source metadata for the sampled points.
+    const specs = {
+      "Sleep": ["sleep", true],
+      "Overnight HRV": ["hrv", false],
+      "Resting rate": ["rhr", false],
+      "Blood oxygen": ["spo2", false],
+      "Nightly stages": ["sleep", false],
+      "Last night": ["sleep", true],
+      "The night in clocks": ["sleep", true],
+      "Circadian timing": ["sleep", true],
+      "Resting heart rate": ["rhr", false],
+      "Today's heart rate": ["heart_rate", false],
+      "Workload balance": ["exercise", true],
+      "Steps": ["steps", false],
+      "Training consistency": ["exercise", false],
+      "Correlations": ["", true],
+    };
+    const badgesFor = (key) => {
+      const entry = key && metrics[key];
+      if (!entry) {
+        const node = document.createElement("span");
+        node.className = "source-badge unreported";
+        node.textContent = "Source unreported";
+        node.title = "The API did not provide source attribution for this metric sample.";
+        return [node];
+      }
+      const counts = new Map();
+      (entry.sources || []).forEach((source) => {
+        if (source.label) counts.set(source.label, (counts.get(source.label) || 0) + (source.points || 0));
+      });
+      if (!counts.size && entry.dominant) counts.set(entry.dominant, entry.sampled || 0);
+      return [...counts].map(([name, count]) => {
+        const node = document.createElement("span");
+        node.className = "source-badge";
+        node.textContent = name;
+        node.title = `${entry.label || key}: ${count} of ${entry.sampled || 0} sampled points`;
+        return node;
+      });
+    };
+    const addBadges = (host, keys, derived) => {
+      if (!host || host.querySelector(":scope > .source-badges")) return;
+      const group = document.createElement("span");
+      group.className = "source-badges";
+      (keys || []).filter(Boolean).forEach((key) => badgesFor(key).forEach((node) => group.appendChild(node)));
+      if (derived) {
+        const item = document.createElement("span");
+        item.className = "source-badge derived";
+        item.textContent = "Derived";
+        item.title = "Derived means calculated from measured data using documented rules; it is not a directly measured reading.";
+        group.appendChild(item);
+      }
+      if (group.childElementCount) host.appendChild(group);
+    };
+    document.querySelectorAll(".card-head").forEach((head) => {
+      const title = head.querySelector(".card-title, h3");
+      if (!title) return;
+      const spec = specs[title.textContent.trim()];
+      if (spec) addBadges(title.parentElement, spec[0].split(","), spec[1]);
+      else if (title.tagName === "H3") {
+        const keys = (title.closest(".coach-card")?.dataset.sourceKeys || "").split(",");
+        addBadges(title.parentElement, keys, true);
+      }
+    });
+    document.querySelectorAll(".ask-row[data-source-keys]").forEach((row) => {
+      const keys = (row.dataset.sourceKeys || "").split(",");
+      addBadges(row.querySelector(".k"), keys, false);
+    });
+    document.querySelectorAll(".pattern").forEach((row) => {
+      const keys = (row.dataset.sourceKeys || "").split(",");
+      addBadges(row.firstElementChild, keys, true);
+    });
+    document.querySelectorAll(".coach-card").forEach((card) => {
+      const keys = (card.dataset.sourceKeys || "").split(",");
+      addBadges(card.querySelector(".card-head"), keys, true);
+    });
+    document.querySelectorAll(".ringcard").forEach((card, index) => {
+      const foot = card.querySelector(".ringfoot");
+      const keys = [["hrv", "rhr", "spo2"], ["exercise"], ["sleep"]][index] || [];
+      addBadges(foot, keys, true);
+    });
+    document.querySelectorAll("#strip .cell").forEach((cell, index) => {
+      const keys = [[], ["rhr"], ["hrv"], ["resp"], ["spo2"], ["steps"], ["sleep"], ["exercise"]][index] || [];
+      addBadges(cell, keys, [0, 6, 7].includes(index));
+    });
+    document.querySelectorAll("#strip .source-badge").forEach((badge) => {
+      badge.tabIndex = 0;
+      badge.setAttribute("aria-label", badge.title);
+    });
 
     const box = $("sources");
     if (!box) return;
@@ -979,7 +1102,8 @@
   ];
 
   function purgeRendered() {
-    ["patternList", "coachGrid", "sources", "provenance", "heatmap"].forEach((id) => {
+    document.querySelectorAll(".source-badges").forEach((node) => node.remove());
+    ["patternList", "coachGrid", "sources", "provenance", "heatmap", "loadDaily"].forEach((id) => {
       const node = $(id);
       if (node) node.innerHTML = "";
     });

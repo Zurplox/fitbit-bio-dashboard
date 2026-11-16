@@ -6,7 +6,7 @@
   <title>Meridian Air — Fitbit bio-intelligence</title>
   <meta name="description" content="A private, end-to-end encrypted dashboard for Fitbit data via the Google Health API." />
   <meta name="color-scheme" content="dark light" />
-  <link rel="stylesheet" href="assets/theme.css" />
+  <link rel="stylesheet" href="assets/theme.css?v=correlation-explainer" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230a0d12'/%3E%3Cpath d='M6 20h5l3-8 4 12 3-7h5' stroke='%236ee7c7' stroke-width='2.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
 </head>
 <body>
@@ -145,6 +145,9 @@
         </div>
 
         <div class="strip" id="strip" role="list" aria-label="Today's vitals"></div>
+        <p class="band-note metric-key">
+          <strong>Reading key:</strong> Green indicates a favorable value or change, red an unfavorable one, and amber means a goal is still in progress. “Derived” means calculated, not directly measured. Source badges name reported contributors; focus or hover a badge for its sample count. Missing attribution is shown explicitly.
+        </p>
 
         <p class="band-note">
           Strain is your acute-to-chronic training ratio scaled to 0–21, not WHOOP's proprietary
@@ -160,10 +163,7 @@
             <span class="faint">·</span>
             <span class="mono" id="metaSource">Google Health API</span>
           </div>
-          <h1>
-            <span id="athleteName">Athlete</span>, here is<br />
-            your body <em>today</em>.
-          </h1>
+          <h1>Today’s physiology</h1>
           <p class="hero-lede" id="heroHeadline"></p>
           <p class="hero-lede" id="heroLede" style="margin-top:10px;font-size:14px;color:var(--faint)"></p>
 
@@ -179,7 +179,7 @@
       <section id="vitals">
         <div class="section-head">
           <h2>Last night</h2>
-          <span class="section-note">Every value below is measured by the device, or reads --</span>
+          <span class="section-note">Measurements carry source labels; calculations are marked “Derived.”</span>
         </div>
         <div class="grid grid-4">
           <article class="card reveal">
@@ -276,7 +276,7 @@
             <p class="chart-hint" id="sleepNeedSource">--</p>
           </article>
 
-          <article class="card reveal">
+          <article class="card reveal circadian-card">
             <div class="card-head">
               <span class="card-title">Circadian timing</span>
               <span class="spacer"></span>
@@ -339,7 +339,8 @@
           <span class="section-note">Acute against chronic training minutes, the ratio the research reads</span>
         </div>
 
-        <div class="grid grid-2">
+        <div class="load-columns">
+          <div class="load-column">
           <article class="card reveal">
             <div class="card-head">
               <span class="card-title">Workload balance</span>
@@ -363,16 +364,20 @@
               is detraining, 0.8-1.3 is the range the research supports, and above 1.5 is where
               injury risk concentrates.
             </div>
+            <div class="load-history">
+              <div class="load-history-head"><span>Daily training</span><span>Past 28 days</span></div>
+              <div id="loadDaily" class="load-daily" role="img" aria-label="Daily training minutes over the past 28 days"></div>
+              <div class="load-history-axis"><span>28 days ago</span><span>Today</span></div>
+            </div>
           </article>
-
           <article class="card reveal">
             <div class="card-head"><span class="card-title">This week</span></div>
             <div class="ask">
-              <div class="ask-row"><span class="k">Active minutes today</span><span class="v" id="activeToday">--</span></div>
-              <div class="ask-row"><span class="k">Active minutes this week</span><span class="v" id="activeWeek">--</span></div>
-              <div class="ask-row"><span class="k">Calories today</span><span class="v" id="caloriesToday">--</span></div>
-              <div class="ask-row"><span class="k">Calories, 7-day mean</span><span class="v" id="caloriesMean">--</span></div>
-              <div class="ask-row"><span class="k">Cardio fitness (VO2 max)</span><span class="v" id="vo2max">--</span></div>
+              <div class="ask-row" data-source-keys="active_minutes"><span class="k">Active minutes today</span><span class="v" id="activeToday">--</span></div>
+              <div class="ask-row" data-source-keys="active_minutes"><span class="k">Active minutes this week</span><span class="v" id="activeWeek">--</span></div>
+              <div class="ask-row" data-source-keys="calories"><span class="k">Calories today</span><span class="v" id="caloriesToday">--</span></div>
+              <div class="ask-row" data-source-keys="calories"><span class="k">Calories, 7-day mean</span><span class="v" id="caloriesMean">--</span></div>
+              <div class="ask-row" data-source-keys="vo2max"><span class="k">Cardio fitness (VO2 max)</span><span class="v" id="vo2max">--</span></div>
             </div>
             <div style="margin-top:16px">
               <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px">
@@ -383,7 +388,8 @@
               </div>
             </div>
           </article>
-
+          </div>
+          <div class="load-column">
           <article class="card reveal">
             <div class="card-head"><span class="card-title">Steps</span><span class="spacer"></span><span class="src" id="srcSteps" hidden></span><span class="mono">last 30 days</span></div>
             <div class="primary-value"><span id="stepsBig">--</span><span class="unit" id="stepsGoal">today</span></div>
@@ -393,12 +399,25 @@
               <div id="stepsTooltip" class="tooltip"></div>
             </div>
           </article>
-
           <article class="card reveal">
             <div class="card-head"><span class="card-title">Training consistency</span><span class="spacer"></span><span class="mono">13 weeks</span></div>
-            <div id="heatmap" class="heatmap" role="img" aria-label="Training minutes per day for the last 13 weeks"></div>
-            <p class="chart-hint">A blank cell means no session was logged that day — not that the day was wasted.</p>
+            <div class="heatmap-layout">
+              <div class="heatmap-days" aria-hidden="true"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+              <div id="heatmap" class="heatmap" role="img" aria-label="Training minutes by day across 13 weeks. Columns run from the oldest week on the left to the current week on the right. Rows run Monday at the top to Sunday at the bottom."></div>
+            </div>
+            <div class="heatmap-footer">
+              <div class="heatmap-legend" aria-label="Workout minutes per day">
+                <span><i data-level="0"></i>—</span>
+                <span><i data-level="1"></i>&lt;25</span>
+                <span><i data-level="2"></i>25–44</span>
+                <span><i data-level="3"></i>45–69</span>
+                <span><i data-level="4"></i>70+</span>
+                <span class="legend-unit">min</span>
+              </div>
+            </div>
           </article>
+          </div>
+        </div>
         </div>
       </section>
 
@@ -437,8 +456,9 @@
       <section id="provenance-section">
         <div class="section-head">
           <h2>Where these numbers came from</h2>
-          <span class="section-note">A missing group is named rather than filled in</span>
+          <span class="section-note">Attribution is sampled from source metadata; unknown stays unknown</span>
         </div>
+        <p class="source-note"><strong>Reading source labels:</strong> A source name is shown only when the API reports it. “Derived” means calculated by this dashboard, not a direct device reading. “Source unreported” means the API did not identify the originating device or app for the sampled points.</p>
         <div id="sources" class="sources"></div>
         <div id="provenance" class="provenance"></div>
       </section>
@@ -451,7 +471,7 @@
     </main>
   </div>
 
-  <script src="assets/charts.js"></script>
-  <script src="assets/app.js"></script>
+  <script src="assets/charts.js?v=6a35e70"></script>
+  <script src="assets/app.js?v=correlation-explainer"></script>
 </body>
 </html>
