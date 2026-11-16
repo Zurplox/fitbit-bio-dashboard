@@ -647,6 +647,8 @@
     (corr.findings || []).forEach((finding) => {
       const row = document.createElement("div");
       row.className = "pattern";
+      const channelSource = { sleep_minutes: "sleep", hrv: "hrv", steps: "steps", rhr: "rhr", resp: "resp", spo2: "spo2" };
+      row.dataset.sourceKeys = [channelSource[finding.a], channelSource[finding.b]].filter(Boolean).join(",");
       row.innerHTML = `
         <div>
           <div class="line">
@@ -680,6 +682,13 @@
     (coaching.cards || []).forEach((card) => {
       const el = document.createElement("article");
       el.className = "card coach-card reveal";
+      const coachingSources = {
+        load: ["exercise"],
+        sleep: ["sleep"],
+        steps: ["steps", "active_minutes"],
+        strength: ["vo2max"],
+      };
+      el.dataset.sourceKeys = (coachingSources[card.key] || []).join(",");
       const evidence = card.evidence || {};
       el.innerHTML = `
         <div class="card-head">
@@ -691,10 +700,10 @@
         </div>
         <p class="reading">${escapeHTML(card.reading)}</p>
         <p class="action">${escapeHTML(card.action)}</p>
-        <div class="lines">
+        <dl class="lines">
           <div><dt>Progress</dt><dd>${escapeHTML(card.progress)}</dd></div>
           <div><dt>Back off</dt><dd>${escapeHTML(card.back_off)}</dd></div>
-        </div>
+        </dl>
         <button class="info-btn" data-info="ev-${escapeHTML(card.key)}" aria-expanded="false" aria-label="Evidence behind this rule">i</button>
         <div class="disclosure" id="ev-${escapeHTML(card.key)}">
           <strong>${escapeHTML(evidence.cite || "No citation")}</strong> found that ${escapeHTML(
@@ -710,6 +719,7 @@
   // Garmin, Google Fit and the phone's step counter arrive relayed by Health
   // Connect, and the API hands them over as one series without saying so.
   function renderSources(data) {
+    document.querySelectorAll(".source-badges").forEach((node) => node.remove());
     const metrics = (data.sources && data.sources.metrics) || {};
 
 
@@ -727,7 +737,7 @@
       "Circadian timing": ["sleep", true],
       "Resting heart rate": ["rhr", false],
       "Today's heart rate": ["heart_rate", false],
-      "Workload balance": ["", true],
+      "Workload balance": ["exercise", true],
       "This week": ["active_minutes,calories,vo2max", false],
       "Steps": ["steps", false],
       "Training consistency": ["exercise", false],
@@ -769,11 +779,22 @@
       if (!title) return;
       const spec = specs[title.textContent.trim()];
       if (spec) addBadges(title.parentElement, spec[0].split(","), spec[1]);
-      else if (title.tagName === "H3") addBadges(title.parentElement, [], true);
+      else if (title.tagName === "H3") {
+        const keys = (title.closest(".coach-card")?.dataset.sourceKeys || "").split(",");
+        addBadges(title.parentElement, keys, true);
+      }
+    });
+    document.querySelectorAll(".pattern").forEach((row) => {
+      const keys = (row.dataset.sourceKeys || "").split(",");
+      addBadges(row.firstElementChild, keys, true);
+    });
+    document.querySelectorAll(".coach-card").forEach((card) => {
+      const keys = (card.dataset.sourceKeys || "").split(",");
+      addBadges(card.querySelector(".card-head"), keys, true);
     });
     document.querySelectorAll(".ringcard").forEach((card, index) => {
       const foot = card.querySelector(".ringfoot");
-      const keys = [["hrv", "rhr", "spo2"], [], ["sleep"]][index] || [];
+      const keys = [["hrv", "rhr", "spo2"], ["exercise"], ["sleep"]][index] || [];
       addBadges(foot, keys, true);
     });
     document.querySelectorAll("#strip .cell").forEach((cell, index) => {
@@ -1024,6 +1045,7 @@
   ];
 
   function purgeRendered() {
+    document.querySelectorAll(".source-badges").forEach((node) => node.remove());
     ["patternList", "coachGrid", "sources", "provenance", "heatmap"].forEach((id) => {
       const node = $(id);
       if (node) node.innerHTML = "";
