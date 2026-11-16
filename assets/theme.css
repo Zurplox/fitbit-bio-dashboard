@@ -999,13 +999,13 @@ section[id] { scroll-margin-top: 80px; }
 .heatmap-guide {
   display: flex;
   justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 4px 16px;
-  margin: 0 0 12px 36px;
-  color: var(--muted);
-  font-size: 11px;
+  align-items: center;
+  margin: 0 0 10px 38px;
+  color: var(--faint);
+  font: 10px var(--mono);
+  letter-spacing: .08em;
 }
-.heatmap-guide b { color: var(--text); font-weight: 500; }
+.heatmap-guide b { color: var(--accent); font-size: 15px; font-weight: 500; line-height: .7; }
 .heatmap-layout {
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr);
@@ -1017,7 +1017,7 @@ section[id] { scroll-margin-top: 80px; }
   grid-template-rows: repeat(7, minmax(0, 1fr));
   gap: 4px;
 }
-.heatmap-days span { min-height: 12px; color: var(--faint); font-size: 11px; line-height: 1; }
+.heatmap-days span { min-height: 12px; color: var(--faint); font: 9px/1 var(--mono); text-align: center; }
 .heatmap {
   display: grid;
   grid-auto-flow: column;
@@ -1027,11 +1027,11 @@ section[id] { scroll-margin-top: 80px; }
   min-width: 0;
 }
 .heat-cell { min-width: 0; border-radius: 2px; }
-.heatmap-footer { margin: 12px 0 0 38px; }
-.heatmap-footer .chart-hint { margin: 0 0 8px; }
-.heatmap-legend { display: flex; flex-wrap: wrap; gap: 6px 12px; }
-.heatmap-legend span { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; }
-.heatmap-legend i { width: 10px; height: 10px; border-radius: 2px; background: var(--surface-2); flex: none; }
+.heatmap-footer { margin: 10px 0 0 38px; }
+.heatmap-legend { display: flex; flex-wrap: wrap; gap: 6px 10px; }
+.heatmap-legend span { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font: 10px var(--mono); }
+.heatmap-legend .legend-unit { color: var(--faint); margin-left: -7px; }
+.heatmap-legend i { width: 10px; height: 10px; border-radius: 3px; background: var(--surface-2); flex: none; }
 .heatmap-legend i[data-level="1"] { background: color-mix(in srgb, var(--accent) 22%, var(--surface-2)); }
 .heatmap-legend i[data-level="2"] { background: color-mix(in srgb, var(--accent) 45%, var(--surface-2)); }
 .heatmap-legend i[data-level="3"] { background: color-mix(in srgb, var(--accent) 70%, var(--surface-2)); }
