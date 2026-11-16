@@ -179,7 +179,7 @@
       <section id="vitals">
         <div class="section-head">
           <h2>Last night</h2>
-          <span class="section-note">Every value below is measured by the device, or reads --</span>
+          <span class="section-note">Measurements carry source labels; calculations are marked “Derived.”</span>
         </div>
         <div class="grid grid-4">
           <article class="card reveal">
@@ -437,8 +437,9 @@
       <section id="provenance-section">
         <div class="section-head">
           <h2>Where these numbers came from</h2>
-          <span class="section-note">A missing group is named rather than filled in</span>
+          <span class="section-note">Attribution is sampled from source metadata; unknown stays unknown</span>
         </div>
+        <p class="source-note"><strong>Reading source labels:</strong> A source name is shown only when the API reports it. “Derived” means calculated by this dashboard, not a direct device reading. “Source unreported” means the API did not identify the originating device or app for the sampled points.</p>
         <div id="sources" class="sources"></div>
         <div id="provenance" class="provenance"></div>
       </section>

@@ -713,28 +713,74 @@
   function renderSources(data) {
     const metrics = (data.sources && data.sources.metrics) || {};
 
-    const chip = (key, id) => {
-      const node = $(id);
-      if (!node) return;
-      const entry = metrics[key];
-      if (!entry) {
-        node.hidden = true;
-        node.textContent = "";
-        return;
-      }
-      const others = entry.sources.length - 1;
-      node.hidden = false;
-      node.textContent = others > 0 ? `${entry.dominant} +${others}` : entry.dominant;
-      node.title =
-        entry.sources.map((source) => `${source.label}: ${source.points}`).join(" · ") +
-        ` (of ${entry.sampled} sampled)`;
-    };
 
-    chip("sleep", "srcSleep");
-    chip("hrv", "srcHrv");
-    chip("rhr", "srcRhr");
-    chip("spo2", "srcSpo2");
-    chip("steps", "srcSteps");
+
+    // Attribute each visible metric group. Never infer a make/model when the
+    // Google Health API did not return source metadata for the sampled points.
+    const specs = {
+      "Sleep": ["sleep", true],
+      "Overnight HRV": ["hrv", false],
+      "Resting rate": ["rhr", false],
+      "Blood oxygen": ["spo2", false],
+      "Nightly stages": ["sleep", false],
+      "Last night": ["sleep", true],
+      "The night in clocks": ["sleep", true],
+      "Circadian timing": ["sleep", true],
+      "Resting heart rate": ["rhr", false],
+      "Today's heart rate": ["heart_rate", false],
+      "Workload balance": ["", true],
+      "This week": ["active_minutes,calories,vo2max", false],
+      "Steps": ["steps", false],
+      "Training consistency": ["exercise", false],
+      "Correlations": ["", true],
+    };
+    const badge = (key) => {
+      const entry = key && metrics[key];
+      const node = document.createElement("span");
+      node.className = "source-badge";
+      if (!entry) {
+        node.classList.add("unreported");
+        node.textContent = "Source unreported";
+        node.title = "The API did not provide source attribution for this metric sample.";
+      } else {
+        const names = (entry.sources || []).map((item) => item.label).filter(Boolean);
+        const unique = [...new Set(names)];
+        node.classList.toggle("mixed", unique.length > 1);
+        node.textContent = unique.length > 1 ? `${entry.dominant} +${unique.length - 1}` : (entry.dominant || unique[0] || "Source reported");
+        node.title = `${entry.label || key}: ${(entry.sources || []).map((item) => `${item.label}: ${item.points}`).join(" · ")} (${entry.sampled || 0} sampled points)`;
+      }
+      return node;
+    };
+    const addBadges = (host, keys, derived) => {
+      if (!host || host.querySelector(":scope > .source-badges")) return;
+      const group = document.createElement("span");
+      group.className = "source-badges";
+      (keys || []).filter(Boolean).forEach((key) => group.appendChild(badge(key)));
+      if (derived) {
+        const item = document.createElement("span");
+        item.className = "source-badge derived";
+        item.textContent = "Derived";
+        item.title = "Calculated by Meridian from measured data and documented rules.";
+        group.appendChild(item);
+      }
+      if (group.childElementCount) host.appendChild(group);
+    };
+    document.querySelectorAll(".card-head").forEach((head) => {
+      const title = head.querySelector(".card-title, h3");
+      if (!title) return;
+      const spec = specs[title.textContent.trim()];
+      if (spec) addBadges(title.parentElement, spec[0].split(","), spec[1]);
+      else if (title.tagName === "H3") addBadges(title.parentElement, [], true);
+    });
+    document.querySelectorAll(".ringcard").forEach((card, index) => {
+      const foot = card.querySelector(".ringfoot");
+      const keys = [["hrv", "rhr", "spo2"], [], ["sleep"]][index] || [];
+      addBadges(foot, keys, true);
+    });
+    document.querySelectorAll("#strip .cell").forEach((cell, index) => {
+      const keys = [[""], ["rhr"], ["hrv"], ["resp"], ["spo2"], ["steps"]][index] || [];
+      addBadges(cell, keys, index === 0);
+    });
 
     const box = $("sources");
     if (!box) return;
