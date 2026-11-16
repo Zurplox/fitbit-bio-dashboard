@@ -303,12 +303,16 @@
     const steps = today.steps || {};
     const resp = today.resp || {};
     const readiness = today.readiness || {};
+    const sleep = today.sleep || {};
+    const active = today.active_minutes || {};
+    const week = active.week || {};
 
     const cells = [
       {
         k: "Readiness",
         v: readiness.score === null || readiness.score === undefined ? DASH : `${num(readiness.score)}<u>/100</u>`,
-        d: `<div class="d ${bandTone(readiness.band) === "good" ? "up" : bandTone(readiness.band) === "bad" ? "down" : "flat"}">${escapeHTML(bandLabel(readiness.band))}</div>`,
+        d: `<div class="d ${escapeHTML(bandTone(readiness.band))}">${escapeHTML(bandLabel(readiness.band))}</div>`,
+        sourceKeys: [], derived: true,
       },
       { k: "Resting HR", v: `${num(today.rhr && today.rhr.bpm)}<u>bpm</u>`, d: deltaCell(today.rhr && today.rhr.delta, " bpm", true) },
       { k: "HRV", v: `${num(today.hrv && today.hrv.ms, 1)}<u>ms</u>`, d: deltaCell(today.hrv && today.hrv.delta_pct, "%", false) },
@@ -317,7 +321,21 @@
       {
         k: "Steps",
         v: num(steps.count),
-        d: steps.pct === null || steps.pct === undefined ? '<div class="d flat">not measured</div>' : `<div class="d ${steps.pct >= 100 ? "up" : "flat"}">${num(steps.pct)}% of ${num(steps.goal)}</div>`,
+        d: steps.pct === null || steps.pct === undefined ? '<div class="d flat">not measured</div>' : `<div class="d ${steps.pct >= 100 ? "up" : "warn"}">${num(steps.pct)}% of ${num(steps.goal)} target</div>`,
+      },
+      {
+        k: "Sleep",
+        v: hm(sleep.minutes),
+        d: sleep.score === null || sleep.score === undefined
+          ? '<div class="d flat">score not measured</div>'
+          : `<div class="d ${escapeHTML(bandTone(sleep.band))}">Score ${num(sleep.score)}/100 · ${escapeHTML(bandLabel(sleep.band))}</div>`,
+      },
+      {
+        k: "Active minutes",
+        v: active.today === null || active.today === undefined ? DASH : `${num(active.today)}<u>min</u>`,
+        d: week.minutes === null || week.minutes === undefined
+          ? '<div class="d flat">week total not measured</div>'
+          : `<div class="d flat">${num(week.minutes)} of ${num(week.target)} min this week</div>`,
       },
     ];
 
@@ -799,7 +817,7 @@
         const item = document.createElement("span");
         item.className = "source-badge derived";
         item.textContent = "Derived";
-        item.title = "Calculated by Meridian from measured data and documented rules.";
+        item.title = "Derived means calculated from measured data using documented rules; it is not a directly measured reading.";
         group.appendChild(item);
       }
       if (group.childElementCount) host.appendChild(group);
@@ -832,8 +850,12 @@
       addBadges(foot, keys, true);
     });
     document.querySelectorAll("#strip .cell").forEach((cell, index) => {
-      const keys = [[""], ["rhr"], ["hrv"], ["resp"], ["spo2"], ["steps"]][index] || [];
-      addBadges(cell, keys, index === 0);
+      const keys = [[], ["rhr"], ["hrv"], ["resp"], ["spo2"], ["steps"], ["sleep"], ["exercise"]][index] || [];
+      addBadges(cell, keys, [0, 6, 7].includes(index));
+    });
+    document.querySelectorAll("#strip .source-badge").forEach((badge) => {
+      badge.tabIndex = 0;
+      badge.setAttribute("aria-label", badge.title);
     });
 
     const box = $("sources");
