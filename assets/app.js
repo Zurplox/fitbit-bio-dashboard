@@ -701,12 +701,13 @@
             <span>${escapeHTML(finding.b_label)}</span>
           </div>
           <div class="note">${escapeHTML(finding.plain)}</div>
-          <button class="info-btn" data-info="why-${escapeHTML(finding.a)}-${escapeHTML(finding.b)}" aria-expanded="false" aria-label="Why these two move together">i</button>
-          <div class="disclosure" id="why-${escapeHTML(finding.a)}-${escapeHTML(finding.b)}">${escapeHTML(
-        finding.why
-      )} <strong>This is an association, not a cause.</strong></div>
+          <div class="pattern-meta">${finding.r >= 0 ? "Positive" : "Negative"} association · ${num(finding.n)} paired days</div>
+          <button class="info-btn" data-info="why-${escapeHTML(finding.a)}-${escapeHTML(finding.b)}" aria-expanded="false" aria-label="How to read this correlation">i</button>
+          <div class="disclosure" id="why-${escapeHTML(finding.a)}-${escapeHTML(finding.b)}">
+            <strong>How to read it:</strong> r = ${finding.r.toFixed(2)}. Correlation ranges from −1 (opposite movement) to +1 (movement together); values nearer 0 indicate a weaker linear relationship. n = ${num(finding.n)} days when both measures were recorded. ${escapeHTML(finding.why)} This is an association, not proof that one measure caused the other.
+          </div>
         </div>
-        <div class="r"><b>${finding.r.toFixed(2)}</b><span>r · n=${finding.n}</span></div>`;
+        <div class="r"><b>${finding.r.toFixed(2)}</b><span>correlation</span></div>`;
       container.appendChild(row);
     });
 
