@@ -386,13 +386,16 @@ section[id] { scroll-margin-top: 76px; }
 
 .strip {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 1px;
   margin-top: 14px;
   background: var(--line);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   overflow: hidden;
+}
+@media (max-width: 1050px) {
+  .strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 .cell { background: var(--surface); padding: 13px 15px; }
 .cell .k {
