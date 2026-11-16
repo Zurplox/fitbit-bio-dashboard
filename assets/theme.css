@@ -896,3 +896,68 @@ footer { margin-top: 46px; }
   .topbar { display: none !important; }
   .shell { display: block; }
 }
+
+/* Typography and rhythm pass: labels read like language, not instrumentation
+   codes; spacing uses a consistent four-point cadence. */
+:root {
+  --bg: #121313;
+  --surface: #1a1b1b;
+  --surface-2: #232525;
+  --surface-3: #2d3030;
+  --line: rgba(236, 239, 235, .09);
+  --line-strong: rgba(236, 239, 235, .17);
+  --text: #eff0ed;
+  --muted: #b7bbb6;
+  --faint: #9a9f99;
+  --accent: #c4d78c;
+  --accent-ink: #1a2111;
+}
+[data-theme="light"] {
+  --bg: #f3f3ef;
+  --surface: #fbfbf8;
+  --surface-2: #ebede8;
+  --surface-3: #dfe2dc;
+  --line: rgba(27, 30, 27, .10);
+  --line-strong: rgba(27, 30, 27, .18);
+  --text: #202320;
+  --muted: #505650;
+  --faint: #59615a;
+  --accent: #526f2e;
+  --accent-ink: #fff;
+}
+.topbar { min-height: 64px; padding-block: 12px; }
+.brand { gap: 8px; }
+.nav { gap: 4px; }
+.nav a { letter-spacing: 0; }
+.mono, .chip, .card-title, .section-head .section-note, .hero-meta dt,
+.source-badge, .cell .k, .tooltip .tt-date, .coach-card .lines dt {
+  text-transform: none;
+  letter-spacing: .02em;
+}
+.mono { font-size: 12px; }
+.chip { font-size: 11px; letter-spacing: 0; }
+.card-title { font-family: var(--sans); font-size: 12px; font-weight: 500; color: var(--muted); }
+.cell .k { font-family: var(--sans); font-size: 12px; }
+.section-head .section-note { font-size: 12px; }
+.hero h1 { font-family: var(--sans); font-size: clamp(40px, 5vw, 60px); font-weight: 500; letter-spacing: -.035em; }
+.hero h1 em { font-style: normal; color: var(--text); }
+.grid { gap: 16px; }
+.card { padding: 20px; }
+.ringcard { padding: 16px; }
+section[id] { scroll-margin-top: 80px; }
+.shell > section { padding-top: 48px; }
+#today { padding-top: 40px; }
+#band { padding-top: 32px; }
+.hero-meta { gap: 16px 24px; margin-top: 24px; }
+.hero-meta div { gap: 8px; }
+.source-badge { font-size: 11px; padding: 2px 6px; border-radius: 3px; }
+.source-badges { gap: 4px; }
+.source-note { border-radius: 4px; padding: 12px 16px; }
+.reveal, .reveal.in { opacity: 1; transform: none; }
+.ringwrap .val { transition: stroke-dashoffset .35s ease; }
+@media (max-width: 620px) {
+  .shell > section { padding-top: 32px; }
+  #today { padding-top: 28px; }
+  .card { padding: 16px; }
+  .ringcard { padding: 12px; }
+}

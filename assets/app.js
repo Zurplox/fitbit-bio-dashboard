@@ -147,7 +147,6 @@
   /* ---------------------------------------------------------------- hero -- */
   function renderHero(data) {
     const today = data.today || {};
-    setText("athleteName", (data.athlete && data.athlete.name) || "Athlete");
     setText("heroHeadline", data.clinical ? data.clinical.headline : "");
     setText(
       "heroLede",
