@@ -273,7 +273,7 @@
             <p class="chart-hint" id="sleepNeedSource">--</p>
           </article>
 
-          <article class="card reveal">
+          <article class="card reveal circadian-card">
             <div class="card-head">
               <span class="card-title">Circadian timing</span>
               <span class="spacer"></span>
@@ -336,7 +336,8 @@
           <span class="section-note">Acute against chronic training minutes, the ratio the research reads</span>
         </div>
 
-        <div class="grid grid-2">
+        <div class="load-columns">
+          <div class="load-column">
           <article class="card reveal">
             <div class="card-head">
               <span class="card-title">Workload balance</span>
@@ -360,16 +361,20 @@
               is detraining, 0.8-1.3 is the range the research supports, and above 1.5 is where
               injury risk concentrates.
             </div>
+            <div class="load-history">
+              <div class="load-history-head"><span>Daily training</span><span>Past 28 days</span></div>
+              <div id="loadDaily" class="load-daily" role="img" aria-label="Daily training minutes over the past 28 days"></div>
+              <div class="load-history-axis"><span>28 days ago</span><span>Today</span></div>
+            </div>
           </article>
-
           <article class="card reveal">
             <div class="card-head"><span class="card-title">This week</span></div>
             <div class="ask">
-              <div class="ask-row"><span class="k">Active minutes today</span><span class="v" id="activeToday">--</span></div>
-              <div class="ask-row"><span class="k">Active minutes this week</span><span class="v" id="activeWeek">--</span></div>
-              <div class="ask-row"><span class="k">Calories today</span><span class="v" id="caloriesToday">--</span></div>
-              <div class="ask-row"><span class="k">Calories, 7-day mean</span><span class="v" id="caloriesMean">--</span></div>
-              <div class="ask-row"><span class="k">Cardio fitness (VO2 max)</span><span class="v" id="vo2max">--</span></div>
+              <div class="ask-row" data-source-keys="active_minutes"><span class="k">Active minutes today</span><span class="v" id="activeToday">--</span></div>
+              <div class="ask-row" data-source-keys="active_minutes"><span class="k">Active minutes this week</span><span class="v" id="activeWeek">--</span></div>
+              <div class="ask-row" data-source-keys="calories"><span class="k">Calories today</span><span class="v" id="caloriesToday">--</span></div>
+              <div class="ask-row" data-source-keys="calories"><span class="k">Calories, 7-day mean</span><span class="v" id="caloriesMean">--</span></div>
+              <div class="ask-row" data-source-keys="vo2max"><span class="k">Cardio fitness (VO2 max)</span><span class="v" id="vo2max">--</span></div>
             </div>
             <div style="margin-top:16px">
               <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px">
@@ -380,7 +385,8 @@
               </div>
             </div>
           </article>
-
+          </div>
+          <div class="load-column">
           <article class="card reveal">
             <div class="card-head"><span class="card-title">Steps</span><span class="spacer"></span><span class="src" id="srcSteps" hidden></span><span class="mono">last 30 days</span></div>
             <div class="primary-value"><span id="stepsBig">--</span><span class="unit" id="stepsGoal">today</span></div>
@@ -390,12 +396,26 @@
               <div id="stepsTooltip" class="tooltip"></div>
             </div>
           </article>
-
           <article class="card reveal">
             <div class="card-head"><span class="card-title">Training consistency</span><span class="spacer"></span><span class="mono">13 weeks</span></div>
-            <div id="heatmap" class="heatmap" role="img" aria-label="Training minutes per day for the last 13 weeks"></div>
-            <p class="chart-hint">A blank cell means no session was logged that day — not that the day was wasted.</p>
+            <div class="heatmap-guide" aria-hidden="true"><span>Mon–Sun, top to bottom</span><span>Older weeks <b>→</b> current week</span></div>
+            <div class="heatmap-layout">
+              <div class="heatmap-days" aria-hidden="true"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+              <div id="heatmap" class="heatmap" role="img" aria-label="Training minutes by day across 13 weeks. Columns run from the oldest week on the left to the current week on the right. Rows run Monday at the top to Sunday at the bottom."></div>
+            </div>
+            <div class="heatmap-footer">
+              <p class="chart-hint">Each square is one day. Gray means no session was logged.</p>
+              <div class="heatmap-legend" aria-label="Workout duration scale">
+                <span><i data-level="0"></i>No session</span>
+                <span><i data-level="1"></i>&lt;25 min</span>
+                <span><i data-level="2"></i>25–44 min</span>
+                <span><i data-level="3"></i>45–69 min</span>
+                <span><i data-level="4"></i>70+ min</span>
+              </div>
+            </div>
           </article>
+          </div>
+        </div>
         </div>
       </section>
 

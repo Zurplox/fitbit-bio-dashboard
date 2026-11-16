@@ -12,7 +12,7 @@ Design notes for the Fitbit Air physiology dashboard.
 
 - Neutral graphite ramp for surfaces, one restrained pale-green accent, semantic hues only where they encode a reading or series.
 - Sentence-case labels, a single sans-serif UI family, tabular numerals, and compact monospace only where it improves data scanning.
-- 4px spacing cadence, flat raised surfaces, quiet hairline borders, responsive charts and cards.
+- 4px spacing cadence, flat raised surfaces, quiet hairline borders, responsive charts and cards. The workout calendar labels weekdays vertically and weeks left-to-right, with a duration legend.
 - No decorative glows, hue gradients, glass surfaces, generic greeting headline, or gratuitous entrance animation.
 
 Metric attribution is sampled from source metadata supplied by Google Health. A badge names only a source the API reported; it does not infer that the originating device is Fitbit Air or Garmin when metadata is absent.

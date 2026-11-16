@@ -605,6 +605,32 @@
         : "Not enough logged sessions to compute a ratio."
     );
     setText("loadNote", band.plain || "");
+    const dailyTraining = $("loadDaily");
+    if (dailyTraining) {
+      dailyTraining.replaceChildren();
+      const days = Array.isArray(load.daily) ? load.daily : [];
+      const exerciseMeasured = data.data_quality?.metrics?.exercise?.source === "live";
+      const maxMinutes = Math.max(0, ...days.map((day) => Number(day.minutes) || 0));
+      if (!exerciseMeasured) {
+        const empty = document.createElement("span");
+        empty.className = "load-empty";
+        empty.textContent = "Training history unavailable";
+        dailyTraining.appendChild(empty);
+      } else days.forEach((day) => {
+        const minutes = Math.max(0, Number(day.minutes) || 0);
+        const bar = document.createElement("span");
+        bar.className = minutes ? "load-day" : "load-day empty";
+        bar.style.height = maxMinutes ? `${Math.max(3, (minutes / maxMinutes) * 100)}%` : "0%";
+        bar.title = `${day.date}: ${minutes ? `${minutes} min trained` : "no session"}`;
+        dailyTraining.appendChild(bar);
+      });
+      dailyTraining.setAttribute(
+        "aria-label",
+        exerciseMeasured
+          ? `${days.length} days of training minutes. Bars run from 28 days ago on the left to today on the right.`
+          : "Training history is unavailable."
+      );
+    }
 
     const steps = today.steps || {};
     setText("stepsBig", num(steps.count));
@@ -738,33 +764,37 @@
       "Resting heart rate": ["rhr", false],
       "Today's heart rate": ["heart_rate", false],
       "Workload balance": ["exercise", true],
-      "This week": ["active_minutes,calories,vo2max", false],
       "Steps": ["steps", false],
       "Training consistency": ["exercise", false],
       "Correlations": ["", true],
     };
-    const badge = (key) => {
+    const badgesFor = (key) => {
       const entry = key && metrics[key];
-      const node = document.createElement("span");
-      node.className = "source-badge";
       if (!entry) {
-        node.classList.add("unreported");
+        const node = document.createElement("span");
+        node.className = "source-badge unreported";
         node.textContent = "Source unreported";
         node.title = "The API did not provide source attribution for this metric sample.";
-      } else {
-        const names = (entry.sources || []).map((item) => item.label).filter(Boolean);
-        const unique = [...new Set(names)];
-        node.classList.toggle("mixed", unique.length > 1);
-        node.textContent = unique.length > 1 ? `${entry.dominant} +${unique.length - 1}` : (entry.dominant || unique[0] || "Source reported");
-        node.title = `${entry.label || key}: ${(entry.sources || []).map((item) => `${item.label}: ${item.points}`).join(" · ")} (${entry.sampled || 0} sampled points)`;
+        return [node];
       }
-      return node;
+      const counts = new Map();
+      (entry.sources || []).forEach((source) => {
+        if (source.label) counts.set(source.label, (counts.get(source.label) || 0) + (source.points || 0));
+      });
+      if (!counts.size && entry.dominant) counts.set(entry.dominant, entry.sampled || 0);
+      return [...counts].map(([name, count]) => {
+        const node = document.createElement("span");
+        node.className = "source-badge";
+        node.textContent = name;
+        node.title = `${entry.label || key}: ${count} of ${entry.sampled || 0} sampled points`;
+        return node;
+      });
     };
     const addBadges = (host, keys, derived) => {
       if (!host || host.querySelector(":scope > .source-badges")) return;
       const group = document.createElement("span");
       group.className = "source-badges";
-      (keys || []).filter(Boolean).forEach((key) => group.appendChild(badge(key)));
+      (keys || []).filter(Boolean).forEach((key) => badgesFor(key).forEach((node) => group.appendChild(node)));
       if (derived) {
         const item = document.createElement("span");
         item.className = "source-badge derived";
@@ -783,6 +813,10 @@
         const keys = (title.closest(".coach-card")?.dataset.sourceKeys || "").split(",");
         addBadges(title.parentElement, keys, true);
       }
+    });
+    document.querySelectorAll(".ask-row[data-source-keys]").forEach((row) => {
+      const keys = (row.dataset.sourceKeys || "").split(",");
+      addBadges(row.querySelector(".k"), keys, false);
     });
     document.querySelectorAll(".pattern").forEach((row) => {
       const keys = (row.dataset.sourceKeys || "").split(",");
@@ -1046,7 +1080,7 @@
 
   function purgeRendered() {
     document.querySelectorAll(".source-badges").forEach((node) => node.remove());
-    ["patternList", "coachGrid", "sources", "provenance", "heatmap"].forEach((id) => {
+    ["patternList", "coachGrid", "sources", "provenance", "heatmap", "loadDaily"].forEach((id) => {
       const node = $(id);
       if (node) node.innerHTML = "";
     });
