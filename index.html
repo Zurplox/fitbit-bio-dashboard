@@ -6,8 +6,8 @@
   <title>Meridian Air — Fitbit bio-intelligence</title>
   <meta name="description" content="A private, end-to-end encrypted dashboard for Fitbit data via the Google Health API." />
   <meta name="color-scheme" content="dark light" />
-  <link rel="stylesheet" href="assets/theme.css?v=correlation-explainer" />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230a0d12'/%3E%3Cpath d='M6 20h5l3-8 4 12 3-7h5' stroke='%236ee7c7' stroke-width='2.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="assets/theme.css?v=breakdown-v2" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2307080a'/%3E%3Cpath d='M6 20h5l3-8 4 12 3-7h5' stroke='%232ff08f' stroke-width='2.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
 </head>
 <body>
 
@@ -53,6 +53,7 @@
 
       <nav class="nav" aria-label="Sections">
         <a href="#band" aria-current="true">Recovery</a>
+        <a href="#breakdown">Breakdown</a>
         <a href="#today">Today</a>
         <a href="#sleep">Sleep</a>
         <a href="#heart">Heart</a>
@@ -62,6 +63,7 @@
       </nav>
 
       <div class="actions">
+        <span class="chip member"><span class="dot"></span>Member</span>
         <span id="demoChip" class="chip demo" hidden><span class="dot"></span>Demo data</span>
         <span id="liveChip" class="chip"><span class="dot"></span>--/-- live</span>
         <button id="btnRefresh" class="btn" type="button" title="Re-read the published vault">Refresh</button>
@@ -153,6 +155,56 @@
           Strain is your acute-to-chronic training ratio scaled to 0–21, not WHOOP's proprietary
           heart-rate integral — the API returns hourly averages here, not second-by-second data.
         </p>
+      </section>
+
+      <!-- ------------------------------------------------------- breakdown -->
+      <section id="breakdown" aria-label="Recovery breakdown and today's target">
+        <div class="section-head">
+          <h2>Recovery breakdown</h2>
+          <span class="section-note">Each signal scored against your own baseline — no proprietary model.</span>
+        </div>
+        <div class="grid grid-2">
+          <article class="card reveal">
+            <div class="card-head">
+              <span class="card-title">What moved your recovery</span>
+              <span class="spacer"></span>
+              <button class="info-btn" data-info="factors-note" aria-expanded="false" aria-label="How contributions are scored">i</button>
+            </div>
+            <div id="recoveryFactors" class="factors"></div>
+            <div class="disclosure" id="factors-note">
+              Each signal is scored 0–100 against your own median, then weighted — HRV 40%, resting
+              rate 25%, sleep 25%, breathing 10%. The score is a summary of where you sit against
+              yourself, not against other people.
+            </div>
+          </article>
+
+          <div class="target-stack">
+            <article class="card reveal">
+              <div class="card-head">
+                <span class="card-title">Today’s strain target</span>
+                <span class="spacer"></span>
+                <span class="chip" id="targetBasis">--</span>
+              </div>
+              <div class="target-value" id="targetText">--</div>
+              <div class="target-track" aria-hidden="true">
+                <span class="target-zone" id="targetZone"></span>
+                <span class="target-marker" id="targetMarker"></span>
+              </div>
+              <div class="target-scale"><span>0</span><span>light</span><span>moderate</span><span>all out</span></div>
+              <p class="chart-hint" id="targetHint">--</p>
+            </article>
+
+            <article class="card reveal">
+              <div class="card-head">
+                <span class="card-title">Illness watch</span>
+                <span class="spacer"></span>
+                <span class="chip" id="watchChip">--</span>
+              </div>
+              <div class="watch-headline" id="watchHeadline">--</div>
+              <div class="watch-drivers" id="watchDrivers"></div>
+            </article>
+          </div>
+        </div>
       </section>
 
       <!-- ------------------------------------------------------------ hero -->

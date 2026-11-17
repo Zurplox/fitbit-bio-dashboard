@@ -346,6 +346,87 @@
       .join("");
   }
 
+  /* ---------------------------------------------------- recovery breakdown -- */
+  /** WHOOP's "optimal strain" is a range you are meant to land inside, scaled
+   *  from how recovered you are. The endpoints here are a plain linear rule
+   *  over recovery percentage, so the card can say what it is: a derived
+   *  target, not the proprietary model it borrows the shape of. */
+  function strainTarget(recoveryPct) {
+    if (recoveryPct === null || recoveryPct === undefined) return null;
+    const top = 6 + (Math.max(0, Math.min(100, recoveryPct)) / 100) * 12;
+    return { lo: Math.max(3, top - 4), hi: top };
+  }
+
+  function renderRecovery(data) {
+    const container = $("recoveryFactors");
+    const today = data.today || {};
+    const recovery = today.recovery || {};
+    const labels = (data.policy && data.policy.labels) || {};
+    const factors = Array.isArray(recovery.factors) ? recovery.factors : [];
+
+    if (container) {
+      container.innerHTML = factors.length
+        ? factors
+            .map((factor) => {
+              const score = Math.max(0, Math.min(100, Number(factor.contribution) || 0));
+              const tone = score >= 60 ? "good" : score >= 35 ? "warn" : "bad";
+              return `<div class="factor">
+                <div class="factor-head">
+                  <span class="factor-name">${escapeHTML(labels[factor.key] || factor.key)}</span>
+                  <span class="factor-read">${escapeHTML(factor.read || "")}</span>
+                  <span class="factor-score ${tone} tnum">${Math.round(score)}</span>
+                </div>
+                <div class="factor-track"><i class="factor-fill ${tone}" style="width:${score}%"></i></div>
+                <div class="factor-weight">${Math.round(Number(factor.weight) || 0)}% of the score</div>
+              </div>`;
+            })
+            .join("")
+        : '<p class="factor-empty">Recovery signals were not measured for this payload.</p>';
+    }
+
+    // ---- Strain target against today's actual strain
+    const target = strainTarget(recovery.score);
+    const strain = strainFrom(data.load || {});
+    setText("targetText", target ? `${target.lo.toFixed(1)} – ${target.hi.toFixed(1)}` : DASH);
+    setText("targetBasis", target ? `${num(recovery.score)}% recovery` : "no recovery score");
+    const zone = $("targetZone");
+    if (zone) {
+      zone.style.left = target ? `${(target.lo / 21) * 100}%` : "0%";
+      zone.style.width = target ? `${((target.hi - target.lo) / 21) * 100}%` : "0%";
+    }
+    const marker = $("targetMarker");
+    if (marker) {
+      marker.hidden = strain === null;
+      marker.style.left = strain === null ? "0%" : `${Math.min(100, (strain / 21) * 100)}%`;
+      marker.title = strain === null ? "No strain measured today" : `Today ${strain.toFixed(1)}`;
+    }
+    setText(
+      "targetHint",
+      target && strain !== null
+        ? strain > target.hi
+          ? `Today sits at ${strain.toFixed(1)} — above the band. Spend the rest of the day recovering.`
+          : strain < target.lo
+          ? `Today sits at ${strain.toFixed(1)} — room inside the band if you want it.`
+          : `Today sits at ${strain.toFixed(1)}, inside the band.`
+        : "A target needs a recovery score and a measured load."
+    );
+
+    // ---- Illness watch: a measured, previously unused signal.
+    const illness = (data.clinical && data.clinical.illness) || {};
+    const watchChip = $("watchChip");
+    if (watchChip) {
+      watchChip.className = `chip dot-${illness.tone || "good"}`;
+      watchChip.innerHTML = `<span class="dot"></span>${escapeHTML(illness.level ? `${illness.level}` : "clear")}`;
+    }
+    setText("watchHeadline", illness.headline || "No illness pattern in the measured signals.");
+    const drivers = $("watchDrivers");
+    if (drivers) {
+      drivers.innerHTML = (illness.drivers || [])
+        .map((driver) => `<span class="watch-driver">${escapeHTML(driver)}</span>`)
+        .join("");
+    }
+  }
+
   /* --------------------------------------------------------------- vitals -- */
   function renderVitals(data) {
     const today = data.today || {};
@@ -929,6 +1010,7 @@
   function render(data) {
     state.payload = data;
     renderBand(data);
+    renderRecovery(data);
     renderHero(data);
     renderVitals(data);
     renderLoad(data);
@@ -1124,12 +1206,13 @@
     "loadScore", "loadBand", "loadText", "loadNote", "stepsBig", "stepsGoal", "stepsMean",
     "activeToday", "activeWeek", "activePct", "caloriesToday", "caloriesMean", "vo2max",
     "patternNote", "patternMethod", "footerMeta", "footerSync", "footerTz",
+    "targetText", "targetBasis", "targetHint", "watchHeadline",
 
   ];
 
   function purgeRendered() {
     document.querySelectorAll(".source-badges").forEach((node) => node.remove());
-    ["patternList", "coachGrid", "sources", "provenance", "heatmap", "loadDaily"].forEach((id) => {
+    ["patternList", "coachGrid", "sources", "provenance", "heatmap", "loadDaily", "recoveryFactors", "watchDrivers"].forEach((id) => {
       const node = $(id);
       if (node) node.innerHTML = "";
     });

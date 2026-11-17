@@ -1090,6 +1090,181 @@ section[id] { scroll-margin-top: 80px; }
 }
 .ask-row .k { display: flex; flex: 1; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
 .ask-row .k .source-badges { margin: 0; }
+/* ==========================================================================
+   WHOOP-style palette
+   A near-black canvas with three loud, meaning-carrying hues: recovery green,
+   strain blue, sleep violet. The chroma is the fun part; the structure stays
+   flat, so the saturation reads as a signal rather than as a decoration.
+   ========================================================================== */
+:root {
+  --bg: #07080a;
+  --surface: #111316;
+  --surface-2: #191c21;
+  --surface-3: #252a30;
+  --line: rgba(238, 244, 250, .10);
+  --line-strong: rgba(238, 244, 250, .21);
+
+  --text: #f3f6f8;
+  --muted: #aab5c0;
+  --faint: #8e9aa6;
+
+  --good: #2ff08f;
+  --warn: #ffc247;
+  --bad: #ff5d73;
+  --neutral: #7bb8ff;
+
+  --sleep: #a78bfa;
+  --hrv: #2ff08f;
+  --rhr: #ff7ba8;
+  --steps: #d4ff4f;
+  --spo2: #5ad2ff;
+  --strain: #17a9ff;
+
+  --accent: #2ff08f;
+  --accent-ink: #04150c;
+}
+
+[data-theme="light"] {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --surface-2: #edf1f5;
+  --surface-3: #dee5ec;
+  --line: rgba(12, 17, 22, .11);
+  --line-strong: rgba(12, 17, 22, .22);
+
+  --text: #0c1116;
+  --muted: #4a5765;
+  --faint: #5a6674;
+
+  --good: #00754a;
+  --warn: #9a5c00;
+  --bad: #c3314c;
+  --neutral: #1c6cb0;
+
+  --sleep: #5936d0;
+  --hrv: #00754a;
+  --rhr: #c23a62;
+  --steps: #4f7300;
+  --spo2: #0a7592;
+  --strain: #006fc4;
+
+  --accent: #00754a;
+  --accent-ink: #ffffff;
+}
+
+/* WHOOP's rings read as thick bands on a tinted track, so the empty part of
+   each ring still says which measurement it belongs to. */
+.ringwrap .trk { stroke: color-mix(in srgb, var(--hue) 18%, var(--surface-3)); }
+.ringwrap .trk, .ringwrap .val { stroke-width: 13; }
+.ringwrap .val { transition: stroke-dashoffset .9s cubic-bezier(.22, 1, .36, 1); }
+
+/* The hue owns the card edge instead of a 38%-opacity sliver: at these
+   saturations a 2px line is legible, and it keys the card to its ring. */
+.ringcard::before { height: 3px; opacity: .9; }
+.ringfoot b { color: var(--text); }
+
+.heat-cell[data-level="1"] { background: color-mix(in srgb, var(--accent) 20%, var(--surface-2)); }
+.heat-cell[data-level="2"] { background: color-mix(in srgb, var(--accent) 42%, var(--surface-2)); }
+.heat-cell[data-level="3"] { background: color-mix(in srgb, var(--accent) 68%, var(--surface-2)); }
+
+
+/* ==========================================================================
+   Premium layer
+   The ring band answers "how am I"; this answers "why", with the same weight
+   of type. Long-form numbers stay tabular, and every derived value says so.
+   ========================================================================== */
+:root {
+  --ring-ink: 46px;
+}
+
+/* A membership mark, not a paywall: the vault is the entitlement here. */
+.chip.member {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+}
+.chip.member .dot { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+
+.big { font-size: var(--ring-ink); font-weight: 640; letter-spacing: -.045em; }
+.big small { font-size: 18px; }
+.ringcard .bandname { font-size: 15px; font-weight: 620; }
+.ringcard .hue { color: color-mix(in srgb, var(--hue) 62%, var(--faint)); }
+
+#breakdown { order: 1; }
+#vitals { order: 2; }
+#sleep { order: 3; }
+#heart { order: 4; }
+#load { order: 5; }
+#patterns { order: 6; }
+#coach { order: 7; }
+#provenance-section { order: 8; }
+
+.target-stack { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+/* ---- recovery contributors */
+.factors { display: flex; flex-direction: column; gap: 16px; }
+.factor { display: flex; flex-direction: column; gap: 6px; }
+.factor-head { display: flex; align-items: baseline; gap: 10px; }
+.factor-name { font-size: 13px; font-weight: 560; }
+.factor-read { margin-left: auto; font-size: 11.5px; color: var(--faint); text-align: right; }
+.factor-score { font-size: 15px; font-weight: 620; letter-spacing: -.02em; min-width: 2ch; text-align: right; }
+.factor-track { height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.factor-fill { display: block; height: 100%; border-radius: 999px; transition: width .7s cubic-bezier(.22, 1, .36, 1); }
+.factor-fill.good { background: var(--good); }
+.factor-fill.warn { background: var(--warn); }
+.factor-fill.bad { background: var(--bad); }
+.factor-weight { font-size: 11px; color: var(--faint); }
+.factor-empty { font-size: 12.5px; color: var(--muted); }
+
+/* ---- strain target */
+.target-value { font-size: clamp(30px, 4vw, 42px); font-weight: 600; letter-spacing: -.04em; font-variant-numeric: tabular-nums; line-height: 1.05; }
+.target-track {
+  position: relative;
+  height: 10px;
+  margin: 16px 0 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: visible;
+}
+.target-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--good) 30%, transparent);
+  border: 1px solid color-mix(in srgb, var(--good) 55%, transparent);
+}
+.target-marker {
+  position: absolute;
+  top: -5px;
+  width: 3px;
+  height: 20px;
+  margin-left: -1.5px;
+  border-radius: 999px;
+  background: var(--text);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bg) 85%, transparent);
+}
+.target-scale { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--faint); }
+
+/* ---- illness watch */
+.watch-headline { font-size: 14px; line-height: 1.5; }
+.watch-drivers { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.watch-driver {
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+@media (max-width: 620px) {
+  :root { --ring-ink: 38px; }
+  .factor-read { font-size: 11px; }
+  /* The phone bar is a fixed four-column grid by area; a fifth chip would take
+     a cell of its own. The vault being unlocked already says "member". */
+  .chip.member { display: none; }
+}
+
 .load-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
 .load-column { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 @media (max-width: 620px) {
