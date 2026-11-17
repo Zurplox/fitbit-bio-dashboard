@@ -293,5 +293,29 @@ class EnvironmentTests(unittest.TestCase):
                 os.environ["STEP_GOAL"] = old
 
 
+class StepsAttributionTest(unittest.TestCase):
+    """Steps are Google Health's merged total, never a second pedometer's claim."""
+
+    def test_garmin_is_not_credited_for_steps(self):
+        import googlehealth_source as source
+
+        entries = [
+            {"label": "Fitbit Air", "platform": "FITBIT", "points": 10},
+            {"label": "Garmin Connect", "platform": "HEALTH_CONNECT", "points": 3},
+        ]
+        self.assertEqual(
+            [entry["label"] for entry in source.steps_sources(entries)], ["Fitbit Air"]
+        )
+
+    def test_phone_and_air_both_survive(self):
+        import googlehealth_source as source
+
+        entries = [
+            {"label": "Fitbit Air", "platform": "FITBIT", "points": 10},
+            {"label": "Android phone", "platform": "HEALTH_CONNECT", "points": 4},
+        ]
+        self.assertEqual(len(source.steps_sources(entries)), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

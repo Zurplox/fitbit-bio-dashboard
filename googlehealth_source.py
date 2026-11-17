@@ -797,6 +797,17 @@ def source_of(point):
     return "Unknown source", platform
 
 
+def steps_sources(entries):
+    """Step attribution after removing foreign pedometers.
+
+    Steps are read from Google Health's own daily rollup, which merges the Air
+    with the phone's counter into one deduplicated total. A Garmin step count
+    is a different device measuring the same walk, so it is never credited
+    here even if it is later ingested through Health Connect.
+    """
+    return [entry for entry in entries if "garmin" not in entry["label"].lower()]
+
+
 def fetch_sources(client, days=90, sample_pages=3):
     """Which app or device produced each metric.
 
@@ -826,6 +837,10 @@ def fetch_sources(client, days=90, sample_pages=3):
             {"label": name, "platform": platform, "points": count}
             for (name, platform), count in ordered
         ]
+        if key == "steps":
+            entries = steps_sources(entries)
+            if not entries:
+                continue
         metrics[key] = {
             "label": label,
             "dominant": entries[0]["label"],

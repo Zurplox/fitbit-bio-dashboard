@@ -859,6 +859,24 @@ body { background: var(--bg); }
 .source-badge.derived { border-color: color-mix(in srgb, var(--accent) 48%, transparent); color: var(--accent); }
 .source-badge.unreported { border-style: dashed; color: var(--faint); }
 .source-badge.more { border-style: dashed; color: var(--faint); cursor: default; }
+
+/* Sample counts are hover-only by nature; a phone has no hover, so a tap opens
+   the same sentence as a popover. */
+.badge-pop {
+  position: fixed;
+  z-index: 70;
+  max-width: 260px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--surface-3);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font: 11.5px/1.45 var(--sans);
+}
+@media (hover: none) {
+  .source-badge { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+}
 .source-badge.mixed { border-color: color-mix(in srgb, var(--neutral) 55%, transparent); color: var(--neutral); }
 .source-note { margin: 0 0 14px; padding: 12px 14px; border-left: 2px solid var(--accent); background: var(--surface); color: var(--muted); font-size: 12px; }
 .source-note strong { color: var(--text); font-weight: 600; }

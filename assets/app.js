@@ -878,9 +878,11 @@
       const keys = [[], ["rhr"], ["hrv"], ["resp"], ["spo2"], ["steps"], ["sleep"], ["active_minutes"]][index] || [];
       addBadges(cell, keys, [0, 6].includes(index));
     });
+    document.querySelectorAll(".source-badge").forEach((badge) => {
+      if (badge.title) badge.setAttribute("aria-label", badge.title);
+    });
     document.querySelectorAll("#strip .source-badge").forEach((badge) => {
       badge.tabIndex = 0;
-      badge.setAttribute("aria-label", badge.title);
     });
 
     const box = $("sources");
@@ -1186,6 +1188,41 @@
     }
   }
 
+  /* ------------------------------------------------------- badge details -- */
+  // The sample count behind a badge lives in its title, which only a mouse can
+  // reach. A tap shows the same sentence as a popover, so a phone gets the
+  // attribution a desktop gets on hover.
+  let badgePop = null;
+  let lastBadge = null;
+
+  function hideBadgeDetail() {
+    if (badgePop) {
+      badgePop.remove();
+      badgePop = null;
+    }
+  }
+
+  function showBadgeDetail(badge) {
+    hideBadgeDetail();
+    const pop = document.createElement("div");
+    pop.className = "badge-pop";
+    pop.setAttribute("role", "tooltip");
+    pop.textContent = badge.title;
+    document.body.appendChild(pop);
+    badgePop = pop;
+
+    const box = badge.getBoundingClientRect();
+    const width = pop.offsetWidth;
+    const left = Math.min(
+      Math.max(8, box.left + box.width / 2 - width / 2),
+      document.documentElement.clientWidth - width - 8
+    );
+    const below = box.bottom + 8;
+    const flip = below + pop.offsetHeight > window.innerHeight - 8;
+    pop.style.left = `${left}px`;
+    pop.style.top = `${flip ? box.top - pop.offsetHeight - 8 : below}px`;
+  }
+
   /* ----------------------------------------------------------------- init -- */
   function initControls() {
     $("btnTheme").addEventListener("click", () =>
@@ -1234,10 +1271,22 @@
       document.querySelectorAll("main section[id]").forEach((section) => observer.observe(section));
     }
 
+    // Tap or click a badge to read what its tooltip says. Pointer devices keep
+    // the native hover; this is the path a phone can actually use.
+    document.addEventListener("click", (event) => {
+      const badge = event.target.closest ? event.target.closest(".source-badge") : null;
+      const tappedAgain = Boolean(badge && badge === lastBadge && badgePop);
+      hideBadgeDetail();
+      lastBadge = badge || null;
+      if (badge && badge.title && !tappedAgain) showBadgeDetail(badge);
+    });
+    window.addEventListener("scroll", hideBadgeDetail, { passive: true });
+
     document.addEventListener("keydown", (event) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const tag = (event.target.tagName || "").toLowerCase();
       if (tag === "input" || tag === "textarea") return;
+      if (event.key === "Escape") hideBadgeDetail();
       if (event.key === "l") lock();
       if (event.key === "r") refresh();
     });
