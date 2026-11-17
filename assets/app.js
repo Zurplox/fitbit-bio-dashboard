@@ -335,7 +335,9 @@
         v: active.today === null || active.today === undefined ? DASH : `${num(active.today)}<u>min</u>`,
         d: week.minutes === null || week.minutes === undefined
           ? '<div class="d flat">week total not measured</div>'
-          : `<div class="d flat">${num(week.minutes)} of ${num(week.target)} min this week</div>`,
+          : `<div class="d flat">${num(week.minutes)} of ${num(week.target)} min this week${
+              week.days && week.days < 7 ? ` · ${num(week.days)} of 7 days` : ""
+            }</div>`,
       },
     ];
 
@@ -798,13 +800,17 @@
       }
       const counts = new Map();
       (entry.sources || []).forEach((source) => {
-        if (source.label) counts.set(source.label, (counts.get(source.label) || 0) + (source.points || 0));
+        if (source.label) {
+          const name = source.label === "Unknown source" ? "Source unreported" : source.label;
+          counts.set(name, (counts.get(name) || 0) + (source.points || 0));
+        }
       });
       if (!counts.size && entry.dominant) counts.set(entry.dominant, entry.sampled || 0);
       return [...counts].map(([name, count]) => {
         const node = document.createElement("span");
         node.className = "source-badge";
         node.textContent = name;
+        if (name === "Source unreported") node.classList.add("unreported");
         node.title = `${entry.label || key}: ${count} of ${entry.sampled || 0} sampled points`;
         return node;
       });
@@ -813,7 +819,25 @@
       if (!host || host.querySelector(":scope > .source-badges")) return;
       const group = document.createElement("span");
       group.className = "source-badges";
-      (keys || []).filter(Boolean).forEach((key) => badgesFor(key).forEach((node) => group.appendChild(node)));
+      const seen = new Map();
+      (keys || []).filter(Boolean).forEach((key) => {
+        badgesFor(key).forEach((node) => {
+          if (!seen.has(node.textContent)) seen.set(node.textContent, node);
+        });
+      });
+      const all = [...seen.values()];
+      // Named contributors are information; "Source unreported" next to named
+      // sources is noise, so it only appears when nothing else is known.
+      const named = all.filter((node) => !node.classList.contains("unreported"));
+      const visible = named.length ? named : all;
+      visible.slice(0, 3).forEach((node) => group.appendChild(node));
+      if (visible.length > 3) {
+        const more = document.createElement("span");
+        more.className = "source-badge more";
+        more.textContent = `+${visible.length - 3}`;
+        more.title = visible.slice(3).map((node) => node.title).join(" · ");
+        group.appendChild(more);
+      }
       if (derived) {
         const item = document.createElement("span");
         item.className = "source-badge derived";
@@ -851,8 +875,8 @@
       addBadges(foot, keys, true);
     });
     document.querySelectorAll("#strip .cell").forEach((cell, index) => {
-      const keys = [[], ["rhr"], ["hrv"], ["resp"], ["spo2"], ["steps"], ["sleep"], ["exercise"]][index] || [];
-      addBadges(cell, keys, [0, 6, 7].includes(index));
+      const keys = [[], ["rhr"], ["hrv"], ["resp"], ["spo2"], ["steps"], ["sleep"], ["active_minutes"]][index] || [];
+      addBadges(cell, keys, [0, 6].includes(index));
     });
     document.querySelectorAll("#strip .source-badge").forEach((badge) => {
       badge.tabIndex = 0;
@@ -1098,7 +1122,7 @@
     "loadScore", "loadBand", "loadText", "loadNote", "stepsBig", "stepsGoal", "stepsMean",
     "activeToday", "activeWeek", "activePct", "caloriesToday", "caloriesMean", "vo2max",
     "patternNote", "patternMethod", "footerMeta", "footerSync", "footerTz",
-    "srcSleep", "srcHrv", "srcRhr", "srcSpo2", "srcSteps",
+
   ];
 
   function purgeRendered() {

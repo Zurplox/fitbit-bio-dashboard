@@ -121,22 +121,31 @@ def build_coaching(signals, load, movement, sleep_score, acwr):
         cards.append(_not_measured("steps", "Daily movement", "step count"))
     else:
         below_floor = (week.get("minutes") or 0) < policy.WEEKLY_ACTIVE_MINUTES_TARGET
+        week_phrase = "."
+        if week.get("minutes") is not None:
+            recorded = week.get("days")
+            partial = (
+                f" across {recorded} recorded days" if recorded and recorded < 7 else ""
+            )
+            week_phrase = (
+                f", {week.get('minutes')} of {policy.WEEKLY_ACTIVE_MINUTES_TARGET} active minutes"
+                f" this week{partial}."
+            )
         cards.append(
             _card(
                 "steps",
                 "Daily movement",
-                f"{steps_mean:.0f} steps a day on average"
-                + (
-                    f", {week.get('minutes')} of {policy.WEEKLY_ACTIVE_MINUTES_TARGET} active minutes this week."
-                    if week.get("minutes") is not None
-                    else "."
-                ),
+                f"{steps_mean:.0f} steps a day on average{week_phrase}",
                 (
                     f"Add a 15-minute walk on the days you are under {int(steps_mean or 0):,} steps."
                     if below_floor
                     else "Hold the weekly active minutes where they are; you are above the floor."
                 ),
-                "Add 500 steps a day per week until the weekly active minutes clear 150.",
+                (
+                    "Add 500 steps a day per week until the weekly active minutes clear 150."
+                    if below_floor
+                    else "Hold the weekly total above 150 minutes and keep the step floor steady."
+                ),
                 "Stop adding when a day's steps start costing you the next night's sleep.",
                 policy.EVIDENCE["steps"],
                 "warn" if below_floor else "good",

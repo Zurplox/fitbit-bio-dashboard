@@ -453,16 +453,19 @@ def weekly_active_minutes(daily, today=None):
     today = today or date.today()
     week_start = today - timedelta(days=today.weekday())
     total = 0
-    measured = False
+    measured = 0
     for row in daily or []:
         day = _parse_date(row.get("date"))
         if day is None or day < week_start or day > today:
             continue
         if row.get("active_minutes") is not None:
-            measured = True
+            measured += 1
             total += row["active_minutes"]
     return {
         "minutes": round(total) if measured else None,
         "target": policy.WEEKLY_ACTIVE_MINUTES_TARGET,
         "pct": round(100 * total / policy.WEEKLY_ACTIVE_MINUTES_TARGET) if measured else None,
+        # How much of the week is actually represented by those minutes: a total
+        # summed over four recorded days must not read as a finished week.
+        "days": measured,
     }

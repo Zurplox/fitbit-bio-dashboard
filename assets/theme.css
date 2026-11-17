@@ -567,19 +567,6 @@ section[id] { scroll-margin-top: 76px; }
 /* ---------------------------------------------------------------- sources */
 /* Attribution, not decoration: Health Connect relays more than one app into the
    same series, so a card has to be able to say who produced the number. */
-.src {
-  font-family: var(--mono);
-  font-size: 9.5px;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--muted);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 2px 7px;
-  white-space: nowrap;
-}
-.src[hidden] { display: none; }
-
 .sources {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
@@ -871,6 +858,7 @@ body { background: var(--bg); }
 }
 .source-badge.derived { border-color: color-mix(in srgb, var(--accent) 48%, transparent); color: var(--accent); }
 .source-badge.unreported { border-style: dashed; color: var(--faint); }
+.source-badge.more { border-style: dashed; color: var(--faint); cursor: default; }
 .source-badge.mixed { border-color: color-mix(in srgb, var(--neutral) 55%, transparent); color: var(--neutral); }
 .source-note { margin: 0 0 14px; padding: 12px 14px; border-left: 2px solid var(--accent); background: var(--surface); color: var(--muted); font-size: 12px; }
 .source-note strong { color: var(--text); font-weight: 600; }
