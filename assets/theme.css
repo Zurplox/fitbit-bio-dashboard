@@ -1430,3 +1430,36 @@ body::after {
     backdrop-filter: none !important;
   }
 }
+
+/* ==========================================================================
+   Neutral canvas
+   The hue-washed backdrop was the loudest colour on the page and it tinted
+   everything that sat on it. The canvas is now plain graphite in dark and plain
+   grey in light, with one soft light from above and a whisper of cool tone in
+   the far corner — the colour in this product belongs to the readings, not to
+   the wallpaper.
+   ========================================================================== */
+:root {
+  --bg: #0a0a0b;
+  --surface: #141416;
+  --surface-2: #1c1c1f;
+  --surface-3: #26262a;
+  --line: rgba(233, 239, 246, 0.08);
+  --line-strong: rgba(233, 239, 246, 0.15);
+}
+[data-theme="light"] {
+  --bg: #f5f5f7;
+  --surface: #ffffff;
+  --surface-2: #ececf0;
+  --surface-3: #e1e3e8;
+}
+html::before {
+  background-image:
+    radial-gradient(1200px 820px at 50% -12%, rgba(255, 255, 255, 0.06), transparent 72%),
+    radial-gradient(900px 700px at 104% 106%, rgba(150, 170, 200, 0.045), transparent 70%);
+}
+html[data-theme="light"]::before {
+  background-image:
+    radial-gradient(1200px 820px at 50% -14%, rgba(255, 255, 255, 0.95), transparent 74%),
+    radial-gradient(900px 700px at 104% 106%, rgba(0, 60, 120, 0.03), transparent 70%);
+}

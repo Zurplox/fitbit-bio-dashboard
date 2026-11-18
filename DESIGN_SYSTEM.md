@@ -10,7 +10,7 @@ Design notes for the Fitbit Air physiology dashboard.
 
 ## Palette
 
-Near-black canvas (`#07080a`) under a faint wash of the three data hues, with saturated colour carrying meaning and nothing else:
+Graphite canvas (`#0a0a0b`, surfaces `#141416` to `#26262a`) with one soft light from above and a whisper of cool tone in the far corner. Saturated colour carries meaning and nothing else — the page itself is neutral, so the rings and status words are the only colour on screen:
 
 | Token | Dark | Meaning |
 | --- | --- | --- |
@@ -22,12 +22,12 @@ Near-black canvas (`#07080a`) under a faint wash of the three data hues, with sa
 | `--rhr` | `#ff7ba8` | resting rate |
 | `--warn` / `--bad` | `#ffc247` / `#ff5d73` | caution, alert |
 
-Light theme keeps the same meanings at darker, AA-clearing values (green `#00754a`, strain `#006fc4`, sleep `#5936d0`).
+Light theme is Apple grey: `#f5f5f7` canvas, `#ffffff` surfaces, the same meanings at darker AA-clearing values (green `#00754a`, strain `#006fc4`, sleep `#5936d0`).
 
 ## Visual rules
 
 - **Surfaces are frosted, not glossy.** Cards, the ring cards, the readout strip and the sticky bar are one glass family (recipe below). Nothing inside a card glows or blooms.
-- **The backdrop is part of the material.** A fixed `html::before` layer carries five wide radial fields (recovery green `.26`, strain `.22`/`.12`, sleep `.20`, steps `.12`, green again at the foot `.13`) plus grain; the panes blur that field, so the hue shows through the glass. Blurring a near-black page would return near-black, which is why the wash has to be this strong.
+- **The backdrop stays neutral.** A fixed `html::before` layer carries one soft white field from the top (`rgba(255,255,255,.06)`) and a faint cool field in the bottom-right corner (`rgba(150,170,200,.045)`), plus grain. An earlier pass washed five data hues across it; that tinted every card and made the page the loudest colour in the product.
 - **No glow.** No coloured shadows, no halo rings around status dots, no bloom behind a card, no gradient text, no spotlight at the top of the page.
 - **One hue per card, at its edge.** The ring cards carry a 3px top bar in `--hue` and a ring track tinted `--hue` at 18%; the card body stays neutral.
 - Neutral graphite ramp for text and rules; semantic hues only where they encode a reading or series.
@@ -44,7 +44,7 @@ One recipe, four ingredients; leaving any of them out is what makes a card read 
 | --- | --- |
 | Fill | `rgba(255,255,255,.095)` — lighter than the backdrop, never a darker tint |
 | Sheen | 118° white gradient `.09` → 0 at 44%, plus a top-left radial `.125` |
-| Frost | `backdrop-filter: blur(30px) saturate(190%)` (with the `-webkit-` prefix) |
+| Frost | `backdrop-filter: blur(30px) saturate(190%)` (with the `-webkit-` prefix) — over a neutral canvas the rim and sheen carry the material, so neither may be dropped |
 | Rim | 1px `rgba(255,255,255,.18)`; top `.35`, left `.23`, bottom `.07` — lit from the top-left |
 | Depth | inset top highlight `.24`, inset bottom shade `rgba(0,0,0,.32)`, `0 30px 60px -28px rgba(0,0,0,.95)` float |
 | Grain | `body::after` noise tile at `opacity .03`, over everything, to dither blur banding |
