@@ -29,3 +29,4 @@ screenshot.png
 
 # local demo copy used for visual checks
 .demo-preview/
+.preview.log

@@ -722,8 +722,9 @@ footer {
 
 /* -------------------------------------------------------------------------
    Meridian instrument refresh
-   A compact field-notes layout: solid surfaces, clear type hierarchy, and
-   colour reserved for meaning. No glow, glass, or decorative card-in-card UI.
+   A compact field-notes layout: clear type hierarchy and colour reserved for
+   meaning. No glow, no decorative card-in-card UI; the glass pane recipe that
+   supersedes the solid surfaces below lives at the end of this file.
    ------------------------------------------------------------------------- */
 :root {
   --bg: #101311;
@@ -825,8 +826,6 @@ body { background: var(--bg); }
 .section-head .section-note { max-width: 48ch; }
 .card, .ringcard {
   border-radius: var(--radius);
-  box-shadow: none !important;
-  background: var(--surface);
 }
 .card { padding: 18px 19px; }
 .card:hover { border-color: var(--line-strong); }
@@ -1274,78 +1273,147 @@ section[id] { scroll-margin-top: 80px; }
 
 /* ==========================================================================
    Frosted surfaces
-   Blur is only a material if there is something behind it to blur, so the page
-   carries a very faint wash of the three data hues plus a grain layer. Cards
-   are then panes over that wash: no glowing borders, no colour bloom inside a
-   card, no gradient text. The glass is the only decoration.
+   Glass is four things at once: something vivid behind the panel, a fill that
+   is lighter than that backdrop, a rim that catches light at its top-left, and
+   a shadow that lifts it off the page. The first pass only had the blur, over a
+   near-black page: blurring near-black gives back near-black, so the panes read
+   as ordinary dark cards.
+
+   The wash below is therefore strong enough to be seen *through* a pane while
+   staying a wide soft field, so nothing in it reads as a glow and no card
+   interior gets a colour bloom of its own.
    ========================================================================== */
 html::before {
   content: "";
   position: fixed;
-  inset: 0;
+  inset: -12%;
   z-index: -1;
   pointer-events: none;
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.05'/%3E%3C/svg%3E"),
-    radial-gradient(1100px 760px at 22% -8%, rgba(47, 240, 143, 0.085), transparent 62%),
-    radial-gradient(900px 700px at 92% 4%, rgba(23, 169, 255, 0.06), transparent 64%),
-    radial-gradient(1000px 820px at 58% 108%, rgba(167, 139, 250, 0.055), transparent 60%);
-  background-size: 180px 180px, auto, auto, auto;
-  opacity: 1;
+    radial-gradient(760px 640px at 12% 0%, rgba(47, 240, 143, 0.26), transparent 66%),
+    radial-gradient(640px 560px at 90% 10%, rgba(23, 169, 255, 0.22), transparent 64%),
+    radial-gradient(900px 620px at 46% 36%, rgba(23, 169, 255, 0.12), transparent 68%),
+    radial-gradient(700px 640px at 4% 58%, rgba(167, 139, 250, 0.2), transparent 66%),
+    radial-gradient(600px 540px at 86% 74%, rgba(212, 255, 79, 0.12), transparent 66%),
+    radial-gradient(900px 700px at 52% 110%, rgba(47, 240, 143, 0.13), transparent 70%);
 }
 html[data-theme="light"]::before {
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.04'/%3E%3C/svg%3E"),
-    radial-gradient(1100px 760px at 20% -10%, rgba(0, 117, 74, 0.07), transparent 62%),
-    radial-gradient(900px 700px at 92% 2%, rgba(0, 111, 196, 0.05), transparent 64%),
-    radial-gradient(980px 820px at 58% 108%, rgba(89, 54, 208, 0.045), transparent 60%);
-  background-size: 180px 180px, auto, auto, auto;
+    radial-gradient(760px 640px at 10% 0%, rgba(0, 117, 74, 0.17), transparent 66%),
+    radial-gradient(640px 560px at 90% 8%, rgba(0, 111, 196, 0.15), transparent 64%),
+    radial-gradient(700px 640px at 4% 60%, rgba(89, 54, 208, 0.12), transparent 66%),
+    radial-gradient(600px 540px at 86% 76%, rgba(95, 140, 18, 0.1), transparent 66%),
+    radial-gradient(900px 700px at 52% 110%, rgba(0, 117, 74, 0.09), transparent 70%);
 }
 
-/* One pane recipe for both card families: a thin tint over the wash, a lit top
-   edge instead of a glow, and a shadow tight enough to stay a shadow. */
+/* Grain above everything dithers the banding a 30px blur pulls out of a large
+   gradient. It stays a whisper; the glass should not look filmed over. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+
+/* The pane: a light tint (never a darker fill), a sheen off the top-left, a rim
+   brighter than the fill and brightest at the top edge, a shade under the
+   bottom lip, and a shadow with enough offset to float it. */
 .card,
-.ringcard {
-  background: color-mix(in srgb, var(--surface) 56%, transparent);
-  -webkit-backdrop-filter: blur(20px) saturate(150%);
-  backdrop-filter: blur(20px) saturate(150%);
-  border: 1px solid color-mix(in srgb, var(--line-strong) 72%, transparent);
+.ringcard,
+.nav {
+  background-color: rgba(255, 255, 255, 0.095);
+  background-image:
+    linear-gradient(118deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0) 44%),
+    radial-gradient(120% 100% at 2% 0%, rgba(255, 255, 255, 0.125), transparent 60%);
+  -webkit-backdrop-filter: blur(30px) saturate(190%);
+  backdrop-filter: blur(30px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-top-color: rgba(255, 255, 255, 0.35);
+  border-left-color: rgba(255, 255, 255, 0.23);
+  border-bottom-color: rgba(255, 255, 255, 0.07);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.055),
-    inset 0 0 0 0.5px rgba(255, 255, 255, 0.02),
-    0 20px 44px -34px rgba(0, 0, 0, 0.85);
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.32),
+    0 30px 60px -28px rgba(0, 0, 0, 0.95),
+    0 2px 8px rgba(0, 0, 0, 0.3);
 }
 .card:hover,
-.ringcard:hover { border-color: color-mix(in srgb, var(--line-strong) 100%, transparent); }
+.ringcard:hover {
+  border-color: rgba(255, 255, 255, 0.24);
+  border-top-color: rgba(255, 255, 255, 0.42);
+}
+.card.flat { background-color: transparent; background-image: none; }
 
-/* White on near-white cannot carry a tinted pane: it reads as a smudge. These
-   keep more of the surface, and take the shadow back to do the lifting. */
+/* On paper-white the tint has to come from the surface instead of the light. */
 [data-theme="light"] .card,
-[data-theme="light"] .ringcard {
-  background: color-mix(in srgb, #fff 78%, transparent);
+[data-theme="light"] .ringcard,
+[data-theme="light"] .nav {
+  background-color: rgba(255, 255, 255, 0.6);
+  background-image: radial-gradient(
+    130% 110% at 0% 0%,
+    rgba(255, 255, 255, 0.85),
+    transparent 60%
+  );
+  border-color: rgba(15, 23, 32, 0.1);
+  border-top-color: rgba(255, 255, 255, 0.95);
+  border-left-color: rgba(255, 255, 255, 0.8);
+  border-bottom-color: rgba(15, 23, 32, 0.14);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    0 1px 2px rgba(15, 23, 32, 0.05),
-    0 14px 30px -26px rgba(15, 23, 32, 0.4);
+    inset 0 1px 0 #ffffff,
+    0 1px 2px rgba(15, 23, 32, 0.06),
+    0 18px 34px -26px rgba(15, 23, 32, 0.35);
 }
 
-/* The readout strip is a single pane cut into cells, so the cells give up their
-   own paint and only the strip is glass. */
+/* The sticky bar is the one pane with content scrolling underneath it, so it is
+   where the frost is easiest to see: keep enough of the page colour behind it
+   for legibility, but let the blur do the work. */
+.topbar {
+  background-color: color-mix(in srgb, var(--bg) 64%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  backdrop-filter: blur(24px) saturate(170%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+[data-theme="light"] .topbar {
+  background-color: rgba(255, 255, 255, 0.66);
+  border-bottom-color: rgba(15, 23, 32, 0.08);
+}
+
+/* The readout strip is one pane cut into cells, so the cells give up their own
+   paint and the dividers become the only structure. */
 .strip {
-  background: color-mix(in srgb, var(--line-strong) 62%, transparent);
-  -webkit-backdrop-filter: blur(20px) saturate(150%);
-  backdrop-filter: blur(20px) saturate(150%);
+  background-color: rgba(255, 255, 255, 0.045);
+  -webkit-backdrop-filter: blur(30px) saturate(175%);
+  backdrop-filter: blur(30px) saturate(175%);
+  border-block-color: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
-.cell { background: color-mix(in srgb, var(--surface) 26%, transparent); }
-[data-theme="light"] .cell { background: color-mix(in srgb, #fff 62%, transparent); }
+.cell { background: transparent; }
+[data-theme="light"] .strip { background-color: rgba(255, 255, 255, 0.55); }
+[data-theme="light"] .cell { background: transparent; }
 
-/* No compositor filter means a transparent card is just a smudge over moving
-   content; fall back to the solid surface rather than pretending. */
+/* No compositor filter means a translucent pane is only a smudge, so fall back
+   to the solid surface rather than pretending. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .card, .ringcard, .cell { background: var(--surface); }
+  .card, .ringcard, .nav, .strip { background-color: var(--surface); background-image: none; }
+  .cell { background: transparent; }
   [data-theme="light"] .card,
   [data-theme="light"] .ringcard,
-  [data-theme="light"] .cell { background: #fff; }
+  [data-theme="light"] .nav,
+  [data-theme="light"] .strip { background-color: #fff; }
+}
+
+/* Translucency is decoration; the reader can ask for it to go away. */
+@media (prefers-reduced-transparency: reduce) {
+  html::before, body::after { display: none; }
+  .card, .ringcard, .nav, .strip { background-color: var(--surface); background-image: none; }
+  [data-theme="light"] .card,
+  [data-theme="light"] .ringcard,
+  [data-theme="light"] .nav,
+  [data-theme="light"] .strip { background-color: #fff; }
 }
 
 /* A halo around a status dot is the smallest kind of fake glow; the dot alone
@@ -1353,8 +1421,8 @@ html[data-theme="light"]::before {
 .chip.member .dot { box-shadow: none; }
 
 @media print {
-  html::before { display: none; }
-  .card, .ringcard, .cell {
+  html::before, body::after { display: none; }
+  .card, .ringcard, .nav, .strip, .cell {
     background: #fff !important;
     border-color: #d8d8d8 !important;
     box-shadow: none !important;

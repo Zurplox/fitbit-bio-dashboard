@@ -26,7 +26,8 @@ Light theme keeps the same meanings at darker, AA-clearing values (green `#00754
 
 ## Visual rules
 
-- **Surfaces are frosted, not glossy.** Cards are a 56%-surface tint with `blur(20px) saturate(150%)`, a hairline border and a lit top edge (inset white at 5.5%). Glass only reads because the page carries a subtle hue wash and grain behind it.
+- **Surfaces are frosted, not glossy.** Cards, the ring cards, the readout strip and the sticky bar are one glass family (recipe below). Nothing inside a card glows or blooms.
+- **The backdrop is part of the material.** A fixed `html::before` layer carries five wide radial fields (recovery green `.26`, strain `.22`/`.12`, sleep `.20`, steps `.12`, green again at the foot `.13`) plus grain; the panes blur that field, so the hue shows through the glass. Blurring a near-black page would return near-black, which is why the wash has to be this strong.
 - **No glow.** No coloured shadows, no halo rings around status dots, no bloom behind a card, no gradient text, no spotlight at the top of the page.
 - **One hue per card, at its edge.** The ring cards carry a 3px top bar in `--hue` and a ring track tinted `--hue` at 18%; the card body stays neutral.
 - Neutral graphite ramp for text and rules; semantic hues only where they encode a reading or series.
@@ -34,6 +35,25 @@ Light theme keeps the same meanings at darker, AA-clearing values (green `#00754
 - 4px spacing cadence, hairline borders, responsive charts and cards. The workout calendar labels weekdays vertically and weeks left-to-right, with a duration legend.
 - Motion is limited to ring draw-in and bar width; no entrance animation, no hover lift.
 - Print drops every pane back to white with grey rules, so a PDF stays readable.
+
+## Glass recipe
+
+One recipe, four ingredients; leaving any of them out is what makes a card read as a plain translucent box.
+
+| Ingredient | Value |
+| --- | --- |
+| Fill | `rgba(255,255,255,.095)` — lighter than the backdrop, never a darker tint |
+| Sheen | 118° white gradient `.09` → 0 at 44%, plus a top-left radial `.125` |
+| Frost | `backdrop-filter: blur(30px) saturate(190%)` (with the `-webkit-` prefix) |
+| Rim | 1px `rgba(255,255,255,.18)`; top `.35`, left `.23`, bottom `.07` — lit from the top-left |
+| Depth | inset top highlight `.24`, inset bottom shade `rgba(0,0,0,.32)`, `0 30px 60px -28px rgba(0,0,0,.95)` float |
+| Grain | `body::after` noise tile at `opacity .03`, over everything, to dither blur banding |
+
+The sticky bar keeps `var(--bg)` at 64% opacity so 11px nav labels still clear AA while content visibly blurs underneath. The readout strip is one pane cut into cells: the cells have no fill of their own and the hairline dividers are the only structure.
+
+Glass is decoration, so it is defeatable: `prefers-reduced-transparency: reduce` drops the wash and grain and returns solid surfaces, `@supports not (backdrop-filter)` does the same for browsers without a compositor filter, and print strips every pane back to white.
+
+Light theme inverts the source of the tint: white at 60% with white top rim and a `rgba(15,23,32,.1)` border, over a dimmed version of the same hue wash (`rgba(0,117,74,.17)` and friends).
 
 ## Entitlement
 
