@@ -1271,3 +1271,94 @@ section[id] { scroll-margin-top: 80px; }
   .load-columns { display: flex; flex-direction: column; }
   .load-column { display: contents; }
 }
+
+/* ==========================================================================
+   Frosted surfaces
+   Blur is only a material if there is something behind it to blur, so the page
+   carries a very faint wash of the three data hues plus a grain layer. Cards
+   are then panes over that wash: no glowing borders, no colour bloom inside a
+   card, no gradient text. The glass is the only decoration.
+   ========================================================================== */
+html::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.05'/%3E%3C/svg%3E"),
+    radial-gradient(1100px 760px at 22% -8%, rgba(47, 240, 143, 0.085), transparent 62%),
+    radial-gradient(900px 700px at 92% 4%, rgba(23, 169, 255, 0.06), transparent 64%),
+    radial-gradient(1000px 820px at 58% 108%, rgba(167, 139, 250, 0.055), transparent 60%);
+  background-size: 180px 180px, auto, auto, auto;
+  opacity: 1;
+}
+html[data-theme="light"]::before {
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.04'/%3E%3C/svg%3E"),
+    radial-gradient(1100px 760px at 20% -10%, rgba(0, 117, 74, 0.07), transparent 62%),
+    radial-gradient(900px 700px at 92% 2%, rgba(0, 111, 196, 0.05), transparent 64%),
+    radial-gradient(980px 820px at 58% 108%, rgba(89, 54, 208, 0.045), transparent 60%);
+  background-size: 180px 180px, auto, auto, auto;
+}
+
+/* One pane recipe for both card families: a thin tint over the wash, a lit top
+   edge instead of a glow, and a shadow tight enough to stay a shadow. */
+.card,
+.ringcard {
+  background: color-mix(in srgb, var(--surface) 56%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid color-mix(in srgb, var(--line-strong) 72%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.02),
+    0 20px 44px -34px rgba(0, 0, 0, 0.85);
+}
+.card:hover,
+.ringcard:hover { border-color: color-mix(in srgb, var(--line-strong) 100%, transparent); }
+
+/* White on near-white cannot carry a tinted pane: it reads as a smudge. These
+   keep more of the surface, and take the shadow back to do the lifting. */
+[data-theme="light"] .card,
+[data-theme="light"] .ringcard {
+  background: color-mix(in srgb, #fff 78%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 1px 2px rgba(15, 23, 32, 0.05),
+    0 14px 30px -26px rgba(15, 23, 32, 0.4);
+}
+
+/* The readout strip is a single pane cut into cells, so the cells give up their
+   own paint and only the strip is glass. */
+.strip {
+  background: color-mix(in srgb, var(--line-strong) 62%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(150%);
+}
+.cell { background: color-mix(in srgb, var(--surface) 26%, transparent); }
+[data-theme="light"] .cell { background: color-mix(in srgb, #fff 62%, transparent); }
+
+/* No compositor filter means a transparent card is just a smudge over moving
+   content; fall back to the solid surface rather than pretending. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .card, .ringcard, .cell { background: var(--surface); }
+  [data-theme="light"] .card,
+  [data-theme="light"] .ringcard,
+  [data-theme="light"] .cell { background: #fff; }
+}
+
+/* A halo around a status dot is the smallest kind of fake glow; the dot alone
+   already reads. */
+.chip.member .dot { box-shadow: none; }
+
+@media print {
+  html::before { display: none; }
+  .card, .ringcard, .cell {
+    background: #fff !important;
+    border-color: #d8d8d8 !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
