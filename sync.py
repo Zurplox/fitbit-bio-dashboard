@@ -587,7 +587,10 @@ def main():
     payload = build_payload(fetched, dq)
 
     out_file = DATA_DIR / "biometrics.json"
-    out_file.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    # allow_nan=False: a NaN that slips past the parsers fails the run here,
+    # leaving yesterday's readable vault, instead of publishing one the
+    # browser cannot parse.
+    out_file.write_text(json.dumps(payload, indent=2, ensure_ascii=False, allow_nan=False), encoding="utf-8")
 
     quality = payload["data_quality"]
     today = payload["today"]

@@ -47,6 +47,19 @@ class FakeClient:
         return {"rollupDataPoints": self.rollup_points}
 
 
+class NumTests(unittest.TestCase):
+    def test_non_finite_values_are_missing_not_numbers(self):
+        for raw in ("NaN", float("nan"), "Infinity", float("-inf")):
+            self.assertIsNone(source._num(raw))
+        self.assertEqual(source._num("36.5"), 36.5)
+
+    def test_nan_skin_night_is_dropped(self):
+        fake = FakeClient(points={"daily-sleep-temperature-derivations": [
+            {"dailySleepTemperatureDerivations": {"date": {"year": 2026, "month": 11, "day": 5}, "nightlyTemperatureCelsius": "NaN", "baselineTemperatureCelsius": 33.8}},
+        ]})
+        self.assertEqual(source.fetch_daily_skin_temp(fake, days=30), [])
+
+
 class SkinTempTests(unittest.TestCase):
     def test_deviation_from_baseline_and_no_baseline_dropped(self):
         day = lambda d: {"year": 2026, "month": 11, "day": d}

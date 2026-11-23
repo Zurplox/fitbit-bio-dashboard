@@ -19,6 +19,7 @@ Two constraints from the API shape everything here:
 from __future__ import annotations
 
 import json
+import math
 import os
 import time
 import urllib.error
@@ -106,12 +107,14 @@ def _seconds(duration):
 def _num(value):
     if value is None or isinstance(value, bool):
         return None
-    if isinstance(value, (int, float)):
-        return float(value)
     try:
-        return float(str(value))
+        number = float(value) if isinstance(value, (int, float)) else float(str(value))
     except (TypeError, ValueError):
         return None
+    # The API can send NaN for a night it could not measure. NaN is not valid
+    # JSON, so one such value once left the whole vault unreadable in the
+    # browser; it is a missing reading, nothing more.
+    return number if math.isfinite(number) else None
 
 
 def _chronological(records, key="date"):
