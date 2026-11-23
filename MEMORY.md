@@ -35,5 +35,7 @@ then update this file at the end of the session.
 
 - Round 6 (real-data QA): the API sent NaN skin temps, which made the vault unparseable in browsers. `_num` now drops non-finite values and sync writes with `allow_nan=False`. Training effect gives light-zone minutes zero weight (walks had scored "Hard"). Real account: Fitbit Air plus Garmin Connect and Google Fit relayed via Health Connect; HRV only since ~13 Nov (HRV status appears around 7 Dec); no height in profile, so no BMI.
 
+- Round 7: unslop + glisse pass. App shell (sidebar, sticky glass toolbar, glass tab bar on phones), one Today panel with four ring cells, vitals as an instrument strip, mono figures. Glass is native CSS (glisse is React from a CDN, which can't run beside decrypted data).
+
 ## Next steps
 - After the next real sync, check that zone data, age and skin temperature arrive (look for "not measured" in the Data sources panel).

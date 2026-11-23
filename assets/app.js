@@ -280,12 +280,18 @@
       : "";
     const lede = recovery.band && recovery.band.plain ? recovery.band.plain : (data.clinical && data.clinical.headline) || "";
 
-    slot("today").innerHTML = `<div class="hero">
-      <div class="hero-meta">${esc(dateText)} · ${esc(device)}</div>
-      <h1>${esc(has(recovery.score) ? `${bandLabel(recovery.band)} recovery` : "Today")}</h1>
-      ${lede ? `<p class="hero-lede">${esc(lede)}</p>` : ""}
+    // One panel, not a hero: the toolbar already names the page and date.
+    $("pageDate").textContent = dateText;
+    $("sideDevice").textContent = device;
+    slot("today").innerHTML = `<div class="card today">
+      <div class="today-head">
+        <div>
+          <div class="today-title">${esc(has(recovery.score) ? `${bandLabel(recovery.band)} recovery` : "Today")}</div>
+          ${lede ? `<p class="sub">${esc(lede)}</p>` : ""}
+        </div>
+        <span class="faint small">Calculated from your measurements, not a WHOOP, Apple or Garmin score</span>
+      </div>
       ${blocks.length ? `<div class="scores">${blocks.join("")}</div>` : ""}
-      <p class="calc-note">Scores are calculated from your own measurements by fixed rules. They are not WHOOP, Apple or Garmin scores.</p>
     </div>`;
   }
 
@@ -325,7 +331,7 @@
     const illness = (data.clinical && data.clinical.illness) || null;
 
     slot("vitals").innerHTML = rows.length
-      ? `<div class="tiles">${rows.map((r) => `<div class="tile">
+      ? `<div class="tiles card">${rows.map((r) => `<div class="tile">
           <div class="tile-name">${esc(r.name)}${info(r.help)}</div>
           <div class="tile-value">${esc(r.value)}</div>
           <div class="tile-meta">${esc([r.base && r.base !== "30-night median" ? `Usual ${r.base}` : r.base, r.change].filter(Boolean).join(" · "))}</div>
@@ -861,9 +867,17 @@
   /* -------------------------------------------------------------- chrome -- */
   function renderChrome(data) {
     $("demoChip").hidden = !data.demo;
-    $("syncText").textContent = data.generated_at
-      ? "Synced " + new Date(data.generated_at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
-      : "";
+    // Signature: a status dot with the data's age, green while fresh.
+    if (data.generated_at) {
+      const ageH = (Date.now() - new Date(data.generated_at).getTime()) / 3600000;
+      const fresh = ageH <= ((data.policy && data.policy.stale_after_hours) || 30);
+      const age = ageH < 1 ? `${Math.max(1, Math.round(ageH * 60))}m ago` : ageH < 48 ? `${Math.round(ageH)}h ago` : `${Math.round(ageH / 24)}d ago`;
+      $("syncText").className = `sync mono small ${fresh ? "fresh" : "stale"}`;
+      $("syncText").textContent = `synced ${age}`;
+      $("syncText").title = new Date(data.generated_at).toLocaleString();
+    } else {
+      $("syncText").textContent = "";
+    }
     const banner = $("staleBanner");
     if (data.generated_at) {
       const hours = (Date.now() - new Date(data.generated_at).getTime()) / 3600000;
@@ -1024,7 +1038,7 @@
     // Every rendered value lives inside a slot, so emptying the slots purges
     // the data from the DOM rather than merely hiding it.
     document.querySelectorAll("[data-slot]").forEach((node) => { node.innerHTML = ""; });
-    $("syncText").textContent = "";
+    ["syncText", "pageDate", "sideDevice"].forEach((id) => { $(id).textContent = ""; });
     $("staleBanner").hidden = true;
     $("app").hidden = true;
     $("lock").hidden = false;
@@ -1088,7 +1102,7 @@
       }
     });
 
-    const links = Array.from(document.querySelectorAll(".nav a"));
+    const links = Array.from(document.querySelectorAll(".nav a, .tabbar a"));
     if ("IntersectionObserver" in window) {
       const observer = new IntersectionObserver(
         (entries) => entries.forEach((entry) => {
@@ -1096,6 +1110,8 @@
           links.forEach((link) =>
             link.setAttribute("aria-current", String(link.getAttribute("href") === "#" + entry.target.id))
           );
+          const current = links.find((link) => link.getAttribute("href") === "#" + entry.target.id);
+          if (current) $("pageTitle").textContent = current.textContent.trim();
         }),
         { rootMargin: "-20% 0px -70% 0px" }
       );

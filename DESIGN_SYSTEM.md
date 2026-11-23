@@ -21,9 +21,15 @@ Light theme by default; dark is a toggle.
 | `--chart` / `--strain` | `#2563eb` | `#60a5fa` | every trend line, training load |
 | `--sleep*` | indigo steps | indigo steps | sleep ring and stages only |
 
+## Shell
+
+An instrument console, not a landing page: a 232px sidebar (sections, device, sync dot), a toolbar naming the current section and date, dense solid panels, and monospaced readings for every figure. Below 1024px the sidebar becomes a floating tab bar.
+
+**Glass** (after glisse's rules, in native CSS because no third-party script may run on a page holding decrypted health data) sits only on the control layer that floats over scrolling content: the toolbar, the phone tab bar, popovers and chart tooltips. Frosted fill, a lit top rim, a soft neutral float; solid fallback when `backdrop-filter` or transparency is unavailable. Content panels stay solid.
+
 ## Rules
 
-- Flat surfaces with 1px borders. No shadows, glass, glow, gradients on surfaces, or gradient text.
+- Solid panels with 1px borders; no shadows on content, no glow, no gradients on surfaces, no gradient text.
 - One series colour per chart; baselines are dashed grey.
 - Type: system UI stack (no web font request, so the vault stays the only network fetch). Page title 40/700 tight, section 22/600, card title 16/600, labels 12/500, tabular figures everywhere.
 - Spacing on a 4px grid: 24px card padding, 64px between sections. Radii: 6px controls, 10px cards, pills only for status tags.
