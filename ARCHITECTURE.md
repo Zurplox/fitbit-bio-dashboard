@@ -74,11 +74,10 @@ Three layers, in order:
 * **Render** — `render(data)` walks the payload once. Each `render*` helper owns one card. It reads
   bands and tones; it computes no scores.
 * **Decrypt boundary** — `decryptVault()` is the only place ciphertext becomes data. `lock()`
-  discards the passphrase, the payload and every chart registered with `Viz`.
+  discards the passphrase and the payload and empties every render slot.
 
-`assets/charts.js` draws straight onto canvas: no CDN, no chart library, no build step. Each chart
-is a draw function over a payload slice, registered for resize, and re-run on theme change because
-colours are read from CSS custom properties at draw time.
+History is shown as data tables and labelled readouts (median, range, mean) rather than trend
+charts. Colour comes from CSS custom properties and tones resolved in `bio_policy.py`.
 
 ## Why these limits are visible in the UI
 

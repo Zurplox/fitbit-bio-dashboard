@@ -23,7 +23,6 @@ jobs:
       - name: Frontend syntax
         run: |
           node --check assets/app.js
-          node --check assets/charts.js
 
       - name: The demo vault must decrypt through the Python path
         run: |

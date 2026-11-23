@@ -174,7 +174,6 @@ sync.py                  the run: fetch → analyse → gate → publish
 encrypt_data.py          AES-256-GCM envelope + status file
 index.html               markup
 assets/theme.css         design system
-assets/charts.js         canvas charts, no dependencies
 assets/app.js            decrypt + render
 ```
 
@@ -186,7 +185,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the ownership rules and the payload c
 
 ```bash
 python -m unittest discover -s tests -t . -v     # 66 tests, offline
-node --check assets/app.js && node --check assets/charts.js
+node --check assets/app.js
 ```
 
 `tests/test_pipeline.py` covers the arithmetic: band ordering and tone vocabulary, the 12-hour
