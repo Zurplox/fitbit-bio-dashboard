@@ -771,7 +771,7 @@
           <div class="sub">${esc(f.a_label)} and ${esc(f.b_label).toLowerCase()} · ${num(f.n)} paired days</div>
         </div>
         <div class="r" title="Correlation, from −1 to +1">${f.r >= 0 ? "+" : "−"}${Math.abs(f.r).toFixed(2)}</div>
-      </div>`).join("") : `<p class="muted small">Nothing cleared the bar yet: at least ${num(corr.min_paired_days)} paired days and |r| ≥ ${num(corr.min_r, 2)}.</p>`}
+      </div>`).join("") : `<p class="muted small">No pattern strong enough to show yet${has(corr.min_paired_days) && has(corr.min_r) ? `: a pair needs ${num(corr.min_paired_days)} paired days and a correlation of at least ${num(corr.min_r, 2)}` : ""}.</p>`}
       <p class="note">Associations across your own days, not causes.</p>
     </div>`;
 
