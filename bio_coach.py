@@ -161,11 +161,13 @@ def build_coaching(signals, load, movement, sleep_score, acwr):
             _card(
                 "strength",
                 "Cardio fitness",
-                f"VO2 max {capacity:.0f} ml/kg/min from the device's own estimate.",
+                f"VO2 max about {capacity:.0f} ml/kg/min, estimated from your resting heart rate and age."
+                if movement.get("vo2max_estimated")
+                else f"VO2 max {capacity:.0f} ml/kg/min from the device's own estimate.",
                 "Two easy aerobic sessions a week is the cheapest way to move this number.",
                 "It moves over months, not days — check it monthly, not nightly.",
                 "Do not chase it while recovery is below 55; the adaptation is made in rest.",
-                policy.EVIDENCE["strength"],
+                policy.EVIDENCE["vo2max"],
                 "good",
             )
         )

@@ -375,7 +375,16 @@ def training_effect(sessions, today=None, keep=8):
         r["aerobic_band"] = policy.te_band(r["aerobic"])
         r["anaerobic_band"] = policy.te_band(r["anaerobic"])
     rows.sort(key=lambda r: r["date"])
-    return {"available": True, "scale_sessions": len(rows), "window_days": policy.TE_WINDOW_DAYS, "sessions": rows[-keep:]}
+    # Easy sessions (all light zone) score 0.0 on both; listing them buries
+    # the workouts that trained something, so they are counted instead.
+    trained = [r for r in rows if r["aerobic"] or r["anaerobic"]]
+    return {
+        "available": bool(trained),
+        "scale_sessions": len(rows),
+        "window_days": policy.TE_WINDOW_DAYS,
+        "easy_sessions": len(rows) - len(trained),
+        "sessions": trained[-keep:],
+    }
 
 
 def vo2_uth(rest_hr, age):

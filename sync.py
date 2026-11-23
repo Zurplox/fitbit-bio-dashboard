@@ -256,6 +256,14 @@ def build_payload(fetched, dq, demo=False):
         "vo2max": signals["vo2max"],
     }
 
+    markers = build_markers(
+        fetched, nights, hrv_series, rhr_series, steps_series, vo2_series, today
+    )
+    if movement["vo2max"] is None and markers["vo2max"]:
+        # Coaching should speak about the same VO2 max the page shows.
+        movement["vo2max"] = markers["vo2max"]["value"]
+        movement["vo2max_estimated"] = markers["vo2max"]["estimated"]
+
     clinical = clinical_engine.assess(signals, load, {"mean": movement["steps_mean"]}, {})
     coaching = bio_coach.build_coaching(
         signals, load, movement, sleep_score, load.get("acwr")
@@ -273,9 +281,6 @@ def build_payload(fetched, dq, demo=False):
     )
 
     correlations = bio_correlate.build_correlations(channels)
-    markers = build_markers(
-        fetched, nights, hrv_series, rhr_series, steps_series, vo2_series, today
-    )
 
     quality = dq.as_dict()
     if not dq.publishable():

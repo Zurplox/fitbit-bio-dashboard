@@ -144,7 +144,7 @@ a { color: inherit; }
   width: 16px; height: 16px; margin-left: 6px; padding: 0; vertical-align: 1px;
   display: inline-grid; place-items: center; border-radius: 50%;
   border: 1px solid var(--line-strong); background: none; cursor: pointer;
-  font: 600 10px/1 var(--sans); color: var(--muted);
+  font: 600 11px/1 var(--sans); color: var(--muted);
   transition: color .15s var(--ease), border-color .15s var(--ease);
 }
 .info:hover, .info[aria-expanded="true"] { color: var(--text); border-color: var(--text); }

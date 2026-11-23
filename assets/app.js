@@ -266,7 +266,9 @@
         figure: load.acwr.toFixed(2),
         unit: "",
         ratio: Math.min(2, load.acwr) / 2,
-        color: cssVar("--strain"),
+        // Status colour, like recovery: a full blue ring read as "done" when
+        // the ratio was actually spiking.
+        color: tone(load.acwr_band) === "good" ? cssVar("--strain") : toneColor(load.acwr_band),
         band: load.acwr_band,
         sub: `${num(load.acute_minutes)} min this week vs ${num(load.chronic_minutes)} usual`,
       }));
@@ -409,7 +411,7 @@
       rows,
       keys: ["deep", "rem", "light", "awake"],
       colors: ["--sleep-deep", "--sleep-rem", "--sleep-light", "--sleep-awake"].map(cssVar),
-      height: 240,
+      height: 380,
       format: (v) => `${Math.round(v / 60)}h`,
       tooltip: $("sleepTip"),
       tipHTML: (i, r) => `<div class="tt-date">${shortDate(r.date)}</div>
@@ -597,10 +599,12 @@
     if (v.length < 2) return "";
     const lo = Math.min(...v), hi = Math.max(...v), span = hi - lo || 1;
     const pts = v.map((y, i) => [(i / (v.length - 1)) * 196 + 2, 30 - ((y - lo) / span) * 26]);
-    const [lx, ly] = pts[pts.length - 1];
+    // The svg stretches to the card width, so a circle would become an oval;
+    // the latest point is marked by a short, thicker round-capped segment.
+    const tail = pts.slice(-2);
     return `<svg class="spark" viewBox="0 0 200 34" preserveAspectRatio="none" aria-hidden="true">
       <polyline points="${pts.map((p) => p.map((n) => n.toFixed(1)).join(",")).join(" ")}" fill="none" stroke="${color}" stroke-width="1.75" vector-effect="non-scaling-stroke" stroke-linejoin="round" />
-      <circle cx="${lx}" cy="${ly}" r="2.5" fill="${color}" />
+      <line x1="${tail[1][0] - 0.01}" y1="${tail[1][1]}" x2="${tail[1][0]}" y2="${tail[1][1]}" stroke="${color}" stroke-width="6" stroke-linecap="round" vector-effect="non-scaling-stroke" />
     </svg>`;
   }
 
@@ -688,7 +692,7 @@
     const typeName = (s) => esc((s.type || "Workout").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()));
     const last = te.available ? te.sessions[te.sessions.length - 1] : null;
     const teCard = last ? `<div class="card">
-      <div class="card-head"><h3>Training effect${info("te")}</h3><span class="faint small">Last workout · ${shortDate(last.date)} · ${typeName(last)} · ${hm(last.minutes)}</span></div>
+      <div class="card-head"><h3>Training effect${info("te")}</h3><span class="faint small">Last training session · ${shortDate(last.date)} · ${typeName(last)} · ${hm(last.minutes)}</span></div>
       <div class="te-grid">
         <div>
           <div class="label">Aerobic</div>
@@ -708,6 +712,7 @@
         <span>${typeName(s)} <span class="faint">· ${hm(s.minutes)}</span></span>
         <span class="meta"><b class="te-a">${num(s.aerobic, 1)}</b> aerobic · <b class="te-n">${num(s.anaerobic, 1)}</b> anaerobic</span>
       </div>`).join("")}</div>
+      ${te.easy_sessions ? `<p class="sub" style="margin-top:12px">Plus ${num(te.easy_sessions)} easy ${te.easy_sessions === 1 ? "session" : "sessions"}, all in the light zone, with no training effect.</p>` : ""}
       <p class="note">Scored against your own ${num(te.scale_sessions)} workouts from the last ${num(te.window_days)} days: 5.0 matches your hardest. This is not Garmin's Firstbeat score.</p>
       ${study(te.evidence)}
     </div>` : "";
@@ -743,7 +748,7 @@
     ].filter(Boolean).join('<div style="height:16px"></div>') || `<p class="muted">No activity in this sync.</p>`;
 
     chart("stepsChart", (canvas) => window.Viz.bars(canvas, {
-      rows: stepRows, key: "value", color: cssVar("--chart"), goal: steps.goal, height: 180,
+      rows: stepRows, key: "value", color: cssVar("--chart"), goal: steps.goal, height: 260,
       format: (v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : Math.round(v)),
       tooltip: $("stepsTip"),
       tipHTML: (i, r) => `<div class="tt-date">${shortDate(r.date)}</div><div class="tt-row"><span>Steps</span><b>${num(r.value)}</b></div>`,

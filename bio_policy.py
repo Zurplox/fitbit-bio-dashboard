@@ -128,7 +128,7 @@ LOAD_BANDS = [
 READINESS_BANDS = [
     (80, _band("green", "Green light", "Recovery and load both support training hard.", "good")),
     (60, _band("amber", "Amber", "Train, but keep intensity honest.", "warn")),
-    (40, _band("red", "Red", "Back off. The numbers are not asking for more.", "warn")),
+    (40, _band("red", "Red", "Back off. The numbers are not asking for more.", "bad")),
     (0, _band("hold", "Hold", "Recovery first. Training can wait a day.", "bad")),
 ]
 

@@ -438,7 +438,8 @@ class TrainingEffectTests(unittest.TestCase):
         hard = [{"date": f"2026-01-{10 + i:02d}", "zones": {"light": 5, "moderate": 30, "vigorous": 10, "peak": 0}} for i in range(5)]
         walk = {"date": "2026-01-19", "zones": {"light": 32, "moderate": 0, "vigorous": 0, "peak": 0}}
         te = analytics.training_effect(hard + [walk], today="2026-01-20")
-        self.assertEqual(te["sessions"][-1]["aerobic"], 0.0)
+        self.assertEqual(te["easy_sessions"], 1)  # counted, not listed
+        self.assertNotIn("2026-01-19", [s["date"] for s in te["sessions"]])
 
     def test_uth_vo2_estimate(self):
         # Age 30: max HR 208 - 21 = 187; 15.3 * 187 / 55 = 52.0
