@@ -33,5 +33,7 @@ then update this file at the end of the session.
 - Round 5: Garmin-style training effect (relative 0–5, `analytics.training_effect`) replaces the workout list; VO₂ max estimated (Uth 2004) because the real account returns 0 `daily-vo2-max` points (confirmed in the sync log). Optional `ATHLETE_AGE` secret added to daily_sync.yml.
 - Gotcha: don't write files with PowerShell `Set-Content` when the text contains non-ASCII characters (≈ came out as "?"). Use the edit tool.
 
+- Round 6 (real-data QA): the API sent NaN skin temps, which made the vault unparseable in browsers. `_num` now drops non-finite values and sync writes with `allow_nan=False`. Training effect gives light-zone minutes zero weight (walks had scored "Hard"). Real account: Fitbit Air plus Garmin Connect and Google Fit relayed via Health Connect; HRV only since ~13 Nov (HRV status appears around 7 Dec); no height in profile, so no BMI.
+
 ## Next steps
 - After the next real sync, check that zone data, age and skin temperature arrive (look for "not measured" in the Data sources panel).
