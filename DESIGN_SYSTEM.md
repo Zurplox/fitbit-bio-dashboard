@@ -36,6 +36,7 @@ An instrument console, not a landing page: a 232px sidebar (sections, device, sy
 - Sentence case, no emoji, line icons at 18px / 1.5 stroke.
 - Explanations live behind `<details>`; provenance is one collapsed panel at the bottom rather than a badge on every card.
 - Motion: ring fill and progress width only; `prefers-reduced-motion` disables both.
+- Each section adds something new. Heart no longer repeats the big HRV/resting-HR/VO₂ figures from Vitals and Markers; it shows only baseline context, skin temperature and the 24-hour readouts.
 - No trend charts, sparklines, heatmaps or canvas. History is shown as a short data table or labelled readouts (lowest, highest, mean, median, range). A single stage bar for last night's sleep and the five-segment training-effect gauge stay: they describe one reading, not a trend.
 
 ## Metric vocabulary

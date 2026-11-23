@@ -431,54 +431,41 @@
     const h = data.history || {};
     const t = data.today || {};
     const b = data.baselines || {};
-    const hrv = (h.hrv || []).slice(-60);
-    const rhr = (h.rhr || []).slice(-60);
     const hr = h.hr_intraday || [];
-    const mk = data.markers || {};
-    const vo2 = (h.vo2max || []).length ? h.vo2max : (mk.vo2max && mk.vo2max.series) || [];
-    const vo2Est = !!(mk.vo2max && mk.vo2max.estimated);
     const skin = (h.skin_temp || []).slice(-60);
 
-    const values = (rows, key) => rows.map((r) => r[key]).filter(has);
     const avg = (v) => v.length ? Math.round((v.reduce((a, c) => a + c, 0) / v.length) * 10) / 10 : null;
-    const hrvVals = values(hrv, "ms");
-    const rhrVals = values(rhr, "bpm");
-    const hrVals = values(hr, "bpm");
-    const skinVals = values(skin, "delta_c");
+    const hrVals = hr.map((r) => r.bpm).filter(has);
+    const skinVals = skin.map((r) => r.delta_c).filter(has);
+    const hrvWeek = (h.hrv || []).slice(-7).map((r) => r.ms).filter(has);
+    const rhrWeek = (h.rhr || []).slice(-7).map((r) => r.bpm).filter(has);
+
+    // Vitals already shows tonight's readings; this section adds only their
+    // context against the athlete's own baseline.
+    const signals = [];
+    if (has(t.hrv && t.hrv.ms)) signals.push({
+      name: "HRV", help: "hrv", value: `${num(t.hrv.ms)} ms`, band: t.hrv.band,
+      read: has(b.hrv_ms)
+        ? `Median ${num(b.hrv_ms)} ms · week ${num(avg(hrvWeek), 1)} ms`
+        : `Week ${num(avg(hrvWeek), 1)} ms`,
+    });
+    if (has(t.rhr && t.rhr.bpm)) signals.push({
+      name: "Resting HR", help: "rhr", value: `${num(t.rhr.bpm)} bpm`, band: t.rhr.band,
+      read: has(b.rhr_bpm)
+        ? `Median ${num(b.rhr_bpm)} bpm · week ${num(avg(rhrWeek), 1)} bpm`
+        : `Week ${num(avg(rhrWeek), 1)} bpm`,
+    });
 
     const cards = [];
-    if (hrvVals.length) cards.push(`<div class="card">
-      <div class="card-head"><h3>Heart rate variability${info("hrv")}</h3><span class="faint small">${hrvVals.length} nights</span></div>
-      <div class="figure">${num(t.hrv && t.hrv.ms)}<small>ms</small></div>
-      ${readouts([
-        ["Your median", has(b.hrv_ms) ? `${num(b.hrv_ms)} ms` : null],
-        ["7-night mean", `${num(avg(hrvVals.slice(-7)), 1)} ms`],
-        ["Nightly range", `${num(Math.min(...hrvVals))}–${num(Math.max(...hrvVals))} ms`],
-      ])}
+    if (signals.length) cards.push(`<div class="card span-2">
+      <div class="card-head"><h3>Baseline context</h3><span class="faint small">Overnight against your own median</span></div>
+      <div class="signal-list">${signals.map((s) => `<div class="signal-row">
+        <span class="signal-name">${s.name}${info(s.help)}</span>
+        <b>${s.value}</b>
+        <span class="muted">${esc(s.read)}</span>
+        ${status(s.band)}
+      </div>`).join("")}</div>
     </div>`);
-    if (rhrVals.length) cards.push(`<div class="card">
-      <div class="card-head"><h3>Resting heart rate${info("rhr")}</h3><span class="faint small">${rhrVals.length} days</span></div>
-      <div class="figure">${num(t.rhr && t.rhr.bpm)}<small>bpm</small></div>
-      ${readouts([
-        ["Your median", has(b.rhr_bpm) ? `${num(b.rhr_bpm)} bpm` : null],
-        ["7-day mean", `${num(avg(rhrVals.slice(-7)), 1)} bpm`],
-        ["Daily range", `${num(Math.min(...rhrVals))}–${num(Math.max(...rhrVals))} bpm`],
-      ])}
-    </div>`);
-    if (vo2.length > 1) {
-      const first = vo2[0].value;
-      const last = vo2[vo2.length - 1].value;
-      cards.push(`<div class="card">
-        <div class="card-head"><h3>Cardio fitness${info("vo2")}</h3><span class="faint small">${vo2Est ? "Estimated from resting HR and age" : "Device VO₂ max"}</span></div>
-        <div class="figure">${num(last, 1)}<small>ml/kg/min</small></div>
-        ${readouts([
-          ["Start", `${num(first, 1)} · ${shortDate(vo2[0].date)}`],
-          ["Change", signed(last - first, 1, " ml/kg/min")],
-          ["METs", num(last / 3.5, 1)],
-        ])}
-        ${vo2Est ? study(mk.vo2max.method) : ""}
-      </div>`);
-    }
     if (skinVals.length) cards.push(`<div class="card">
       <div class="card-head"><h3>Skin temperature${info("skin")}</h3><span class="faint small">${skinVals.length} nights</span></div>
       <div class="figure">${signed(skinVals[skinVals.length - 1], 1, "")}<small>°C vs baseline</small></div>
@@ -487,9 +474,8 @@
         ["Mean", `${signed(avg(skinVals), 1, " °C")}`],
       ])}
     </div>`);
-
-    if (hrVals.length) cards.push(`<div class="card span-2">
-      <div class="card-head"><h3>Heart rate, last 24 hours</h3><span class="faint small">${hrVals.length} hourly readings</span></div>
+    if (hrVals.length) cards.push(`<div class="card">
+      <div class="card-head"><h3>Heart rate, 24 hours</h3><span class="faint small">${hrVals.length} hourly readings</span></div>
       ${readouts([
         ["Lowest", `${num(Math.min(...hrVals))} bpm`],
         ["Highest", `${num(Math.max(...hrVals))} bpm`],

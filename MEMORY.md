@@ -39,5 +39,7 @@ then update this file at the end of the session.
 
 - Round 8: removed every trend chart (canvas, sparklines, heatmap, day bars, scales) and deleted assets/charts.js. All history is now a short table or numeric readouts. Still visual: the four rings, one sleep-stage bar, goal progress bars and the training-effect gauge.
 
+- Round 9 (final tightening): Heart section no longer duplicates HRV/RHR/VO₂ cards; it is a two-row baseline context list plus skin temperature and 24-hour readouts. QA on real data passed.
+
 ## Next steps
 - After the next real sync, check that zone data, age and skin temperature arrive (look for "not measured" in the Data sources panel).
