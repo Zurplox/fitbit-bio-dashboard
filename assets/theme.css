@@ -196,14 +196,30 @@ a { color: inherit; }
 .hero-meta { font-size: 13px; color: var(--muted); }
 .hero h1 { font-size: 40px; font-weight: 700; letter-spacing: -0.025em; line-height: 1.15; margin-top: 8px; }
 .hero-lede { font-size: 16px; color: var(--muted); margin-top: 12px; max-width: 65ch; }
-.scores { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px 16px; margin-top: 32px; }
-.score { display: flex; align-items: center; gap: 20px; }
-.ring { width: 88px; height: 88px; flex: none; transform: rotate(-90deg); }
-.ring circle { fill: none; stroke-width: 8; }
+.scores { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 32px; }
+.score {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+  padding: 20px 16px 24px; display: flex; flex-direction: column; align-items: center; text-align: center;
+}
+.score-title { font-size: 13px; font-weight: 600; color: var(--muted); align-self: stretch; display: flex; justify-content: center; align-items: center; }
+.ring-wrap { position: relative; width: 132px; height: 132px; margin: 16px 0 12px; }
+.ring { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring circle { fill: none; stroke-width: 10; }
 .ring .trk { stroke: var(--surface-2); }
+[data-theme="light"] .ring .trk { stroke: #eceef1; }
 .ring .val { stroke-linecap: round; transition: stroke-dashoffset .8s var(--ease); }
-.score .figure { font-size: 36px; }
-.score-band { font-size: 14px; font-weight: 500; margin-top: 2px; }
+.ring-center { position: absolute; inset: 0; display: grid; place-items: center; }
+.ring-value { font-size: 34px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1; }
+.ring-value small { font-size: 15px; font-weight: 600; color: var(--muted); margin-left: 1px; letter-spacing: 0; }
+.score-band { font-size: 15px; font-weight: 600; }
+.score-sub { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.45; max-width: 22ch; }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; min-width: 0; }
+.tile-name { font-size: 13px; font-weight: 600; color: var(--muted); display: flex; align-items: center; }
+.tile-value { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; margin-top: 8px; line-height: 1.15; }
+.tile-meta { font-size: 12px; color: var(--muted); margin-top: 4px; min-height: 18px; font-variant-numeric: tabular-nums; }
+.tile-status { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
 .calc-note { margin-top: 16px; font-size: 12px; color: var(--faint); }
 
 /* -------------------------------------------------------------- vitals -- */
@@ -329,7 +345,10 @@ details.plain > div { margin-top: 16px; }
   .actions #syncText { display: none; }
   .section { padding-top: 48px; }
   .hero h1 { font-size: 32px; }
-  .scores { grid-template-columns: 1fr; gap: 20px; }
+  .scores { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .ring-wrap { width: 112px; height: 112px; }
+  .ring-value { font-size: 28px; }
+  .tiles { grid-template-columns: 1fr 1fr; }
   .cols-2 { grid-template-columns: 1fr; }
   .card { padding: 20px; }
   .table .hide-sm { display: none; }

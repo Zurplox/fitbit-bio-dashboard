@@ -184,27 +184,27 @@
   }
 
   /* --------------------------------------------------------------- today -- */
-  const RING_R = 38;
+  const RING_R = 52;
   const RING_C = 2 * Math.PI * RING_R;
 
-  function ring(ratio, color) {
+  function ring(ratio, color, inner) {
     const bounded = has(ratio) ? Math.max(0, Math.min(1, ratio)) : 0;
-    return `<svg class="ring" viewBox="0 0 88 88" aria-hidden="true">
-      <circle class="trk" cx="44" cy="44" r="${RING_R}" />
-      <circle class="val" cx="44" cy="44" r="${RING_R}" stroke="${color}"
-        stroke-dasharray="${RING_C}" stroke-dashoffset="${RING_C * (1 - bounded)}" />
-    </svg>`;
+    return `<div class="ring-wrap">
+      <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+        <circle class="trk" cx="60" cy="60" r="${RING_R}" />
+        <circle class="val" cx="60" cy="60" r="${RING_R}" stroke="${color}"
+          stroke-dasharray="${RING_C}" stroke-dashoffset="${RING_C * (1 - bounded)}" />
+      </svg>
+      <div class="ring-center">${inner}</div>
+    </div>`;
   }
 
   function scoreBlock({ help, label, figure, unit, ratio, color, band, bandText, sub }) {
     return `<div class="score">
-      ${ring(ratio, color)}
-      <div>
-        <div class="label">${esc(label)}${info(help)}</div>
-        <div class="figure">${figure}${unit ? `<small>${unit}</small>` : ""}</div>
-        <div class="score-band" style="color:${color}">${esc(bandText ?? bandLabel(band))}</div>
-        ${sub ? `<div class="sub">${sub}</div>` : ""}
-      </div>
+      <div class="score-title">${esc(label)}${info(help)}</div>
+      ${ring(ratio, color, `<div class="ring-value">${figure}${unit ? `<small>${unit}</small>` : ""}</div>`)}
+      <div class="score-band" style="color:${color}">${esc(bandText ?? bandLabel(band))}</div>
+      ${sub ? `<div class="score-sub">${sub}</div>` : ""}
     </div>`;
   }
 
@@ -236,7 +236,7 @@
       blocks.push(scoreBlock({
         help: "readiness", label: "Training readiness",
         figure: Math.round(readiness.score),
-        unit: "/100",
+        unit: "",
         ratio: readiness.score / 100,
         color: toneColor(readiness.band),
         band: readiness.band,
@@ -263,7 +263,7 @@
       blocks.push(scoreBlock({
         help: "load", label: "Training load",
         figure: load.acwr.toFixed(2),
-        unit: "ratio",
+        unit: "",
         ratio: Math.min(2, load.acwr) / 2,
         color: cssVar("--strain"),
         band: load.acwr_band,
@@ -297,11 +297,11 @@
 
     const rows = [
       has(hrv.ms) && {
-        help: "hrv", name: "Heart rate variability", value: `${num(hrv.ms)} ms`,
+        help: "hrv", name: "HRV", value: `${num(hrv.ms)} ms`,
         base: has(hrv.baseline) ? `${num(hrv.baseline)} ms` : "", change: signed(hrv.delta_pct, 0, "%"), band: hrv.band,
       },
       has(rhr.bpm) && {
-        help: "rhr", name: "Resting heart rate", value: `${num(rhr.bpm)} bpm`,
+        help: "rhr", name: "Resting HR", value: `${num(rhr.bpm)} bpm`,
         base: has(rhr.baseline) ? `${num(rhr.baseline)} bpm` : "", change: signed(rhr.delta, 0, " bpm"), band: rhr.band,
       },
       has(resp.brpm) && {
@@ -314,7 +314,7 @@
       // The API gives skin temperature with its own 30-night baseline; there
       // is no published threshold for it here, so it carries no status colour.
       has(skin.delta_c) && {
-        help: "skin", name: "Skin temperature", value: `${signed(skin.delta_c, 1, " °C")}`, base: "30-night median", change: "",
+        help: "skin", name: "Skin temp", value: `${signed(skin.delta_c, 1, " °C")}`, base: "30-night median", change: "",
         band: null, bandText: "Not scored",
       },
     ].filter(Boolean);
@@ -322,19 +322,14 @@
     const illness = (data.clinical && data.clinical.illness) || null;
 
     slot("vitals").innerHTML = rows.length
-      ? `<div class="card"><div class="table-wrap"><table class="table">
-          <thead><tr><th>Metric</th><th class="num">Last night</th><th class="num hide-sm">Baseline</th><th class="num hide-sm">Change</th><th>Status</th></tr></thead>
-          <tbody>${rows.map((r) => `<tr>
-            <td>${esc(r.name)}${info(r.help)}</td>
-            <td class="num value">${esc(r.value)}</td>
-            <td class="num hide-sm muted">${esc(r.base)}</td>
-            <td class="num hide-sm muted">${esc(r.change)}</td>
-            <td>${status(r.band, r.bandText)}</td>
-          </tr>`).join("")}</tbody>
-        </table></div>
+      ? `<div class="tiles">${rows.map((r) => `<div class="tile">
+          <div class="tile-name">${esc(r.name)}${info(r.help)}</div>
+          <div class="tile-value">${esc(r.value)}</div>
+          <div class="tile-meta">${esc([r.base && r.base !== "30-night median" ? `Usual ${r.base}` : r.base, r.change].filter(Boolean).join(" · "))}</div>
+          <div class="tile-status">${status(r.band, r.bandText)}</div>
+        </div>`).join("")}</div>
         ${illness && illness.headline ? `<p class="note">${status({ tone: illness.tone }, illness.headline)}${
-          (illness.drivers || []).length ? ` · ${esc(illness.drivers.join(", "))}` : ""}</p>` : ""}
-      </div>`
+          (illness.drivers || []).length ? ` · ${esc(illness.drivers.join(", "))}` : ""}</p>` : ""}`
       : `<p class="muted">No overnight vitals in this sync.</p>`;
   }
 
