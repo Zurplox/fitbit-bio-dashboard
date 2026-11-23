@@ -37,5 +37,7 @@ then update this file at the end of the session.
 
 - Round 7: unslop + glisse pass. App shell (sidebar, sticky glass toolbar, glass tab bar on phones), one Today panel with four ring cells, vitals as an instrument strip, mono figures. Glass is native CSS (glisse is React from a CDN, which can't run beside decrypted data).
 
+- Round 8: removed every trend chart (canvas, sparklines, heatmap, day bars, scales) and deleted assets/charts.js. All history is now a short table or numeric readouts. Still visual: the four rings, one sleep-stage bar, goal progress bars and the training-effect gauge.
+
 ## Next steps
 - After the next real sync, check that zone data, age and skin temperature arrive (look for "not measured" in the Data sources panel).
