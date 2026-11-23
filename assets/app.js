@@ -81,6 +81,7 @@
     bmi: "Weight relative to height. A rough screening number: it can't tell muscle from fat.",
     intensity: "How your workout time splits between easy effort, where you could still talk, and hard effort, where you are breathing heavily. Most endurance plans aim for about 80% easy.",
     active: "Minutes you moved briskly enough to raise your heart rate. Health guidelines suggest at least 150 a week.",
+    te: "How hard your workout was for you, Garmin-style. Aerobic counts steady effort (light to vigorous heart-rate zones); anaerobic counts all-out bursts (peak zone). 5.0 means as hard as your toughest recent sessions.",
     heatmap: "Each square is one day. Darker squares mean more training minutes.",
     factors: "How each signal scored against your own normal, and how much it counts toward your recovery score.",
     patterns: "A number from −1 to +1 showing how closely two of your measures move together. Closer to ±1 is stronger. It shows a link, not a cause.",
@@ -427,7 +428,10 @@
     const hrv = (h.hrv || []).slice(-60);
     const rhr = (h.rhr || []).slice(-60);
     const hr = h.hr_intraday || [];
-    const vo2 = h.vo2max || [];
+    const mk = data.markers || {};
+    // The device's own VO2 max when it sent one; otherwise the labelled estimate.
+    const vo2 = (h.vo2max || []).length ? h.vo2max : (mk.vo2max && mk.vo2max.series) || [];
+    const vo2Est = !!(mk.vo2max && mk.vo2max.estimated);
 
     const cards = [];
     if (hrv.length) cards.push(`<div class="card">
@@ -447,9 +451,10 @@
       <div class="chart"><canvas id="hrChart"></canvas></div>
     </div>` : "";
     if (vo2.length > 1) cards.push(`<div class="card">
-      <div class="card-head"><h3>Cardio fitness${info("vo2")}</h3><span class="faint small">VO₂ max estimate</span></div>
+      <div class="card-head"><h3>Cardio fitness${info("vo2")}</h3><span class="faint small">${vo2Est ? "Estimated from resting HR and age" : "Device VO₂ max"}</span></div>
       <div class="figure">${num(vo2[vo2.length - 1].value, 1)}<small>ml/kg/min</small></div>
       <div class="sub">${signed(vo2[vo2.length - 1].value - vo2[0].value, 1, "")} since ${shortDate(vo2[0].date)}</div>
+      ${vo2Est ? study(mk.vo2max.method) : ""}
       <div class="chart" style="margin-top:16px"><canvas id="vo2Chart"></canvas><div id="vo2Tip" class="tooltip"></div></div>
     </div>`);
 
@@ -513,10 +518,10 @@
     const rows = [];
     if (m.vo2max) rows.push({
       help: "vo2", name: "Cardio fitness",
-      value: `${num(m.vo2max.value, 1)} ml/kg/min`,
+      value: `${m.vo2max.estimated ? "≈ " : ""}${num(m.vo2max.value, 1)} ml/kg/min`,
       detail: `${num(m.vo2max.mets, 1)} METs${has(m.vo2max.change_mets) ? ` · ${signed(m.vo2max.change_mets, 1, " MET")} since ${shortDate(m.vo2max.since)}` : ""}`,
       ev: m.vo2max.evidence,
-      viz: spark(((data.history && data.history.vo2max) || []).map((r) => r.value), cssVar("--chart")),
+      viz: spark((m.vo2max.series || []).map((r) => r.value), cssVar("--chart")),
     });
     if (m.rhr_trend) rows.push({
       help: "rhr_trend", name: "Resting heart rate, 30 days",
@@ -674,6 +679,39 @@
       </div>`).join("")}</div>
     </div>` : "";
 
+    // Garmin-style training effect, on a 0-5 scale relative to your own
+    // hardest sessions (see bio_policy). Replaces the plain workout list.
+    const te = (data.markers && data.markers.training_effect) || {};
+    const gauge = (value, band, color) => `<div class="te-gauge" role="img" aria-label="${num(value, 1)} of 5">
+      ${[0, 1, 2, 3, 4].map((i) => `<i style="--fill:${Math.max(0, Math.min(1, value - i)) * 100}%;--c:${color}"></i>`).join("")}
+    </div>`;
+    const typeName = (s) => esc((s.type || "Workout").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()));
+    const last = te.available ? te.sessions[te.sessions.length - 1] : null;
+    const teCard = last ? `<div class="card">
+      <div class="card-head"><h3>Training effect${info("te")}</h3><span class="faint small">Last workout · ${shortDate(last.date)} · ${typeName(last)} · ${hm(last.minutes)}</span></div>
+      <div class="te-grid">
+        <div>
+          <div class="label">Aerobic</div>
+          <div class="te-value">${num(last.aerobic, 1)}<small>/ 5</small></div>
+          ${gauge(last.aerobic, last.aerobic_band, "var(--chart)")}
+          <div class="te-band">${esc(bandLabel(last.aerobic_band))}</div>
+        </div>
+        <div>
+          <div class="label">Anaerobic</div>
+          <div class="te-value">${num(last.anaerobic, 1)}<small>/ 5</small></div>
+          ${gauge(last.anaerobic, last.anaerobic_band, "var(--warn)")}
+          <div class="te-band">${esc(bandLabel(last.anaerobic_band))}</div>
+        </div>
+      </div>
+      <div class="list" style="margin-top:20px">${te.sessions.slice(0, -1).reverse().map((s) => `<div class="list-row te-row">
+        <span class="muted tnum">${shortDate(s.date)}</span>
+        <span>${typeName(s)} <span class="faint">· ${hm(s.minutes)}</span></span>
+        <span class="meta"><b class="te-a">${num(s.aerobic, 1)}</b> aerobic · <b class="te-n">${num(s.anaerobic, 1)}</b> anaerobic</span>
+      </div>`).join("")}</div>
+      <p class="note">Scored against your own ${num(te.scale_sessions)} workouts from the last ${num(te.window_days)} days: 5.0 matches your hardest. This is not Garmin's Firstbeat score.</p>
+      ${study(te.evidence)}
+    </div>` : "";
+
     const heat = exerciseLive ? `<div class="card">
       <div class="card-head"><h3>Consistency, 13 weeks${info("heatmap")}</h3><span class="faint small">Darker is longer</span></div>
       <div class="heatmap-layout">
@@ -701,7 +739,7 @@
       stats.length ? `<div class="grid cols-4">${stats.join("")}</div>` : "",
       pair(loadCard, mixCard),
       pair(stepsCard, heat),
-      workouts,
+      teCard || workouts,
     ].filter(Boolean).join('<div style="height:16px"></div>') || `<p class="muted">No activity in this sync.</p>`;
 
     chart("stepsChart", (canvas) => window.Viz.bars(canvas, {

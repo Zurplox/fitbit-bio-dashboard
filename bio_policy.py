@@ -176,6 +176,31 @@ JETLAG_BANDS = [
     (0, _band("low", "Low", "Weekend and weekday sleep keep nearly the same clock.", "good")),
 ]
 
+# --------------------------------------------------------------------------
+# Training effect, Garmin-style 0-5, but RELATIVE: zone-weighted load
+# (Edwards 1993 TRIMP idea, weights per Fitbit zone) divided by your own
+# 95th-percentile session of the last 90 days. 5.0 = one of your hardest.
+# Garmin's own Training Effect is Firstbeat's EPOC model on beat-to-beat
+# heart rate, which this API does not provide.
+# --------------------------------------------------------------------------
+TE_AEROBIC_WEIGHTS = {"light": 1, "moderate": 2, "vigorous": 3}
+TE_ANAEROBIC_WEIGHTS = {"peak": 4}
+TE_WINDOW_DAYS = 90
+TE_PERCENTILE = 0.95
+TE_MIN_SESSIONS = 5
+TE_BANDS = [
+    (4, _band("very_hard", "Very hard", "Among your hardest sessions.", "bad")),
+    (3, _band("hard", "Hard", "Harder than most of your sessions.", "warn")),
+    (2, _band("moderate", "Moderate", "A typical session for you.", "good")),
+    (1, _band("light", "Light", "Easier than most of your sessions.", "neutral")),
+    (0, _band("very_light", "Very light", "Little load in this zone.", "neutral")),
+]
+
+# Uth 2004 heart-rate-ratio VO2 max estimate, used only when the device sends
+# none. Max heart rate from age per Tanaka 2001.
+VO2_UTH_FACTOR = 15.3
+HRMAX_INTERCEPT, HRMAX_SLOPE = 208, 0.7
+
 # Paluch 2022: the daily steps beyond which mortality risk stopped falling.
 STEP_PLATEAU = {"under_60": (8_000, 10_000), "60_plus": (6_000, 8_000)}
 
@@ -255,6 +280,22 @@ EVIDENCE = {
         "not": "Predicting insulin resistance needed blood tests; wearable data alone reached only AUROC 0.70.",
     },
 }
+
+
+EVIDENCE["training_effect"] = {
+    "cite": "Edwards 1993, High Performance Training and Racing",
+    "found": "Weighting minutes by heart-rate zone gives a simple, validated-in-practice measure of session load (zone TRIMP).",
+    "not": "This is not Garmin/Firstbeat Training Effect; 5.0 means your own hardest sessions, not a physiological threshold.",
+}
+EVIDENCE["vo2_estimate"] = {
+    "cite": "Uth 2004, Eur J Appl Physiol; Tanaka 2001, J Am Coll Cardiol",
+    "found": "VO2 max can be estimated as 15.3 × max heart rate ÷ resting heart rate, with max heart rate ≈ 208 − 0.7 × age.",
+    "not": "Developed in 46 trained men aged 21-51; an individual estimate can be off by several ml/kg/min. A lab test or device measurement is better.",
+}
+
+
+def te_band(value):
+    return _pick(TE_BANDS, value)
 
 
 def hrv_status_band(key):

@@ -320,6 +320,18 @@ details.study { margin-top: 8px; }
 details.study > summary { font-size: 12px; font-weight: 500; }
 details.study > div { margin-top: 6px; max-width: 65ch; }
 
+/* ----------------------------------------------------- training effect -- */
+.te-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.te-value { font-size: 40px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.te-value small { font-size: 15px; font-weight: 600; color: var(--muted); margin-left: 4px; letter-spacing: 0; }
+.te-gauge { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-top: 12px; }
+.te-gauge i { height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--c) var(--fill), var(--surface-2) var(--fill)); }
+.te-band { font-size: 14px; font-weight: 600; margin-top: 8px; }
+.te-row .meta b { font-weight: 600; color: var(--text); }
+.te-a { color: var(--chart) !important; }
+.te-n { color: var(--warn) !important; }
+@media (max-width: 720px) { .te-row { grid-template-columns: 48px 1fr; } .te-row .meta { grid-column: 2; text-align: left; } }
+
 /* ------------------------------------------------------------ insights -- */
 .factor { padding: 12px 0; border-top: 1px solid var(--line); }
 .factor:first-child { border-top: 0; padding-top: 0; }

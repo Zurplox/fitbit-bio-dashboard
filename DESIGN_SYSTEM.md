@@ -42,6 +42,8 @@ Light theme by default; dark is a toggle.
 - **Aerobic vs high intensity**: workout heart-rate-zone time, light+moderate vs vigorous+peak, read against ~80/20 (Seiler 2010).
 - **Social jetlag**: weekend vs weekday mid-sleep (Wittmann 2006, Roenneberg 2012).
 - **Heart and metabolic markers**: VO₂ max in METs (Kodama 2009), 30-day RHR trend (Zhang 2016), 28-day steps vs the age-group plateau (Paluch 2022), BMI. Context, never a personal risk number.
+- **Training effect** (Garmin-style aerobic/anaerobic 0–5): zone-weighted load per workout (Edwards 1993 TRIMP idea) divided by your own 95th-percentile session of 90 days. Relative, and labelled as not Firstbeat.
+- **VO₂ max estimate**: when the device sends none (true for this Fitbit Air account), Uth 2004 (15.3 × max HR ÷ resting HR, max HR per Tanaka 2001), weekly from a 7-day RHR mean, shown with "≈" and "Estimated". Needs age: from the profile, else the `ATHLETE_AGE` secret.
 - Not derivable, therefore absent: walking steadiness and gait (not in the API), Body Battery and stress (need continuous HRV), fitness age and VO₂ percentiles (need sex, which the API doesn't expose), insulin and glucose (WEAR-ME, Nature 2026: wearables alone reached AUROC 0.70; useful accuracy needed blood tests).
 
 Design process informed by [heydamir/unslop](https://github.com/heydamir/unslop) (Damir Sokolovsky, CC BY 4.0).

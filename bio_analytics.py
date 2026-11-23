@@ -338,6 +338,54 @@ def intensity_mix(sessions, today=None):
     }
 
 
+def training_effect(sessions, today=None, keep=8):
+    """Relative 0-5 aerobic / anaerobic effect per workout (see bio_policy)."""
+    today = _parse_date(today) or date.today()
+    since = today - timedelta(days=policy.TE_WINDOW_DAYS - 1)
+
+    def load(zones, weights):
+        return sum((zones.get(zone) or 0) * w for zone, w in weights.items())
+
+    rows = []
+    for session in sessions:
+        day = _parse_date(session.get("date"))
+        zones = session.get("zones")
+        if not zones or day is None or not since <= day <= today:
+            continue
+        rows.append({
+            "date": session["date"],
+            "type": session.get("type"),
+            "minutes": session.get("minutes"),
+            "aerobic_load": round(load(zones, policy.TE_AEROBIC_WEIGHTS), 1),
+            "anaerobic_load": round(load(zones, policy.TE_ANAEROBIC_WEIGHTS), 1),
+        })
+    if len(rows) < policy.TE_MIN_SESSIONS:
+        return {"available": False, "sessions": len(rows)}
+
+    def p95(values):
+        ordered = sorted(values)
+        return ordered[min(len(ordered) - 1, int(policy.TE_PERCENTILE * len(ordered)))]
+
+    top_aer = p95([r["aerobic_load"] for r in rows])
+    top_ana = p95([r["anaerobic_load"] for r in rows])
+    for r in rows:
+        r["aerobic"] = round(min(5.0, 5 * r["aerobic_load"] / top_aer), 1) if top_aer else 0.0
+        # No peak-zone time in 90 days means nothing to scale against: 0.0.
+        r["anaerobic"] = round(min(5.0, 5 * r["anaerobic_load"] / top_ana), 1) if top_ana else 0.0
+        r["aerobic_band"] = policy.te_band(r["aerobic"])
+        r["anaerobic_band"] = policy.te_band(r["anaerobic"])
+    rows.sort(key=lambda r: r["date"])
+    return {"available": True, "scale_sessions": len(rows), "window_days": policy.TE_WINDOW_DAYS, "sessions": rows[-keep:]}
+
+
+def vo2_uth(rest_hr, age):
+    """Uth 2004 heart-rate-ratio estimate, max HR per Tanaka 2001."""
+    if not rest_hr or not age:
+        return None
+    hr_max = policy.HRMAX_INTERCEPT - policy.HRMAX_SLOPE * age
+    return round(policy.VO2_UTH_FACTOR * hr_max / rest_hr, 1)
+
+
 def day_load(steps, active_minutes, exercise_minutes):
     """0-100 reading of how much work a day contained.
 

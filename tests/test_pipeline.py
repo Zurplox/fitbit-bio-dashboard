@@ -419,6 +419,27 @@ class MarkerTests(unittest.TestCase):
         self.assertEqual(jet["band"]["key"], "high")
 
 
+class TrainingEffectTests(unittest.TestCase):
+    def test_relative_scale_tops_out_at_your_hardest_sessions(self):
+        sessions = [
+            {"date": f"2026-01-{10 + i:02d}", "zones": {"light": 10, "moderate": 10 * (i + 1), "vigorous": 0, "peak": i}}
+            for i in range(6)
+        ]
+        te = analytics.training_effect(sessions, today="2026-01-20")
+        self.assertTrue(te["available"])
+        hardest = te["sessions"][-1]
+        self.assertEqual((hardest["aerobic"], hardest["anaerobic"]), (5.0, 5.0))
+        # Session 1: aerobic load 10 + 2*20 = 50 against the top 10 + 2*60 = 130.
+        self.assertEqual(te["sessions"][1]["aerobic"], round(5 * 50 / 130, 1))
+        self.assertEqual(te["sessions"][0]["anaerobic"], 0.0)
+        self.assertFalse(analytics.training_effect(sessions[:3], today="2026-01-20")["available"])
+
+    def test_uth_vo2_estimate(self):
+        # Age 30: max HR 208 - 21 = 187; 15.3 * 187 / 55 = 52.0
+        self.assertEqual(analytics.vo2_uth(55, 30), 52.0)
+        self.assertIsNone(analytics.vo2_uth(55, None))
+
+
 class NarrativeTests(unittest.TestCase):
     def test_illness_needs_more_than_one_driver(self):
         one = clinical_engine.illness_signal({"rhr_delta_bpm": 7, "resp_delta": 0})

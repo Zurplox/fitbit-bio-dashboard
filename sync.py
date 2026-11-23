@@ -481,9 +481,27 @@ def build_markers(fetched, nights, hrv_series, rhr_series, steps_series, vo2_ser
     markers; the page leaves those off rather than estimating them."""
     profile = fetched.get("profile") or {}
     age = profile.get("age")
+    age_source = "profile" if age else None
+    if not age:
+        # Like STEP_GOAL: a configured value, labelled as configured.
+        try:
+            age = int(os.environ.get("ATHLETE_AGE") or 0) or None
+        except ValueError:
+            age = None
+        age_source = "configured" if age else None
     evidence = policy.EVIDENCE
 
     vo2 = None
+    if not vo2_series and age and len(rhr_series) >= 7:
+        # The device sent no VO2 max: estimate it from resting heart rate and
+        # age (Uth 2004), weekly from a 7-day mean so one odd morning cannot
+        # move it, and say plainly that it is an estimate.
+        estimates = []
+        for end in range(len(rhr_series), 6, -7):
+            week = [r["value"] for r in rhr_series[end - 7:end]]
+            estimates.append({"date": rhr_series[end - 1]["date"], "value": analytics.vo2_uth(sum(week) / 7, age)})
+        estimates.reverse()
+        vo2_series = estimates
     if vo2_series:
         first, last = vo2_series[0], vo2_series[-1]
         vo2 = {
@@ -491,7 +509,10 @@ def build_markers(fetched, nights, hrv_series, rhr_series, steps_series, vo2_ser
             "mets": round(last["value"] / 3.5, 1),
             "change_mets": round((last["value"] - first["value"]) / 3.5, 2) if len(vo2_series) > 1 else None,
             "since": first["date"],
+            "estimated": not fetched["vo2max"],
+            "series": vo2_series,
             "evidence": evidence["vo2max"],
+            "method": evidence["vo2_estimate"] if not fetched["vo2max"] else None,
         }
 
     rhr = None
@@ -527,9 +548,13 @@ def build_markers(fetched, nights, hrv_series, rhr_series, steps_series, vo2_ser
     intensity["evidence"] = evidence["intensity"]
     jetlag = analytics.social_jetlag(nights)
     jetlag["evidence"] = evidence["jetlag"]
+    effect = analytics.training_effect(fetched["exercise"], today=today)
+    effect["evidence"] = evidence["training_effect"]
 
     return {
         "age": age,
+        "age_source": age_source,
+        "training_effect": effect,
         "bmi": bmi,
         "vo2max": vo2,
         "rhr_trend": rhr,

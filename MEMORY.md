@@ -30,5 +30,8 @@ then update this file at the end of the session.
 
 - Round 4: app-style score tiles (value inside ring), vitals as tiles; charts for every marker (HRV status band chart, sleep timing `Viz.timing`, skin temp, sparklines, steps/BMI scales); theme switch is a View Transitions circle sweep from the button. History sleep rows now carry `bed_minutes`/`wake_minutes`.
 
+- Round 5: Garmin-style training effect (relative 0–5, `analytics.training_effect`) replaces the workout list; VO₂ max estimated (Uth 2004) because the real account returns 0 `daily-vo2-max` points (confirmed in the sync log). Optional `ATHLETE_AGE` secret added to daily_sync.yml.
+- Gotcha: don't write files with PowerShell `Set-Content` when the text contains non-ASCII characters (≈ came out as "?"). Use the edit tool.
+
 ## Next steps
 - After the next real sync, check that zone data, age and skin temperature arrive (look for "not measured" in the Data sources panel).
