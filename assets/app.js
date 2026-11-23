@@ -81,7 +81,7 @@
     bmi: "Weight relative to height. A rough screening number: it can't tell muscle from fat.",
     intensity: "How your workout time splits between easy effort, where you could still talk, and hard effort, where you are breathing heavily. Most endurance plans aim for about 80% easy.",
     active: "Minutes you moved briskly enough to raise your heart rate. Health guidelines suggest at least 150 a week.",
-    te: "How hard your workout was for you, Garmin-style. Aerobic counts steady effort (light to vigorous heart-rate zones); anaerobic counts all-out bursts (peak zone). 5.0 means as hard as your toughest recent sessions.",
+    te: "How hard your workout was for you, Garmin-style. Aerobic counts steady effort (moderate and vigorous heart-rate zones; easy light-zone time doesn't count, as with Fitbit's Active Zone Minutes); anaerobic counts all-out bursts (peak zone). 5.0 means as hard as your toughest recent sessions.",
     heatmap: "Each square is one day. Darker squares mean more training minutes.",
     factors: "How each signal scored against your own normal, and how much it counts toward your recovery score.",
     patterns: "A number from −1 to +1 showing how closely two of your measures move together. Closer to ±1 is stronger. It shows a link, not a cause.",
@@ -571,7 +571,7 @@
     </div>`);
 
     $("markers").hidden = !cards.length;
-    slot("markers").innerHTML = cards.length ? `<div class="grid cols-2">${cards.join("")}</div>` : "";
+    slot("markers").innerHTML = cards.length ? `<div class="grid ${cards.length > 1 ? "cols-2" : ""}">${cards.join("")}</div>` : "";
 
     if (hs.available) {
       // Display-only rolling mean, matching the 7-night window the status reads.

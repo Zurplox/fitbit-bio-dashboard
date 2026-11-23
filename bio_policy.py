@@ -183,7 +183,10 @@ JETLAG_BANDS = [
 # Garmin's own Training Effect is Firstbeat's EPOC model on beat-to-beat
 # heart rate, which this API does not provide.
 # --------------------------------------------------------------------------
-TE_AEROBIC_WEIGHTS = {"light": 1, "moderate": 2, "vigorous": 3}
+# The light zone carries no weight, the same convention as Fitbit's Active
+# Zone Minutes; with it counted, a walk-heavy history once scored an easy walk
+# as "Hard".
+TE_AEROBIC_WEIGHTS = {"light": 0, "moderate": 2, "vigorous": 3}
 TE_ANAEROBIC_WEIGHTS = {"peak": 4}
 TE_WINDOW_DAYS = 90
 TE_PERCENTILE = 0.95
