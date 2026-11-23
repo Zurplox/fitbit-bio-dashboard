@@ -60,6 +60,7 @@
 
   /* ---------------------------------------------------- plain-English help -- */
   const HELP = {
+    scores: "All four scores are calculated here from your own Fitbit measurements by fixed, published rules. They borrow ideas from WHOOP, Apple and Garmin but are not their scores.",
     recovery: "How ready your body is today, from 0 to 100%. It compares last night's HRV, resting heart rate, sleep and breathing with your own normal. Higher means better recovered.",
     readiness: "Your recovery, adjusted for how quickly your training has been ramping up. A quick answer to: is today a good day to go hard?",
     sleep_perf: "The hours you slept divided by the hours your body needed. 100% means you got all the sleep you needed.",
@@ -286,10 +287,9 @@
     slot("today").innerHTML = `<div class="card today">
       <div class="today-head">
         <div>
-          <div class="today-title">${esc(has(recovery.score) ? `${bandLabel(recovery.band)} recovery` : "Today")}</div>
+          <div class="today-title">${esc(has(recovery.score) ? `Recovery is ${bandLabel(recovery.band).toLowerCase()}` : "Today")}${info("scores")}</div>
           ${lede ? `<p class="sub">${esc(lede)}</p>` : ""}
         </div>
-        <span class="faint small">Calculated from your measurements, not a WHOOP, Apple or Garmin score</span>
       </div>
       ${blocks.length ? `<div class="scores">${blocks.join("")}</div>` : ""}
     </div>`;
@@ -384,7 +384,7 @@
         ${kv.length ? `<dl class="kv">${kv.map(([k, v]) => `<div><dt>${k}${info({ "Efficiency": "efficiency", "Sleep debt, 14 nights": "debt", "Consistency": "consistency", "Social jetlag": "jetlag" }[k])}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>` : ""}
       </div>
       <div class="card">
-        <div class="card-head"><h3>Last ${Math.min(21, history.length)} nights</h3><span class="faint small">Hover for detail</span></div>
+        <div class="card-head"><h3>Last ${Math.min(21, history.length)} nights</h3></div>
         <div class="chart"><canvas id="sleepChart"></canvas><div id="sleepTip" class="tooltip"></div></div>
         <div class="legend">${[["Deep", "--sleep-deep"], ["REM", "--sleep-rem"], ["Light", "--sleep-light"], ["Awake", "--sleep-awake"]]
           .map(([l, c]) => `<span><i style="background:var(${c})"></i>${l}</span>`).join("")}</div>
@@ -636,27 +636,28 @@
     const exerciseLive = data.data_quality?.metrics?.exercise?.source === "live";
 
     const stats = [];
-    if (has(steps.count)) stats.push(`<div class="card">
-      <div class="label">Steps today</div>
-      <div class="figure">${num(steps.count)}</div>
-      <div class="sub">of ${num(steps.goal)} target</div>
+    // One instrument strip, like Vitals, instead of four equal cards.
+    if (has(steps.count)) stats.push(`<div class="tile">
+      <div class="tile-name">Steps today</div>
+      <div class="tile-value">${num(steps.count)}</div>
+      <div class="tile-meta">of ${num(steps.goal)} target</div>
       <div class="progress"><i class="${steps.pct >= 100 ? "done" : ""}" style="width:${Math.min(100, steps.pct || 0)}%"></i></div>
     </div>`);
-    if (has(week.minutes)) stats.push(`<div class="card">
-      <div class="label">Active minutes, this week${info("active")}</div>
-      <div class="figure">${num(week.minutes)}</div>
-      <div class="sub">of ${num(week.target)} min${week.days && week.days < 7 ? ` · ${num(week.days)} of 7 days` : ""}</div>
+    if (has(week.minutes)) stats.push(`<div class="tile">
+      <div class="tile-name">Active minutes, week${info("active")}</div>
+      <div class="tile-value">${num(week.minutes)}</div>
+      <div class="tile-meta">of ${num(week.target)} min${week.days && week.days < 7 ? ` · day ${num(week.days)} of 7` : ""}</div>
       <div class="progress"><i class="${week.pct >= 100 ? "done" : ""}" style="width:${Math.min(100, week.pct || 0)}%"></i></div>
     </div>`);
-    if (has(calories.today)) stats.push(`<div class="card">
-      <div class="label">Calories today</div>
-      <div class="figure">${num(calories.today)}</div>
-      ${has(calories.mean_7d) ? `<div class="sub">7-day average ${num(calories.mean_7d)}</div>` : ""}
+    if (has(calories.today)) stats.push(`<div class="tile">
+      <div class="tile-name">Calories today</div>
+      <div class="tile-value">${num(calories.today)}</div>
+      ${has(calories.mean_7d) ? `<div class="tile-meta">7-day avg ${num(calories.mean_7d)}</div>` : ""}
     </div>`);
-    if (has(steps.mean_7d)) stats.push(`<div class="card">
-      <div class="label">Steps, 7-day average</div>
-      <div class="figure">${num(steps.mean_7d)}</div>
-      ${has(steps.mean_28d) ? `<div class="sub">28-day average ${num(steps.mean_28d)}</div>` : ""}
+    if (has(steps.mean_7d)) stats.push(`<div class="tile">
+      <div class="tile-name">Steps, 7-day average</div>
+      <div class="tile-value">${num(steps.mean_7d)}</div>
+      ${has(steps.mean_28d) ? `<div class="tile-meta">28-day avg ${num(steps.mean_28d)}</div>` : ""}
     </div>`);
 
     const days = Array.isArray(load.daily) ? load.daily : [];
@@ -713,11 +714,15 @@
           <div class="te-band">${esc(bandLabel(last.anaerobic_band))}</div>
         </div>
       </div>
-      <div class="list" style="margin-top:20px">${te.sessions.slice(0, -1).reverse().map((s) => `<div class="list-row te-row">
-        <span class="muted tnum">${shortDate(s.date)}</span>
-        <span>${typeName(s)} <span class="faint">· ${hm(s.minutes)}</span></span>
-        <span class="meta"><b class="te-a">${num(s.aerobic, 1)}</b> aerobic · <b class="te-n">${num(s.anaerobic, 1)}</b> anaerobic</span>
-      </div>`).join("")}</div>
+      ${te.sessions.length > 1 ? `<div class="te-table">
+        <div class="te-tr te-th"><span>Date</span><span>Session</span><span>Aerobic</span><span>Anaerobic</span></div>
+        ${te.sessions.slice(0, -1).reverse().map((s) => `<div class="te-tr">
+          <span class="muted">${shortDate(s.date)}</span>
+          <span>${typeName(s)} <span class="faint">${hm(s.minutes)}</span></span>
+          <b class="te-a">${num(s.aerobic, 1)}</b>
+          <b class="te-n">${num(s.anaerobic, 1)}</b>
+        </div>`).join("")}
+      </div>` : ""}
       ${te.easy_sessions ? `<p class="sub" style="margin-top:12px">Plus ${num(te.easy_sessions)} easy ${te.easy_sessions === 1 ? "session" : "sessions"}, all in the light zone, with no training effect.</p>` : ""}
       <p class="note">Scored against your own ${num(te.scale_sessions)} workouts from the last ${num(te.window_days)} days: 5.0 matches your hardest. This is not Garmin's Firstbeat score.</p>
       ${study(te.evidence)}
@@ -747,7 +752,7 @@
 
     const pair = (a, b) => (a && b ? `<div class="grid cols-2">${a}${b}</div>` : a || b);
     slot("activity").innerHTML = [
-      stats.length ? `<div class="grid cols-4">${stats.join("")}</div>` : "",
+      stats.length ? `<div class="tiles card">${stats.join("")}</div>` : "",
       pair(loadCard, mixCard),
       pair(stepsCard, heat),
       teCard || workouts,
