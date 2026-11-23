@@ -1,7 +1,8 @@
 /* ==========================================================================
    Meridian Air — render layer
    One decrypt boundary, one render pass, no arithmetic on thresholds: every
-   band, tone and label arrives resolved in the payload.
+   band, tone and label arrives resolved in the payload. A metric the payload
+   does not carry is left out, never shown as a placeholder.
    ========================================================================== */
 (function () {
   "use strict";
@@ -10,10 +11,11 @@
   const state = { payload: null, passphrase: null, theme: null };
 
   /* ------------------------------------------------------------- helpers -- */
-  const DASH = "--";
+  const DASH = "–";
+  const has = (value) => value !== null && value !== undefined && !Number.isNaN(value);
 
   function num(value, digits = 0) {
-    if (value === null || value === undefined || Number.isNaN(value)) return DASH;
+    if (!has(value)) return DASH;
     return Number(value).toLocaleString(undefined, {
       minimumFractionDigits: digits,
       maximumFractionDigits: digits,
@@ -21,7 +23,7 @@
   }
 
   function hm(minutes) {
-    if (minutes === null || minutes === undefined) return DASH;
+    if (!has(minutes)) return DASH;
     const total = Math.round(minutes);
     const h = Math.floor(total / 60);
     const m = total % 60;
@@ -29,44 +31,97 @@
   }
 
   function signed(value, digits, suffix) {
-    if (value === null || value === undefined) return DASH;
+    if (!has(value)) return DASH;
     const rounded = Number(value).toFixed(digits);
-    return (value > 0 ? "+" : "") + rounded + (suffix || "");
+    // Sign from the rounded figure, so -0.04 reads "0.0", not "−0.0".
+    const shown = Number(rounded);
+    const sign = shown > 0 ? "+" : shown < 0 ? "−" : "";
+    return sign + rounded.replace("-", "") + (suffix || "");
   }
 
-  function bandTone(band) {
-    return (band && band.tone) || "neutral";
-  }
+  const tone = (band) => (band && band.tone) || "neutral";
+  const bandLabel = (band) => (band && band.label) || "";
 
-  function bandLabel(band) {
-    return (band && band.label) || "Not measured";
-  }
-
-  function setText(id, value) {
-    const el = $(id);
-    if (el) el.textContent = value === null || value === undefined ? DASH : value;
-  }
-
-  function setHTML(id, html) {
-    const el = $(id);
-    if (el) el.innerHTML = html;
-  }
-
-  function escapeHTML(text) {
-    return String(text).replace(/[&<>"']/g, (ch) => ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;",
+  function esc(text) {
+    return String(text ?? "").replace(/[&<>"']/g, (ch) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
     }[ch]));
   }
 
   function shortDate(iso) {
     if (!iso) return "";
-    const [, month, day] = iso.slice(0, 10).split("-");
-    return `${day}/${month}`;
+    const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" });
   }
+
+  function cssVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#888";
+  }
+
+  /* ---------------------------------------------------- plain-English help -- */
+  const HELP = {
+    recovery: "How ready your body is today, from 0 to 100%. It compares last night's HRV, resting heart rate, sleep and breathing with your own normal. Higher means better recovered.",
+    readiness: "Your recovery, adjusted for how quickly your training has been ramping up. A quick answer to: is today a good day to go hard?",
+    sleep_perf: "The hours you slept divided by the hours your body needed. 100% means you got all the sleep you needed.",
+    load: "Training minutes in the last 7 days compared with your usual week. About 0.8 to 1.3 is a healthy build. Above 1.5 is a sudden jump that raises injury risk.",
+    hrv: "Heart rate variability: tiny differences in time between heartbeats, measured while you sleep. Above your normal usually means rested. Below can mean fatigue, stress, illness or alcohol.",
+    rhr: "Your heart rate at complete rest. A few beats above your normal can signal fatigue or illness. Lower over months usually means fitter.",
+    resp: "Breaths per minute while asleep. It barely changes from night to night, so a rise can be an early sign of getting sick.",
+    spo2: "How much oxygen your blood is carrying, measured overnight. 95 to 100% is typical.",
+    skin: "How warm your skin was overnight compared with your own usual. It can rise with illness, alcohol, a warm room or the menstrual cycle.",
+    stages: "Deep sleep restores the body, REM supports memory and mood, and light sleep makes up the rest. Short wake-ups are normal.",
+    efficiency: "The share of your time in bed that you were actually asleep.",
+    debt: "Sleep you missed compared with your need, added up over the last 14 nights.",
+    consistency: "How often you fell asleep within 45 minutes of your usual bedtime. A steadier body clock is linked to better health.",
+    jetlag: "How far your weekend sleep times drift from your weekday ones. It is like crossing time zones every weekend. Under an hour is good.",
+    hrv_status: "Your HRV averaged over the past week and compared with your normal range. One night means little; the weekly trend tells you more.",
+    vo2: "Cardio fitness: how much oxygen your body can use during hard exercise. It is one of the strongest predictors of long-term health. One MET is 3.5 ml/kg/min.",
+    rhr_trend: "Your average resting heart rate this month compared with the month before. A slow drift down usually means improving fitness.",
+    steps: "Your average daily steps. In large studies, the health benefit kept growing up to a certain range and then levelled off.",
+    bmi: "Weight relative to height. A rough screening number: it can't tell muscle from fat.",
+    intensity: "How your workout time splits between easy effort, where you could still talk, and hard effort, where you are breathing heavily. Most endurance plans aim for about 80% easy.",
+    active: "Minutes you moved briskly enough to raise your heart rate. Health guidelines suggest at least 150 a week.",
+    heatmap: "Each square is one day. Darker squares mean more training minutes.",
+    factors: "How each signal scored against your own normal, and how much it counts toward your recovery score.",
+    patterns: "A number from −1 to +1 showing how closely two of your measures move together. Closer to ±1 is stronger. It shows a link, not a cause.",
+  };
+
+  const info = (key) =>
+    HELP[key]
+      ? `<button class="info" type="button" data-help="${key}" aria-expanded="false" aria-label="What does this mean?">i</button>`
+      : "";
+
+  let helpPop = null;
+  let helpButton = null;
+
+  function hideHelp() {
+    if (helpPop) helpPop.remove();
+    if (helpButton) helpButton.setAttribute("aria-expanded", "false");
+    helpPop = helpButton = null;
+  }
+
+  function showHelp(button) {
+    hideHelp();
+    const pop = document.createElement("div");
+    pop.className = "info-pop";
+    pop.setAttribute("role", "note");
+    pop.textContent = HELP[button.dataset.help];
+    document.body.appendChild(pop);
+    const box = button.getBoundingClientRect();
+    const left = Math.min(Math.max(8, box.left + box.width / 2 - pop.offsetWidth / 2),
+      document.documentElement.clientWidth - pop.offsetWidth - 8);
+    const below = box.bottom + 8;
+    const flip = below + pop.offsetHeight > window.innerHeight - 8;
+    pop.style.left = `${left}px`;
+    pop.style.top = `${(flip ? box.top - pop.offsetHeight - 8 : below) + window.scrollY}px`;
+    button.setAttribute("aria-expanded", "true");
+    helpPop = pop;
+    helpButton = button;
+  }
+
+  const slot = (name) => document.querySelector(`[data-slot="${name}"]`);
+  const status = (band, text) =>
+    `<span class="status ${tone(band)}">${esc(text ?? bandLabel(band))}</span>`;
 
   /* -------------------------------------------------------------- vault --- */
   function decodeBase64(value) {
@@ -77,9 +132,7 @@
   }
 
   async function decryptVault(passphrase) {
-    const response = await fetch("data/biometrics.enc.json?ts=" + Date.now(), {
-      cache: "no-store",
-    });
+    const response = await fetch("data/biometrics.enc.json?ts=" + Date.now(), { cache: "no-store" });
     if (!response.ok) {
       throw new Error(
         response.status === 404
@@ -93,19 +146,10 @@
     const ciphertext = decodeBase64(envelope.data);
 
     const keyMaterial = await crypto.subtle.importKey(
-      "raw",
-      new TextEncoder().encode(passphrase),
-      "PBKDF2",
-      false,
-      ["deriveKey"]
+      "raw", new TextEncoder().encode(passphrase), "PBKDF2", false, ["deriveKey"]
     );
     const key = await crypto.subtle.deriveKey(
-      {
-        name: "PBKDF2",
-        salt,
-        iterations: Number(envelope.iterations),
-        hash: "SHA-256",
-      },
+      { name: "PBKDF2", salt, iterations: Number(envelope.iterations), hash: "SHA-256" },
       keyMaterial,
       { name: "AES-GCM", length: 256 },
       false,
@@ -124,9 +168,9 @@
     } catch (error) {
       /* private mode: the theme simply does not persist */
     }
-    const button = $("btnTheme");
-    if (button) button.setAttribute("aria-label", theme === "dark" ? "Switch to light theme" : "Switch to dark theme");
-    if (state.payload && window.Viz) window.Viz.redrawAll();
+    $("btnTheme").setAttribute("aria-label", theme === "dark" ? "Switch to light theme" : "Switch to dark theme");
+    // Charts and rings read colours from CSS variables at draw time.
+    if (state.payload) render(state.payload);
   }
 
   function initTheme() {
@@ -136,933 +180,606 @@
     } catch (error) {
       stored = null;
     }
-    const preferred =
-      stored ||
-      (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
-        ? "light"
-        : "dark");
-    applyTheme(preferred);
+    applyTheme(stored || "light");
   }
 
-  /* ---------------------------------------------------------------- hero -- */
-  function renderHero(data) {
+  /* --------------------------------------------------------------- today -- */
+  const RING_R = 38;
+  const RING_C = 2 * Math.PI * RING_R;
+
+  function ring(ratio, color) {
+    const bounded = has(ratio) ? Math.max(0, Math.min(1, ratio)) : 0;
+    return `<svg class="ring" viewBox="0 0 88 88" aria-hidden="true">
+      <circle class="trk" cx="44" cy="44" r="${RING_R}" />
+      <circle class="val" cx="44" cy="44" r="${RING_R}" stroke="${color}"
+        stroke-dasharray="${RING_C}" stroke-dashoffset="${RING_C * (1 - bounded)}" />
+    </svg>`;
+  }
+
+  function scoreBlock({ help, label, figure, unit, ratio, color, band, bandText, sub }) {
+    return `<div class="score">
+      ${ring(ratio, color)}
+      <div>
+        <div class="label">${esc(label)}${info(help)}</div>
+        <div class="figure">${figure}${unit ? `<small>${unit}</small>` : ""}</div>
+        <div class="score-band" style="color:${color}">${esc(bandText ?? bandLabel(band))}</div>
+        ${sub ? `<div class="sub">${sub}</div>` : ""}
+      </div>
+    </div>`;
+  }
+
+  function toneColor(band) {
+    const t = tone(band);
+    return cssVar(t === "neutral" ? "--text" : `--${t}`);
+  }
+
+  function renderToday(data) {
     const today = data.today || {};
-    setText("heroHeadline", data.clinical ? data.clinical.headline : "");
-    setText(
-      "heroLede",
-      (data.clinical && data.clinical.paragraphs && data.clinical.paragraphs[0] &&
-        data.clinical.paragraphs[0].plain) ||
-        "No narrative in this payload."
-    );
-
-    // Health Connect can relay several apps into the same series, so the device
-    // line names them instead of implying one watch produced everything.
-    const deviceSources = ((data.device && data.device.sources) || []).filter(
-      (label) => label !== (data.device && data.device.name)
-    );
-    setText(
-      "metaDevice",
-      ((data.device && data.device.name) || DASH) +
-        (deviceSources.length ? " · " + deviceSources.join(", ") : "")
-    );
-    setText(
-      "metaSync",
-      data.generated_at ? new Date(data.generated_at).toLocaleString() : DASH
-    );
-    setText(
-      "metaSource",
-      (data.device && data.device.api ? data.device.api : "Google Health") +
-        (data.demo ? " · demo" : "")
-    );
-    setText(
-      "metaWindow",
-      `${(data.history && data.history.sleep && data.history.sleep.length) || 0} nights · ${
-        (data.history && data.history.rhr && data.history.rhr.length) || 0
-      } days`
-    );
-
-    const demoChip = $("demoChip");
-    if (demoChip) demoChip.hidden = !data.demo;
-
-    const quality = data.data_quality || {};
-    const liveChip = $("liveChip");
-    if (liveChip) {
-      const tone = quality.degraded && quality.degraded.length ? "warn" : "good";
-      liveChip.className = `chip dot-${tone}`;
-      liveChip.innerHTML = `<span class="dot"></span>${quality.live_count || 0}/${
-        quality.total_count || 0
-      } live`;
-      liveChip.title = quality.degraded && quality.degraded.length
-        ? "Not measured: " + quality.degraded.join(", ")
-        : "Every metric group in this payload came from the API";
-    }
-
-    const banner = $("staleBanner");
-    if (banner && data.generated_at) {
-      const hours = (Date.now() - new Date(data.generated_at).getTime()) / 3600000;
-      const staleAfter = (data.policy && data.policy.stale_after_hours) || 30;
-      if (hours > staleAfter) {
-        banner.hidden = false;
-        banner.textContent = `This vault is ${Math.round(hours)} hours old. The daily sync has not published since ${new Date(
-          data.generated_at
-        ).toLocaleString()}.`;
-      } else {
-        banner.hidden = true;
-      }
-    }
-  }
-
-  /* --------------------------------------------------------- whoop ring band -- */
-  const RING_CIRCUMFERENCE = 2 * Math.PI * 63;
-
-  function setRing(arcId, ratio, color) {
-    const arc = $(arcId);
-    if (!arc) return;
-    arc.setAttribute("stroke-dasharray", String(RING_CIRCUMFERENCE));
-    // A missing value leaves the ring empty: an unfilled arc is honest, a
-    // zero-length one at full opacity would read as a measurement of nothing.
-    const bounded = ratio === null || ratio === undefined ? 0 : Math.max(0, Math.min(1, ratio));
-    arc.setAttribute("stroke-dashoffset", String(RING_CIRCUMFERENCE * (1 - bounded)));
-    arc.style.stroke = color;
-  }
-
-  /** WHOOP shows strain on a 0-21 scale. The payload holds ACWR and minutes, so
-   *  the ratio is mapped onto that span and labelled as what it is. */
-  function strainFrom(load) {
-    if (load.acwr === null || load.acwr === undefined) return null;
-    return Math.max(0, Math.min(21, (load.acwr / 2) * 21));
-  }
-
-  function renderBand(data) {
-    const today = data.today || {};
+    const recovery = today.recovery || {};
+    const sleep = today.sleep || {};
     const load = data.load || {};
-    const recovery = today.recovery || {};
-    const sleep = today.sleep || {};
-    const hrv = today.hrv || {};
-    const rhr = today.rhr || {};
-    const spo2 = today.spo2 || {};
 
-    const toneColor = (band) => {
-      const tone = bandTone(band);
-      return cssVar(tone === "neutral" ? "--accent" : `--${tone}`);
-    };
-
-    // ---- Recovery ring
-    setRing("rcRecArc", (recovery.score ?? null) === null ? null : recovery.score / 100, toneColor(recovery.band));
-    setText("rcRecScore", recovery.score === null || recovery.score === undefined ? DASH : Math.round(recovery.score));
-    setText("rcRecBand", bandLabel(recovery.band));
-    setHTML(
-      "rcRecFoot",
-      `HRV <b>${signed(hrv.delta_pct, 0, "%")}</b> vs your median<br/>` +
-        `RHR <b>${num(rhr.bpm)}</b> bpm · SpO₂ <b>${num(spo2.pct, 1)}%</b>`
-    );
-
-    // ---- Strain ring
-    const strain = strainFrom(load);
-    setRing("rcStrArc", strain === null ? null : strain / 21, cssVar("--strain"));
-    setText("rcStrScore", strain === null ? DASH : strain.toFixed(1));
-    setText("rcStrBand", bandLabel(load.acwr_band));
-    setHTML(
-      "rcStrFoot",
-      load.acwr === null || load.acwr === undefined
-        ? "No sessions in the window"
-        : `ACWR <b>${load.acwr.toFixed(2)}</b> · ${hm(load.acute_minutes)} trained this week`
-    );
-
-    // ---- Sleep ring: need met, not the device's composite score
-    const needPct =
-      sleep.minutes !== null && sleep.minutes !== undefined && sleep.need_minutes
-        ? Math.min(100, (sleep.minutes / sleep.need_minutes) * 100)
-        : null;
-    setRing("rcSlpArc", needPct === null ? null : needPct / 100, cssVar("--sleep"));
-    setText("rcSlpScore", needPct === null ? DASH : Math.round(needPct));
-    setText("rcSlpBand", needPct === null ? DASH : needPct >= 100 ? "Fully repaid" : sleep.debt_minutes ? "In debt" : "At baseline");
-    setHTML(
-      "rcSlpFoot",
-      `${hm(sleep.minutes)} of <b>${hm(sleep.need_minutes)}</b> need<br/>` +
-        (sleep.debt_minutes ? `Debt <b>${hm(sleep.debt_minutes)}</b> over 14 nights` : `No accumulated debt`)
-    );
-
-    renderStrip(data);
-  }
-
-  function deltaCell(value, unit, invert) {
-    // For HRV higher is better; for resting rate lower is better. `invert`
-    // flips which colour means good, so both read as movement plus meaning.
-    if (value === null || value === undefined) return '<div class="d flat">no baseline</div>';
-    const good = invert ? value <= 0 : value >= 0;
-    const arrow = value > 0 ? "▲" : value < 0 ? "▼" : "•";
-    const cls = value === 0 ? "flat" : good ? "up" : "down";
-    return `<div class="d ${cls}">${arrow} ${Math.abs(value).toFixed(unit === "%" ? 0 : 1)}${unit}</div>`;
-  }
-
-  function renderStrip(data) {
-    const container = $("strip");
-    if (!container) return;
-    const today = data.today || {};
-    const steps = today.steps || {};
-    const resp = today.resp || {};
+    const blocks = [];
+    if (has(recovery.score)) {
+      blocks.push(scoreBlock({
+        help: "recovery", label: "Recovery",
+        figure: Math.round(recovery.score),
+        unit: "%",
+        ratio: recovery.score / 100,
+        color: toneColor(recovery.band),
+        band: recovery.band,
+        sub: has(today.hrv && today.hrv.delta_pct) ? `HRV ${signed(today.hrv.delta_pct, 0, "%")} vs your median` : "",
+      }));
+    }
     const readiness = today.readiness || {};
-    const sleep = today.sleep || {};
-    const active = today.active_minutes || {};
-    const week = active.week || {};
+    if (has(readiness.score)) {
+      blocks.push(scoreBlock({
+        help: "readiness", label: "Training readiness",
+        figure: Math.round(readiness.score),
+        unit: "/100",
+        ratio: readiness.score / 100,
+        color: toneColor(readiness.band),
+        band: readiness.band,
+        sub: "Recovery, tempered by load trend",
+      }));
+    }
+    // Sleep performance: hours slept against the night's need, the same idea
+    // WHOOP uses. Not the device's composite score.
+    if (has(sleep.minutes) && sleep.need_minutes) {
+      const pct = Math.min(100, (sleep.minutes / sleep.need_minutes) * 100);
+      blocks.push(scoreBlock({
+        help: "sleep_perf", label: "Sleep performance",
+        figure: Math.round(pct),
+        unit: "%",
+        ratio: pct / 100,
+        color: cssVar("--sleep"),
+        bandText: pct >= 100 ? "Need met" : sleep.debt_minutes ? "Short of need" : "Near need",
+        sub: `${hm(sleep.minutes)} of ${hm(sleep.need_minutes)} needed`,
+      }));
+    }
+    // Training load is the acute:chronic minutes ratio, shown as itself rather
+    // than rescaled to look like a proprietary strain score.
+    if (has(load.acwr)) {
+      blocks.push(scoreBlock({
+        help: "load", label: "Training load",
+        figure: load.acwr.toFixed(2),
+        unit: "ratio",
+        ratio: Math.min(2, load.acwr) / 2,
+        color: cssVar("--strain"),
+        band: load.acwr_band,
+        sub: `${num(load.acute_minutes)} min this week vs ${num(load.chronic_minutes)} usual`,
+      }));
+    }
 
-    const cells = [
-      {
-        k: "Readiness",
-        v: readiness.score === null || readiness.score === undefined ? DASH : `${num(readiness.score)}<u>/100</u>`,
-        d: `<div class="d ${escapeHTML(bandTone(readiness.band))}">${escapeHTML(bandLabel(readiness.band))}</div>`,
-        sourceKeys: [], derived: true,
-      },
-      { k: "Resting HR", v: `${num(today.rhr && today.rhr.bpm)}<u>bpm</u>`, d: deltaCell(today.rhr && today.rhr.delta, " bpm", true) },
-      { k: "HRV", v: `${num(today.hrv && today.hrv.ms, 1)}<u>ms</u>`, d: deltaCell(today.hrv && today.hrv.delta_pct, "%", false) },
-      { k: "Breathing", v: `${num(resp.brpm, 1)}<u>brpm</u>`, d: deltaCell(resp.delta, " brpm", true) },
-      { k: "SpO₂", v: `${num(today.spo2 && today.spo2.pct, 1)}<u>%</u>`, d: `<div class="d flat">${num(today.spo2 && today.spo2.nights_recorded)} of ${num(today.spo2 && today.spo2.window_days)} nights</div>` },
-      {
-        k: "Steps",
-        v: num(steps.count),
-        d: steps.pct === null || steps.pct === undefined ? '<div class="d flat">not measured</div>' : `<div class="d ${steps.pct >= 100 ? "up" : "warn"}">${num(steps.pct)}% of ${num(steps.goal)} target</div>`,
-      },
-      {
-        k: "Sleep",
-        v: hm(sleep.minutes),
-        d: sleep.score === null || sleep.score === undefined
-          ? '<div class="d flat">score not measured</div>'
-          : `<div class="d ${escapeHTML(bandTone(sleep.band))}">Score ${num(sleep.score)}/100 · ${escapeHTML(bandLabel(sleep.band))}</div>`,
-      },
-      {
-        k: "Active minutes",
-        v: active.today === null || active.today === undefined ? DASH : `${num(active.today)}<u>min</u>`,
-        d: week.minutes === null || week.minutes === undefined
-          ? '<div class="d flat">week total not measured</div>'
-          : `<div class="d flat">${num(week.minutes)} of ${num(week.target)} min this week${
-              week.days && week.days < 7 ? ` · ${num(week.days)} of 7 days` : ""
-            }</div>`,
-      },
-    ];
+    const device = (data.device && data.device.name) || "Fitbit";
+    const dateText = today.date
+      ? new Date(today.date + "T12:00:00").toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })
+      : "";
+    const lede = recovery.band && recovery.band.plain ? recovery.band.plain : (data.clinical && data.clinical.headline) || "";
 
-    container.innerHTML = cells
-      .map((cell) => `<div class="cell" role="listitem"><div class="k">${cell.k}</div><div class="v">${cell.v}</div>${cell.d}</div>`)
-      .join("");
+    slot("today").innerHTML = `<div class="hero">
+      <div class="hero-meta">${esc(dateText)} · ${esc(device)}</div>
+      <h1>${esc(has(recovery.score) ? `${bandLabel(recovery.band)} recovery` : "Today")}</h1>
+      ${lede ? `<p class="hero-lede">${esc(lede)}</p>` : ""}
+      ${blocks.length ? `<div class="scores">${blocks.join("")}</div>` : ""}
+      <p class="calc-note">Scores are calculated from your own measurements by fixed rules. They are not WHOOP, Apple or Garmin scores.</p>
+    </div>`;
   }
 
-  /* ---------------------------------------------------- recovery breakdown -- */
-  /** WHOOP's "optimal strain" is a range you are meant to land inside, scaled
-   *  from how recovered you are. The endpoints here are a plain linear rule
-   *  over recovery percentage, so the card can say what it is: a derived
-   *  target, not the proprietary model it borrows the shape of. */
-  function strainTarget(recoveryPct) {
-    if (recoveryPct === null || recoveryPct === undefined) return null;
-    const top = 6 + (Math.max(0, Math.min(100, recoveryPct)) / 100) * 12;
-    return { lo: Math.max(3, top - 4), hi: top };
-  }
-
-  function renderRecovery(data) {
-    const container = $("recoveryFactors");
-    const today = data.today || {};
-    const recovery = today.recovery || {};
-    const labels = (data.policy && data.policy.labels) || {};
-    const factors = Array.isArray(recovery.factors) ? recovery.factors : [];
-
-    if (container) {
-      container.innerHTML = factors.length
-        ? factors
-            .map((factor) => {
-              const score = Math.max(0, Math.min(100, Number(factor.contribution) || 0));
-              const tone = score >= 60 ? "good" : score >= 35 ? "warn" : "bad";
-              return `<div class="factor">
-                <div class="factor-head">
-                  <span class="factor-name">${escapeHTML(labels[factor.key] || factor.key)}</span>
-                  <span class="factor-read">${escapeHTML(factor.read || "")}</span>
-                  <span class="factor-score ${tone} tnum">${Math.round(score)}</span>
-                </div>
-                <div class="factor-track"><i class="factor-fill ${tone}" style="width:${score}%"></i></div>
-                <div class="factor-weight">${Math.round(Number(factor.weight) || 0)}% of the score</div>
-              </div>`;
-            })
-            .join("")
-        : '<p class="factor-empty">Recovery signals were not measured for this payload.</p>';
-    }
-
-    // ---- Strain target against today's actual strain
-    const target = strainTarget(recovery.score);
-    const strain = strainFrom(data.load || {});
-    setText("targetText", target ? `${target.lo.toFixed(1)} – ${target.hi.toFixed(1)}` : DASH);
-    setText("targetBasis", target ? `${num(recovery.score)}% recovery` : "no recovery score");
-    const zone = $("targetZone");
-    if (zone) {
-      zone.style.left = target ? `${(target.lo / 21) * 100}%` : "0%";
-      zone.style.width = target ? `${((target.hi - target.lo) / 21) * 100}%` : "0%";
-    }
-    const marker = $("targetMarker");
-    if (marker) {
-      marker.hidden = strain === null;
-      marker.style.left = strain === null ? "0%" : `${Math.min(100, (strain / 21) * 100)}%`;
-      marker.title = strain === null ? "No strain measured today" : `Today ${strain.toFixed(1)}`;
-    }
-    setText(
-      "targetHint",
-      target && strain !== null
-        ? strain > target.hi
-          ? `Today sits at ${strain.toFixed(1)} — above the band. Spend the rest of the day recovering.`
-          : strain < target.lo
-          ? `Today sits at ${strain.toFixed(1)} — room inside the band if you want it.`
-          : `Today sits at ${strain.toFixed(1)}, inside the band.`
-        : "A target needs a recovery score and a measured load."
-    );
-
-    // ---- Illness watch: a measured, previously unused signal.
-    const illness = (data.clinical && data.clinical.illness) || {};
-    const watchChip = $("watchChip");
-    if (watchChip) {
-      watchChip.className = `chip dot-${illness.tone || "good"}`;
-      watchChip.innerHTML = `<span class="dot"></span>${escapeHTML(illness.level ? `${illness.level}` : "clear")}`;
-    }
-    setText("watchHeadline", illness.headline || "No illness pattern in the measured signals.");
-    const drivers = $("watchDrivers");
-    if (drivers) {
-      drivers.innerHTML = (illness.drivers || [])
-        .map((driver) => `<span class="watch-driver">${escapeHTML(driver)}</span>`)
-        .join("");
-    }
-  }
-
-  /* --------------------------------------------------------------- vitals -- */
+  /* -------------------------------------------------------------- vitals -- */
   function renderVitals(data) {
-    const today = data.today || {};
-    const sleep = today.sleep || {};
-    const hrv = today.hrv || {};
-    const rhr = today.rhr || {};
-    const spo2 = today.spo2 || {};
-    const resp = today.resp || {};
+    const t = data.today || {};
+    const hrv = t.hrv || {};
+    const rhr = t.rhr || {};
+    const resp = t.resp || {};
+    const spo2 = t.spo2 || {};
+    const skin = t.skin_temp || {};
 
-    setText("kpiSleep", hm(sleep.minutes));
-    setText("kpiSleepSub", `score ${num(sleep.score)} · need ${hm(sleep.need_minutes)}`);
-    setHTML(
-      "kpiSleepBand",
-      `<span class="inline-band ${bandTone(sleep.band)}"><i></i>${escapeHTML(bandLabel(sleep.band))}</span>`
-    );
+    const rows = [
+      has(hrv.ms) && {
+        help: "hrv", name: "Heart rate variability", value: `${num(hrv.ms)} ms`,
+        base: has(hrv.baseline) ? `${num(hrv.baseline)} ms` : "", change: signed(hrv.delta_pct, 0, "%"), band: hrv.band,
+      },
+      has(rhr.bpm) && {
+        help: "rhr", name: "Resting heart rate", value: `${num(rhr.bpm)} bpm`,
+        base: has(rhr.baseline) ? `${num(rhr.baseline)} bpm` : "", change: signed(rhr.delta, 0, " bpm"), band: rhr.band,
+      },
+      has(resp.brpm) && {
+        help: "resp", name: "Breathing rate", value: `${num(resp.brpm, 1)} /min`,
+        base: has(resp.baseline) ? `${num(resp.baseline, 1)} /min` : "", change: signed(resp.delta, 1, ""), band: resp.band,
+      },
+      has(spo2.pct) && {
+        help: "spo2", name: "Blood oxygen", value: `${num(spo2.pct, 1)}%`, base: "", change: "", band: spo2.band,
+      },
+      // The API gives skin temperature with its own 30-night baseline; there
+      // is no published threshold for it here, so it carries no status colour.
+      has(skin.delta_c) && {
+        help: "skin", name: "Skin temperature", value: `${signed(skin.delta_c, 1, " °C")}`, base: "30-night median", change: "",
+        band: null, bandText: "Not scored",
+      },
+    ].filter(Boolean);
 
-    // A median is only a baseline once it has nights behind it. The payload
-    // carries how many it used, so say so rather than letting two nights read
-    // like a month.
-    const hrvNights = (data.baselines && data.baselines.hrv_nights) || null;
-    const hrvBasis =
-      hrvNights !== null && hrvNights < 7
-        ? ` from ${hrvNights} ${hrvNights === 1 ? "night" : "nights"}`
-        : "";
+    const illness = (data.clinical && data.clinical.illness) || null;
 
-    setText("kpiHrv", `${num(hrv.ms, 1)}`);
-    setText(
-      "kpiHrvSub",
-      `median ${num(hrv.baseline, 1)} ms${hrvBasis} · ${signed(hrv.delta_pct, 0, "%")}`
-    );
-    setHTML(
-      "kpiHrvBand",
-      `<span class="inline-band ${bandTone(hrv.band)}"><i></i>${escapeHTML(bandLabel(hrv.band))}</span>`
-    );
+    slot("vitals").innerHTML = rows.length
+      ? `<div class="card"><div class="table-wrap"><table class="table">
+          <thead><tr><th>Metric</th><th class="num">Last night</th><th class="num hide-sm">Baseline</th><th class="num hide-sm">Change</th><th>Status</th></tr></thead>
+          <tbody>${rows.map((r) => `<tr>
+            <td>${esc(r.name)}${info(r.help)}</td>
+            <td class="num value">${esc(r.value)}</td>
+            <td class="num hide-sm muted">${esc(r.base)}</td>
+            <td class="num hide-sm muted">${esc(r.change)}</td>
+            <td>${status(r.band, r.bandText)}</td>
+          </tr>`).join("")}</tbody>
+        </table></div>
+        ${illness && illness.headline ? `<p class="note">${status({ tone: illness.tone }, illness.headline)}${
+          (illness.drivers || []).length ? ` · ${esc(illness.drivers.join(", "))}` : ""}</p>` : ""}
+      </div>`
+      : `<p class="muted">No overnight vitals in this sync.</p>`;
+  }
 
-    setText("kpiRhr", `${num(rhr.bpm)}`);
-    setText("kpiRhrSub", `median ${num(rhr.baseline)} bpm · ${signed(rhr.delta, 0, " bpm")}`);
-    setHTML(
-      "kpiRhrBand",
-      `<span class="inline-band ${bandTone(rhr.band)}"><i></i>${escapeHTML(bandLabel(rhr.band))}</span>`
-    );
+  /* --------------------------------------------------------------- sleep -- */
+  function renderSleep(data) {
+    const sleep = (data.today && data.today.sleep) || {};
+    const circ = data.circadian || {};
+    const jet = (data.markers && data.markers.social_jetlag) || {};
+    const history = (data.history && data.history.sleep) || [];
+    if (!has(sleep.minutes) && !history.length) {
+      slot("sleep").innerHTML = `<p class="muted">No sleep recorded in this sync.</p>`;
+      return;
+    }
 
-    setText("kpiSpo2", `${num(spo2.pct, 1)}%`);
-    setText(
-      "kpiSpo2Sub",
-      `${num(spo2.nights_recorded)} of ${num(spo2.window_days)} nights recorded · breathing ${num(
-        resp.brpm,
-        1
-      )} brpm`
-    );
-    setHTML(
-      "kpiSpo2Band",
-      `<span class="inline-band ${bandTone(spo2.band)}"><i></i>${escapeHTML(bandLabel(spo2.band))}</span>`
-    );
-
-    // Sleep detail panel
     const stages = sleep.stages || {};
-    const totalStage = (stages.deep || 0) + (stages.light || 0) + (stages.rem || 0) + (stages.awake || 0);
-    [["Deep", "deep"], ["Light", "light"], ["REM", "rem"], ["Awake", "awake"]].forEach(([label, key]) => {
-      const value = stages[key] || 0;
-      const pct = totalStage ? (value / totalStage) * 100 : 0;
-      const fill = $(`stage${label}`);
-      if (fill) {
-        fill.style.width = pct + "%";
-        fill.style.background = `var(--${
-          key === "deep" ? "sleep" : key === "rem" ? "hrv" : key === "awake" ? "bad" : "neutral"
-        })`;
-      }
-      setText(`stage${label}Mins`, value ? `${Math.round(value)}m` : DASH);
+    const stageDefs = [
+      ["Deep", "deep", "--sleep-deep"],
+      ["REM", "rem", "--sleep-rem"],
+      ["Light", "light", "--sleep-light"],
+      ["Awake", "awake", "--sleep-awake"],
+    ].filter(([, key]) => has(stages[key]));
+    const total = stageDefs.reduce((sum, [, key]) => sum + stages[key], 0);
+
+    const kv = [
+      ["Fell asleep", sleep.bed],
+      ["Woke", sleep.wake],
+      ["Efficiency", has(sleep.efficiency) ? `${num(sleep.efficiency)}%` : null],
+      ["Need tonight", sleep.need_minutes ? hm(sleep.need_minutes) : null],
+      ["Sleep debt, 14 nights", has(sleep.debt_minutes) ? (sleep.debt_minutes ? hm(sleep.debt_minutes) : "None") : null],
+      ["Bedtime target", circ.bedtime_target],
+      ["Consistency", has(circ.alignment_pct) ? `${circ.alignment_pct}% of nights within 45 min` : null],
+      ["Social jetlag", jet.available ? `${hm(jet.minutes)} · ${bandLabel(jet.band)}` : null],
+    ].filter(([, v]) => has(v) && v !== "");
+
+    slot("sleep").innerHTML = `<div class="grid cols-2-3">
+      <div class="card">
+        <div class="label">Last night${info("stages")}</div>
+        <div class="figure">${hm(sleep.minutes)}</div>
+        ${has(sleep.score) ? `<div class="sub">Score ${num(sleep.score)} of 100 · ${esc(bandLabel(sleep.band))}</div>` : ""}
+        ${total ? `<div class="stagebar" role="img" aria-label="Sleep stages">${stageDefs
+          .map(([, key, color]) => `<i style="width:${(stages[key] / total) * 100}%;background:var(${color})"></i>`).join("")}</div>
+          <div class="legend">${stageDefs
+            .map(([label, key, color]) => `<span><i style="background:var(${color})"></i>${label} <b>${hm(stages[key])}</b></span>`).join("")}</div>` : ""}
+        ${kv.length ? `<dl class="kv">${kv.map(([k, v]) => `<div><dt>${k}${info({ "Efficiency": "efficiency", "Sleep debt, 14 nights": "debt", "Consistency": "consistency", "Social jetlag": "jetlag" }[k])}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>` : ""}
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Last ${Math.min(21, history.length)} nights</h3><span class="faint small">Hover for detail</span></div>
+        <div class="chart"><canvas id="sleepChart"></canvas><div id="sleepTip" class="tooltip"></div></div>
+        <div class="legend">${[["Deep", "--sleep-deep"], ["REM", "--sleep-rem"], ["Light", "--sleep-light"], ["Awake", "--sleep-awake"]]
+          .map(([l, c]) => `<span><i style="background:var(${c})"></i>${l}</span>`).join("")}</div>
+      </div>
+    </div>`;
+
+    const rows = history.slice(-21).map((r) => ({
+      date: r.date, deep: r.deep || 0, rem: r.rem || 0, light: r.light || 0, awake: r.awake || 0, minutes: r.minutes,
+    }));
+    chart("sleepChart", (canvas) => window.Viz.stacked(canvas, {
+      rows,
+      keys: ["deep", "rem", "light", "awake"],
+      colors: ["--sleep-deep", "--sleep-rem", "--sleep-light", "--sleep-awake"].map(cssVar),
+      height: 240,
+      format: (v) => `${Math.round(v / 60)}h`,
+      tooltip: $("sleepTip"),
+      tipHTML: (i, r) => `<div class="tt-date">${shortDate(r.date)}</div>
+        <div class="tt-row"><span>Asleep</span><b>${hm(r.minutes)}</b></div>
+        <div class="tt-row"><span>Deep</span><b>${hm(r.deep)}</b></div>
+        <div class="tt-row"><span>REM</span><b>${hm(r.rem)}</b></div>
+        <div class="tt-row"><span>Awake</span><b>${hm(r.awake)}</b></div>`,
+    }));
+  }
+
+  /* --------------------------------------------------------------- heart -- */
+  function renderHeart(data) {
+    const h = data.history || {};
+    const t = data.today || {};
+    const b = data.baselines || {};
+    const hrv = (h.hrv || []).slice(-60);
+    const rhr = (h.rhr || []).slice(-60);
+    const hr = h.hr_intraday || [];
+    const vo2 = h.vo2max || [];
+
+    const cards = [];
+    if (hrv.length) cards.push(`<div class="card">
+      <div class="card-head"><h3>Heart rate variability${info("hrv")}</h3><span class="faint small">${hrv.length} nights</span></div>
+      <div class="figure">${num(t.hrv && t.hrv.ms)}<small>ms</small></div>
+      <div class="sub">Median ${num(b.hrv_ms)} ms</div>
+      <div class="chart" style="margin-top:16px"><canvas id="hrvChart"></canvas><div id="hrvTip" class="tooltip"></div></div>
+    </div>`);
+    if (rhr.length) cards.push(`<div class="card">
+      <div class="card-head"><h3>Resting heart rate${info("rhr")}</h3><span class="faint small">${rhr.length} days</span></div>
+      <div class="figure">${num(t.rhr && t.rhr.bpm)}<small>bpm</small></div>
+      <div class="sub">Median ${num(b.rhr_bpm)} bpm</div>
+      <div class="chart" style="margin-top:16px"><canvas id="rhrChart"></canvas><div id="rhrTip" class="tooltip"></div></div>
+    </div>`);
+    if (hr.length > 1) cards.push(`<div class="card">
+      <div class="card-head"><h3>Heart rate, last 24 hours</h3><span class="faint small">Hourly averages</span></div>
+      <div class="chart"><canvas id="hrChart"></canvas></div>
+    </div>`);
+    if (vo2.length > 1) cards.push(`<div class="card">
+      <div class="card-head"><h3>Cardio fitness${info("vo2")}</h3><span class="faint small">VO₂ max estimate</span></div>
+      <div class="figure">${num(vo2[vo2.length - 1].value, 1)}<small>ml/kg/min</small></div>
+      <div class="sub">${signed(vo2[vo2.length - 1].value - vo2[0].value, 1, "")} since ${shortDate(vo2[0].date)}</div>
+      <div class="chart" style="margin-top:16px"><canvas id="vo2Chart"></canvas><div id="vo2Tip" class="tooltip"></div></div>
+    </div>`);
+
+    slot("heart").innerHTML = cards.length
+      ? `<div class="grid cols-2">${cards.join("")}</div>`
+      : `<p class="muted">No heart data in this sync.</p>`;
+
+    const line = (id, rows, key, unit, baseline, digits = 0) =>
+      chart(id, (canvas) => window.Viz.line(canvas, {
+        rows, key, color: cssVar("--chart"), height: 160,
+        band: has(baseline) ? { value: baseline } : null,
+        format: (v) => Math.round(v),
+        tooltip: $(id.replace("Chart", "Tip")),
+        tipHTML: (i, r) => `<div class="tt-date">${shortDate(r.date)}</div><div class="tt-row"><span></span><b>${num(r[key], digits)} ${unit}</b></div>`,
+      }));
+    line("hrvChart", hrv, "ms", "ms", b.hrv_ms);
+    line("rhrChart", rhr, "bpm", "bpm", b.rhr_bpm);
+    line("vo2Chart", vo2, "value", "", null, 1);
+    chart("hrChart", (canvas) => window.Viz.area(canvas, { rows: hr, color: cssVar("--chart"), height: 140 }));
+  }
+
+  /* ------------------------------------------------------------- markers -- */
+  const study = (ev) =>
+    ev && ev.cite
+      ? `<details class="plain study"><summary>${esc(ev.cite)}</summary><div class="small muted">${esc(ev.found)} <span class="faint">Limits: ${esc(ev.not)}</span></div></details>`
+      : "";
+
+  function renderMarkers(data) {
+    const m = data.markers || {};
+    const hs = m.hrv_status || {};
+    const cards = [];
+
+    if (hs.available) {
+      const [lo, hi] = hs.range_ms;
+      // Scale the bar to the range ± its own width, so the week is visible
+      // whichever side of the range it falls on.
+      const span = hi - lo;
+      const min = Math.min(lo - span, hs.week_ms - span * 0.2);
+      const max = Math.max(hi + span, hs.week_ms + span * 0.2);
+      const pos = (v) => ((v - min) / (max - min)) * 100;
+      cards.push(`<div class="card">
+        <div class="card-head"><h3>HRV status${info("hrv_status")}</h3>${status(hs.band)}</div>
+        <div class="figure">${num(hs.week_ms, 1)}<small>ms, 7-night average</small></div>
+        <div class="sub">Your usual range ${num(lo, 1)}–${num(hi, 1)} ms, from ${num(hs.baseline_nights)} nights</div>
+        <div class="rangebar" role="img" aria-label="Weekly HRV against your usual range">
+          <span class="range" style="left:${pos(lo)}%;width:${pos(hi) - pos(lo)}%"></span>
+          <span class="mark" style="left:${pos(hs.week_ms)}%"></span>
+        </div>
+        <p class="note">${esc(hs.band.plain)}${has(hs.cv_pct) ? ` Night-to-night variation ${num(hs.cv_pct, 1)}%.` : ""}</p>
+        ${study(hs.evidence)}
+      </div>`);
+    }
+
+    const rows = [];
+    if (m.vo2max) rows.push({
+      help: "vo2", name: "Cardio fitness",
+      value: `${num(m.vo2max.value, 1)} ml/kg/min`,
+      detail: `${num(m.vo2max.mets, 1)} METs${has(m.vo2max.change_mets) ? ` · ${signed(m.vo2max.change_mets, 1, " MET")} since ${shortDate(m.vo2max.since)}` : ""}`,
+      ev: m.vo2max.evidence,
+    });
+    if (m.rhr_trend) rows.push({
+      help: "rhr_trend", name: "Resting heart rate, 30 days",
+      value: `${num(m.rhr_trend.mean_30d, 1)} bpm`,
+      detail: `${signed(m.rhr_trend.change, 1, " bpm")} vs the 30 days before`,
+      ev: m.rhr_trend.evidence,
+    });
+    if (m.steps && has(m.steps.mean_28d)) {
+      const range = m.steps.plateau;
+      rows.push({
+        help: "steps", name: "Daily steps, 28 days",
+        value: num(m.steps.mean_28d),
+        detail: range
+          ? `Benefit levelled off at ${num(range[0])}–${num(range[1])} for your age group`
+          : `Benefit levelled off at 8,000–10,000 under 60, 6,000–8,000 over 60`,
+        ev: m.steps.evidence,
+      });
+    }
+    if (has(m.bmi)) rows.push({
+      help: "bmi", name: "Body mass index",
+      value: num(m.bmi, 1),
+      detail: "From the height and weight in your profile",
+      ev: null,
     });
 
-    setText("sleepBed", sleep.bed || DASH);
-    setText("sleepWake", sleep.wake || DASH);
-    setText("sleepEfficiency", sleep.efficiency === null || sleep.efficiency === undefined ? DASH : `${num(sleep.efficiency, 0)}%`);
-    setText("sleepNeed", hm(sleep.need_minutes));
-    setText("sleepDebt", sleep.debt_minutes ? hm(sleep.debt_minutes) : "none");
-    setText("sleepNeedSource", sleep.need_source === "measured" ? "from your 14-night debt" : "adult floor");
-    setText("sleepScoreBig", `${num(sleep.score)}`);
-    setText("sleepScoreBand", bandLabel(sleep.band));
+    if (rows.length) cards.push(`<div class="card">
+      <div class="card-head"><h3>Heart and metabolic markers</h3></div>
+      ${rows.map((r) => `<div class="marker">
+        <div class="marker-head"><span>${esc(r.name)}${info(r.help)}</span><b class="tnum">${esc(r.value)}</b></div>
+        <div class="sub">${esc(r.detail)}</div>
+        ${study(r.ev)}
+      </div>`).join("")}
+      <p class="note">Research context, not a diagnosis or a personal risk estimate. Insulin resistance and blood glucose are not estimated:
+        ${m.metabolic_evidence ? esc(m.metabolic_evidence.not) : "they need blood tests."}</p>
+    </div>`);
 
-    const circadian = data.circadian || {};
-    setText("circadianOnset", circadian.median_onset || DASH);
-    setText("circadianSpread", circadian.spread_minutes !== undefined ? `${circadian.spread_minutes} min` : DASH);
-    setText("circadianAlign", circadian.alignment_pct !== undefined ? `${circadian.alignment_pct}%` : DASH);
-    setText("circadianTarget", circadian.bedtime_target || DASH);
+    $("markers").hidden = !cards.length;
+    slot("markers").innerHTML = cards.length ? `<div class="grid cols-2">${cards.join("")}</div>` : "";
   }
 
-  /* --------------------------------------------------------------- charts -- */
-  function renderCharts(data) {
-    if (!window.Viz) return;
-    window.Viz.reset();
-    const history = data.history || {};
+  /* ------------------------------------------------------------ activity -- */
+  function renderActivity(data) {
+    const t = data.today || {};
+    const load = data.load || {};
+    const h = data.history || {};
+    const steps = t.steps || {};
+    const active = t.active_minutes || {};
+    const week = active.week || {};
+    const calories = t.calories || {};
+    const exerciseLive = data.data_quality?.metrics?.exercise?.source === "live";
 
-    const sleepRows = (history.sleep || []).slice(-21).map((row) => ({
-      date: row.date,
-      deep: row.deep || 0,
-      light: row.light || 0,
-      rem: row.rem || 0,
-      awake: row.awake || 0,
-      minutes: row.minutes,
+    const stats = [];
+    if (has(steps.count)) stats.push(`<div class="card">
+      <div class="label">Steps today</div>
+      <div class="figure">${num(steps.count)}</div>
+      <div class="sub">of ${num(steps.goal)} target</div>
+      <div class="progress"><i class="${steps.pct >= 100 ? "done" : ""}" style="width:${Math.min(100, steps.pct || 0)}%"></i></div>
+    </div>`);
+    if (has(week.minutes)) stats.push(`<div class="card">
+      <div class="label">Active minutes, this week${info("active")}</div>
+      <div class="figure">${num(week.minutes)}</div>
+      <div class="sub">of ${num(week.target)} min${week.days && week.days < 7 ? ` · ${num(week.days)} of 7 days` : ""}</div>
+      <div class="progress"><i class="${week.pct >= 100 ? "done" : ""}" style="width:${Math.min(100, week.pct || 0)}%"></i></div>
+    </div>`);
+    if (has(calories.today)) stats.push(`<div class="card">
+      <div class="label">Calories today</div>
+      <div class="figure">${num(calories.today)}</div>
+      ${has(calories.mean_7d) ? `<div class="sub">7-day average ${num(calories.mean_7d)}</div>` : ""}
+    </div>`);
+    if (has(steps.mean_7d)) stats.push(`<div class="card">
+      <div class="label">Steps, 7-day average</div>
+      <div class="figure">${num(steps.mean_7d)}</div>
+      ${has(steps.mean_28d) ? `<div class="sub">28-day average ${num(steps.mean_28d)}</div>` : ""}
+    </div>`);
+
+    const days = Array.isArray(load.daily) ? load.daily : [];
+    const maxMinutes = Math.max(0, ...days.map((d) => Number(d.minutes) || 0));
+    const loadCard = has(load.acwr) && exerciseLive ? `<div class="card">
+      <div class="card-head"><h3>Training load${info("load")}</h3>${status(load.acwr_band)}</div>
+      <div class="figure">${load.acwr.toFixed(2)}<small>acute : chronic</small></div>
+      <div class="sub">${num(load.acute_minutes)} min in 7 days against ${num(load.chronic_minutes)} min per usual week · ${num(load.sessions_28d)} sessions in 28 days</div>
+      ${load.acwr_band && load.acwr_band.plain ? `<p class="note">${esc(load.acwr_band.plain)}</p>` : ""}
+      <div class="daybars" role="img" aria-label="Training minutes per day, 28 days">${days.map((d) => {
+        const m = Math.max(0, Number(d.minutes) || 0);
+        return `<span class="${m ? "" : "empty"}" style="height:${maxMinutes ? Math.max(4, (m / maxMinutes) * 100) : 0}%" title="${esc(d.date)}: ${m ? m + " min" : "rest"}"></span>`;
+      }).join("")}</div>
+      <div class="axis"><span>28 days ago</span><span>Today</span></div>
+    </div>` : "";
+
+    const stepRows = (h.steps || []).slice(-30).map((r) => ({ date: r.date, value: r.count }));
+    const stepsCard = stepRows.length ? `<div class="card">
+      <div class="card-head"><h3>Steps, 30 days</h3><span class="faint small">Line is your ${num(steps.goal)} target</span></div>
+      <div class="chart"><canvas id="stepsChart"></canvas><div id="stepsTip" class="tooltip"></div></div>
+    </div>` : "";
+
+    const sessions = exerciseLive ? (h.exercise || []).filter((s) => s.date).slice(-6).reverse() : [];
+    const workouts = sessions.length ? `<div class="card">
+      <div class="card-head"><h3>Recent workouts</h3></div>
+      <div class="list">${sessions.map((s) => `<div class="list-row">
+        <span class="muted tnum">${shortDate(s.date)}</span>
+        <span>${esc((s.type || s.name || "Workout").replace(/^./, (c) => c.toUpperCase()))}</span>
+        <span class="meta">${[hm(s.minutes), has(s.avg_hr) ? `${num(s.avg_hr)} bpm` : "", has(s.distance_m) ? `${num(s.distance_m / 1000, 1)} km` : ""].filter(Boolean).join(" · ")}</span>
+      </div>`).join("")}</div>
+    </div>` : "";
+
+    const heat = exerciseLive ? `<div class="card">
+      <div class="card-head"><h3>Consistency, 13 weeks${info("heatmap")}</h3><span class="faint small">Darker is longer</span></div>
+      <div class="heatmap-layout">
+        <div class="heatmap-days" aria-hidden="true"><span>M</span><span></span><span>W</span><span></span><span>F</span><span></span><span>S</span></div>
+        <div id="heatmap" class="heatmap" role="img" aria-label="Training minutes by day over 13 weeks"></div>
+      </div>
+    </div>` : "";
+
+    const mix = (data.markers && data.markers.intensity) || {};
+    const mixCard = mix.available ? `<div class="card">
+      <div class="card-head"><h3>Aerobic vs high intensity${info("intensity")}</h3>${status(mix.band)}</div>
+      <div class="figure">${num(100 - mix.pct_hard)}<small>% easy</small></div>
+      <div class="sub">Heart-rate zone time across ${num(mix.sessions)} workouts, ${num(mix.window_days)} days</div>
+      <div class="stagebar"><i style="width:${100 - mix.pct_hard}%;background:var(--chart)"></i><i style="width:${mix.pct_hard}%;background:var(--warn)"></i></div>
+      <div class="legend">
+        <span><i style="background:var(--chart)"></i>Aerobic, light + moderate <b>${hm(mix.easy_minutes)}</b></span>
+        <span><i style="background:var(--warn)"></i>High intensity, vigorous + peak <b>${hm(mix.hard_minutes)}</b></span>
+      </div>
+      <p class="note">${esc(mix.band.plain)}</p>
+      ${study(mix.evidence)}
+    </div>` : "";
+
+    const pair = (a, b) => (a && b ? `<div class="grid cols-2">${a}${b}</div>` : a || b);
+    slot("activity").innerHTML = [
+      stats.length ? `<div class="grid cols-4">${stats.join("")}</div>` : "",
+      pair(loadCard, mixCard),
+      pair(stepsCard, heat),
+      workouts,
+    ].filter(Boolean).join('<div style="height:16px"></div>') || `<p class="muted">No activity in this sync.</p>`;
+
+    chart("stepsChart", (canvas) => window.Viz.bars(canvas, {
+      rows: stepRows, key: "value", color: cssVar("--chart"), goal: steps.goal, height: 180,
+      format: (v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : Math.round(v)),
+      tooltip: $("stepsTip"),
+      tipHTML: (i, r) => `<div class="tt-date">${shortDate(r.date)}</div><div class="tt-row"><span>Steps</span><b>${num(r.value)}</b></div>`,
     }));
-
-    const sleepCanvas = $("sleepChart");
-    if (sleepCanvas && sleepRows.length) {
-      const draw = () =>
-        window.Viz.stacked(sleepCanvas, {
-          rows: sleepRows,
-          keys: ["deep", "light", "rem", "awake"],
-          colors: [cssVar("--sleep"), cssVar("--neutral"), cssVar("--hrv"), cssVar("--bad")],
-          height: 210,
-          format: (v) => `${Math.round(v / 60)}h`,
-          tooltip: $("sleepTooltip"),
-          tipHTML: (index, row) => `
-            <div class="tt-date">${row.date}</div>
-            <div class="tt-row"><span>Deep</span><b>${Math.round(row.deep)}m</b></div>
-            <div class="tt-row"><span>REM</span><b>${Math.round(row.rem)}m</b></div>
-            <div class="tt-row"><span>Light</span><b>${Math.round(row.light)}m</b></div>
-            <div class="tt-row"><span>Awake</span><b>${Math.round(row.awake)}m</b></div>`,
-        });
-      window.Viz.register(sleepCanvas, draw);
-      draw();
-    }
-
-    const hrvRows = (history.hrv || []).slice(-60);
-    const hrvCanvas = $("hrvChart");
-    if (hrvCanvas && hrvRows.length) {
-      const draw = () =>
-        window.Viz.line(hrvCanvas, {
-          rows: hrvRows,
-          key: "ms",
-          color: cssVar("--hrv"),
-          height: 190,
-          band: data.baselines && data.baselines.hrv_ms !== null ? { value: data.baselines.hrv_ms } : null,
-          format: (v) => Math.round(v),
-          tooltip: $("hrvTooltip"),
-          tipHTML: (index, row) => `
-            <div class="tt-date">${row.date}</div>
-            <div class="tt-row"><span>Overnight HRV</span><b>${num(row.ms, 1)} ms</b></div>`,
-        });
-      window.Viz.register(hrvCanvas, draw);
-      draw();
-    }
-
-    const rhrRows = (history.rhr || []).slice(-60);
-    const rhrCanvas = $("rhrChart");
-    if (rhrCanvas && rhrRows.length) {
-      const draw = () =>
-        window.Viz.line(rhrCanvas, {
-          rows: rhrRows,
-          key: "bpm",
-          color: cssVar("--rhr"),
-          height: 190,
-          band: data.baselines && data.baselines.rhr_bpm !== null ? { value: data.baselines.rhr_bpm } : null,
-          format: (v) => Math.round(v),
-          tooltip: $("rhrTooltip"),
-          tipHTML: (index, row) => `
-            <div class="tt-date">${row.date}</div>
-            <div class="tt-row"><span>Resting rate</span><b>${num(row.bpm)} bpm</b></div>`,
-        });
-      window.Viz.register(rhrCanvas, draw);
-      draw();
-    }
-
-    const hrCanvas = $("hrChart");
-    const hrRows = history.hr_intraday || [];
-    if (hrCanvas) {
-      if (hrRows.length > 1) {
-        const draw = () => window.Viz.area(hrCanvas, { rows: hrRows, color: cssVar("--rhr"), height: 150 });
-        window.Viz.register(hrCanvas, draw);
-        draw();
-        if ($("hrEmpty")) $("hrEmpty").hidden = true;
-      } else if ($("hrEmpty")) {
-        $("hrEmpty").hidden = false;
-      }
-    }
-
-    const stepRows = (history.steps || []).slice(-30).map((row) => ({
-      date: row.date,
-      value: row.count,
-    }));
-    const stepsCanvas = $("stepsChart");
-    if (stepsCanvas && stepRows.length) {
-      const goal = data.today && data.today.steps ? data.today.steps.goal : null;
-      const draw = () =>
-        window.Viz.bars(stepsCanvas, {
-          rows: stepRows,
-          key: "value",
-          color: cssVar("--steps"),
-          goal,
-          height: 175,
-          format: (v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : Math.round(v)),
-          tooltip: $("stepsTooltip"),
-          tipHTML: (index, row) => `
-            <div class="tt-date">${row.date}</div>
-            <div class="tt-row"><span>Steps</span><b>${num(row.value)}</b></div>`,
-        });
-      window.Viz.register(stepsCanvas, draw);
-      draw();
-    }
-
     renderHeatmap(data);
   }
 
-  function cssVar(name) {
-    return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#888";
-  }
-
-  /* ------------------------------------------------------------- heat map -- */
   function renderHeatmap(data) {
     const container = $("heatmap");
     if (!container) return;
-
-    // 13 weeks of columns, Monday-first, ending with this week. Built in UTC so
-    // a timezone ahead of UTC cannot shift every cell by a day, and anchored to
-    // a Monday so the 7-row grid reads as weeks rather than as stripes.
+    // 13 Monday-first weeks ending this week, built in UTC so a timezone ahead
+    // of UTC cannot shift every cell by a day.
     const byDate = {};
-    ((data.history && data.history.exercise) || []).forEach((session) => {
-      if (!session.date) return;
-      byDate[session.date] = (byDate[session.date] || 0) + (session.minutes || 0);
+    ((data.history && data.history.exercise) || []).forEach((s) => {
+      if (s.date) byDate[s.date] = (byDate[s.date] || 0) + (s.minutes || 0);
     });
-
     const todayISO = (data.today && data.today.date) || new Date().toISOString().slice(0, 10);
-    const [year, month, dayOfMonth] = todayISO.split("-").map(Number);
-    const todayUTC = Date.UTC(year, month - 1, dayOfMonth);
-    const dayOfWeek = new Date(todayUTC).getUTCDay(); // 0 = Sunday
-    const mondayOfThisWeek = todayUTC - ((dayOfWeek + 6) % 7) * 86400000;
-    const startUTC = mondayOfThisWeek - 12 * 7 * 86400000;
-
-    container.innerHTML = "";
-    for (let index = 0; index < 13 * 7; index += 1) {
-      const stamp = startUTC + index * 86400000;
+    const [y, m, d] = todayISO.split("-").map(Number);
+    const todayUTC = Date.UTC(y, m - 1, d);
+    const monday = todayUTC - ((new Date(todayUTC).getUTCDay() + 6) % 7) * 86400000;
+    const start = monday - 12 * 7 * 86400000;
+    let html = "";
+    for (let i = 0; i < 91; i += 1) {
+      const stamp = start + i * 86400000;
       const iso = new Date(stamp).toISOString().slice(0, 10);
-      const cell = document.createElement("div");
-      cell.className = "heat-cell";
-
       if (stamp > todayUTC) {
-        cell.dataset.level = "0";
-        cell.style.opacity = "0.35";
-        cell.title = `${iso} — not yet`;
-      } else {
-        const minutes = byDate[iso] || 0;
-        const level = minutes === 0 ? 0 : minutes < 25 ? 1 : minutes < 45 ? 2 : minutes < 70 ? 3 : 4;
-        cell.dataset.level = String(level);
-        cell.title = `${iso} — ${minutes ? minutes + " min trained" : "no session logged"}`;
+        html += `<div class="heat-cell future"></div>`;
+        continue;
       }
-      container.appendChild(cell);
+      const min = byDate[iso] || 0;
+      const level = min === 0 ? 0 : min < 25 ? 1 : min < 45 ? 2 : min < 70 ? 3 : 4;
+      html += `<div class="heat-cell" data-level="${level}" title="${iso}: ${min ? min + " min" : "rest"}"></div>`;
     }
+    container.innerHTML = html;
   }
 
-  /* ---------------------------------------------------------------- load --- */
-  function renderLoad(data) {
-    const load = data.load || {};
-    const today = data.today || {};
-    const dialSvg = $("loadDial");
-    const band = load.acwr_band || {};
-
-    if (dialSvg && load.acwr !== null && load.acwr !== undefined) {
-      window.Viz &&
-        window.Viz.dial(dialSvg, {
-          value: Math.min(2, load.acwr) * 50,
-          max: 100,
-          color: cssVar(`--${bandTone(band) === "neutral" ? "neutral" : bandTone(band)}`),
-        });
-    }
-
-    setText("loadScore", load.acwr !== null && load.acwr !== undefined ? load.acwr.toFixed(2) : DASH);
-    setHTML(
-      "loadBand",
-      `<span class="inline-band ${bandTone(band)}"><i></i>${escapeHTML(bandLabel(band))}</span>`
-    );
-    setText(
-      "loadText",
-      load.acwr !== null && load.acwr !== undefined
-        ? `${num(load.acute_minutes)} min in the last 7 days against ${num(
-            load.chronic_minutes
-          )} min/week chronic, from ${num(load.sessions_28d)} sessions.`
-        : "Not enough logged sessions to compute a ratio."
-    );
-    setText("loadNote", band.plain || "");
-    const dailyTraining = $("loadDaily");
-    if (dailyTraining) {
-      dailyTraining.replaceChildren();
-      const days = Array.isArray(load.daily) ? load.daily : [];
-      const exerciseMeasured = data.data_quality?.metrics?.exercise?.source === "live";
-      const maxMinutes = Math.max(0, ...days.map((day) => Number(day.minutes) || 0));
-      if (!exerciseMeasured) {
-        const empty = document.createElement("span");
-        empty.className = "load-empty";
-        empty.textContent = "Training history unavailable";
-        dailyTraining.appendChild(empty);
-      } else days.forEach((day) => {
-        const minutes = Math.max(0, Number(day.minutes) || 0);
-        const bar = document.createElement("span");
-        bar.className = minutes ? "load-day" : "load-day empty";
-        bar.style.height = maxMinutes ? `${Math.max(3, (minutes / maxMinutes) * 100)}%` : "0%";
-        bar.title = `${day.date}: ${minutes ? `${minutes} min trained` : "no session"}`;
-        dailyTraining.appendChild(bar);
-      });
-      dailyTraining.setAttribute(
-        "aria-label",
-        exerciseMeasured
-          ? `${days.length} days of training minutes. Bars run from 28 days ago on the left to today on the right.`
-          : "Training history is unavailable."
-      );
-    }
-
-    const steps = today.steps || {};
-    setText("stepsBig", num(steps.count));
-    setText("stepsGoal", `of ${num(steps.goal)} target`);
-    setText("stepsMean", `7-day mean ${num(steps.mean_7d)} · 28-day mean ${num(steps.mean_28d)}`);
-
-    const active = today.active_minutes || {};
-    const week = active.week || {};
-    setText("activeToday", num(active.today));
-    setText("activeWeek", week.minutes !== null && week.minutes !== undefined ? `${num(week.minutes)} / ${num(week.target)} min` : DASH);
-    setText("activePct", week.pct !== null && week.pct !== undefined ? `${num(week.pct)}%` : DASH);
-    const bar = $("activeBar");
-    if (bar) bar.style.width = Math.min(100, week.pct || 0) + "%";
-
-    const calories = today.calories || {};
-    setText("caloriesToday", num(calories.today));
-    setText("caloriesMean", `7-day mean ${num(calories.mean_7d)}`);
-    setText("vo2max", num(today.vo2max && today.vo2max.value, 1));
-  }
-
-  /* ------------------------------------------------------------- patterns -- */
-  function renderPatterns(data) {
+  /* ------------------------------------------------------------ insights -- */
+  function renderInsights(data) {
+    const recovery = (data.today && data.today.recovery) || {};
+    const labels = (data.policy && data.policy.labels) || {};
+    const factors = Array.isArray(recovery.factors) ? recovery.factors : [];
     const corr = data.correlations || {};
-    const container = $("patternList");
-    if (!container) return;
-    setText(
-      "patternNote",
-      corr.findings && corr.findings.length
-        ? `${corr.findings.length} patterns found in your last ${corr.window_days} days`
-        : "No pattern strong enough to publish yet"
-    );
-    setText(
-      "patternMethod",
-      `Checked ${corr.tested_pairs || 0} curated pairs in a ${corr.window_days || 0}-day window. A pair needs at least ${
-        corr.min_paired_days || 0
-      } paired days and |r| ≥ ${corr.min_r || 0} to be published.`
-    );
+    const findings = corr.findings || [];
+    const cards = (data.coaching && data.coaching.cards) || [];
 
-    container.innerHTML = "";
-    (corr.findings || []).forEach((finding) => {
-      const row = document.createElement("div");
-      row.className = "pattern";
-      const channelSource = { sleep_minutes: "sleep", hrv: "hrv", steps: "steps", rhr: "rhr", resp: "resp", spo2: "spo2" };
-      row.dataset.sourceKeys = [channelSource[finding.a], channelSource[finding.b]].filter(Boolean).join(",");
-      row.innerHTML = `
+    const factorCard = factors.length ? `<div class="card">
+      <div class="card-head"><h3>What moved your recovery${info("factors")}</h3><span class="faint small">Weight in score</span></div>
+      ${factors.map((f) => {
+        const score = Math.max(0, Math.min(100, Number(f.contribution) || 0));
+        return `<div class="factor">
+          <div class="factor-head"><b>${esc(labels[f.key] || f.key)}</b><span class="muted tnum">${Math.round(Number(f.weight) || 0)}%</span></div>
+          <div class="factor-read">${esc(f.read || "")}</div>
+          <div class="progress"><i style="width:${score}%"></i></div>
+        </div>`;
+      }).join("")}
+    </div>` : "";
+
+    const patternCard = `<div class="card">
+      <div class="card-head"><h3>Patterns in your data${info("patterns")}</h3><span class="faint small">${corr.window_days ? `Last ${corr.window_days} days` : ""}</span></div>
+      ${findings.length ? findings.map((f) => `<div class="pattern">
         <div>
-          <div class="line">
-            <span>${escapeHTML(finding.a_label)}</span>
-            <span class="dir">${finding.direction === "up" ? "↑ → ↑" : "↑ → ↓"}</span>
-            <span>${escapeHTML(finding.b_label)}</span>
-          </div>
-          <div class="note">${escapeHTML(finding.plain)}</div>
-          <div class="pattern-meta">${finding.r >= 0 ? "Positive" : "Negative"} association · ${num(finding.n)} paired days</div>
-          <button class="info-btn" data-info="why-${escapeHTML(finding.a)}-${escapeHTML(finding.b)}" aria-expanded="false" aria-label="How to read this correlation">i</button>
-          <div class="disclosure" id="why-${escapeHTML(finding.a)}-${escapeHTML(finding.b)}">
-            <strong>How to read it:</strong> r = ${finding.r.toFixed(2)}. Correlation ranges from −1 (opposite movement) to +1 (movement together); values nearer 0 indicate a weaker linear relationship. n = ${num(finding.n)} days when both measures were recorded. ${escapeHTML(finding.why)} This is an association, not proof that one measure caused the other.
-          </div>
+          <b>${esc(f.plain)}</b>
+          <div class="sub">${esc(f.a_label)} and ${esc(f.b_label).toLowerCase()} · ${num(f.n)} paired days</div>
         </div>
-        <div class="r"><b>${finding.r.toFixed(2)}</b><span>correlation</span></div>`;
-      container.appendChild(row);
-    });
+        <div class="r" title="Correlation, from −1 to +1">${f.r >= 0 ? "+" : "−"}${Math.abs(f.r).toFixed(2)}</div>
+      </div>`).join("") : `<p class="muted small">Nothing cleared the bar yet: at least ${num(corr.min_paired_days)} paired days and |r| ≥ ${num(corr.min_r, 2)}.</p>`}
+      <p class="note">Associations across your own days, not causes.</p>
+    </div>`;
 
-    if (!(corr.findings || []).length) {
-      container.innerHTML =
-        '<p class="muted">Nothing cleared both floors in this window. That is a result: it means the pairs you have were noise.</p>';
+    const coachCard = cards.length ? `<div class="card">
+      <div class="card-head"><h3>What to do about it</h3></div>
+      ${cards.map((c) => {
+        const ev = c.evidence || {};
+        return `<details class="coach">
+          <summary><div><h3>${esc(c.title)}</h3><p>${esc(c.action)}</p></div></summary>
+          <dl class="coach-body">
+            <dt>Reading</dt><dd>${esc(c.reading)}</dd>
+            <dt>Next step</dt><dd>${esc(c.progress)}</dd>
+            <dt>Back off when</dt><dd>${esc(c.back_off)}</dd>
+            ${ev.cite ? `<dt>Evidence</dt><dd>${esc(ev.cite)}: ${esc(ev.found)} Not settled: ${esc(ev.not)}</dd>` : ""}
+          </dl>
+        </details>`;
+      }).join("")}
+    </div>` : "";
+
+    slot("insights").innerHTML = `<div class="grid cols-2">${factorCard}${patternCard}</div>
+      ${coachCard ? `<div style="height:16px"></div>${coachCard}` : ""}`;
+  }
+
+  /* ------------------------------------------------------------- sources -- */
+  function renderSources(data) {
+    const quality = data.data_quality || {};
+    const metrics = Object.values(quality.metrics || {});
+    const devices = (data.sources && data.sources.devices) || [];
+    const clinical = data.clinical || {};
+
+    slot("sources").innerHTML = `<details class="plain">
+      <summary>Data sources and methods · ${num(quality.live_count)} of ${num(quality.total_count)} metric groups measured</summary>
+      <div>
+        <div class="prov">${metrics.map((m) => `<div><span>${esc(m.label)}</span><span>${m.source === "live" ? esc(m.note || "measured") : "not measured"}</span></div>`).join("")}</div>
+        ${devices.length ? `<p class="note">Reported by: ${devices.map((d) => esc(d.label)).join(", ")}</p>` : ""}
+        <p class="note">Measurements come from the Google Health API. Recovery, sleep performance, sleep need, training load and patterns are calculated here by documented rules (bio_policy.py); a metric the API did not return is left off the page rather than estimated.</p>
+      </div>
+    </details>`;
+
+    slot("footer").innerHTML = `<span>Meridian Air · Google Health API v4 · AES-256-GCM vault</span>
+      <span class="tnum">Synced ${data.generated_at ? esc(new Date(data.generated_at).toLocaleString()) : DASH} · ${esc(data.timezone || "")} · ${esc(clinical.score_source || "deterministic")}</span>`;
+  }
+
+  /* -------------------------------------------------------------- chrome -- */
+  function renderChrome(data) {
+    $("demoChip").hidden = !data.demo;
+    $("syncText").textContent = data.generated_at
+      ? "Synced " + new Date(data.generated_at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+      : "";
+    const banner = $("staleBanner");
+    if (data.generated_at) {
+      const hours = (Date.now() - new Date(data.generated_at).getTime()) / 3600000;
+      const staleAfter = (data.policy && data.policy.stale_after_hours) || 30;
+      banner.hidden = hours <= staleAfter;
+      banner.textContent = `This data is ${Math.round(hours)} hours old. The daily sync has not published since ${new Date(data.generated_at).toLocaleString()}.`;
     }
   }
 
-  /* ---------------------------------------------------------------- coach -- */
-  function renderCoach(data) {
-    const container = $("coachGrid");
-    if (!container) return;
-    const coaching = data.coaching || {};
-    container.innerHTML = "";
-
-    (coaching.cards || []).forEach((card) => {
-      const el = document.createElement("article");
-      el.className = "card coach-card reveal";
-      const coachingSources = {
-        load: ["exercise"],
-        sleep: ["sleep"],
-        steps: ["steps", "active_minutes"],
-        strength: ["vo2max"],
-      };
-      el.dataset.sourceKeys = (coachingSources[card.key] || []).join(",");
-      const evidence = card.evidence || {};
-      el.innerHTML = `
-        <div class="card-head">
-          <h3>${escapeHTML(card.title)}</h3>
-          <span class="spacer"></span>
-          <span class="chip dot-${card.tone === "good" ? "good" : card.tone === "warn" ? "warn" : card.tone === "bad" ? "bad" : "good"}">
-            <span class="dot"></span>${card.measured ? "measured" : "not measured"}
-          </span>
-        </div>
-        <p class="reading">${escapeHTML(card.reading)}</p>
-        <p class="action">${escapeHTML(card.action)}</p>
-        <dl class="lines">
-          <div><dt>Progress</dt><dd>${escapeHTML(card.progress)}</dd></div>
-          <div><dt>Back off</dt><dd>${escapeHTML(card.back_off)}</dd></div>
-        </dl>
-        <button class="info-btn" data-info="ev-${escapeHTML(card.key)}" aria-expanded="false" aria-label="Evidence behind this rule">i</button>
-        <div class="disclosure" id="ev-${escapeHTML(card.key)}">
-          <strong>${escapeHTML(evidence.cite || "No citation")}</strong> found that ${escapeHTML(
-        evidence.found || ""
-      )} It does not settle: ${escapeHTML(evidence.not || "")}
-        </div>`;
-      container.appendChild(el);
-    });
+  /* -------------------------------------------------------------- charts -- */
+  function chart(id, draw) {
+    const canvas = $(id);
+    if (!canvas || !window.Viz) return;
+    const run = () => draw(canvas);
+    window.Viz.register(canvas, run);
+    run();
   }
 
-  /* ----------------------------------------------------------- provenance -- */
-  // Which app or device produced each metric. Fitbit writes its own points;
-  // Garmin, Google Fit and the phone's step counter arrive relayed by Health
-  // Connect, and the API hands them over as one series without saying so.
-  function renderSources(data) {
-    document.querySelectorAll(".source-badges").forEach((node) => node.remove());
-    const metrics = (data.sources && data.sources.metrics) || {};
-
-
-
-    // Attribute each visible metric group. Never infer a make/model when the
-    // Google Health API did not return source metadata for the sampled points.
-    const specs = {
-      "Sleep": ["sleep", true],
-      "Overnight HRV": ["hrv", false],
-      "Resting rate": ["rhr", false],
-      "Blood oxygen": ["spo2", false],
-      "Nightly stages": ["sleep", false],
-      "Last night": ["sleep", true],
-      "The night in clocks": ["sleep", true],
-      "Circadian timing": ["sleep", true],
-      "Resting heart rate": ["rhr", false],
-      "Today's heart rate": ["heart_rate", false],
-      "Workload balance": ["exercise", true],
-      "Steps": ["steps", false],
-      "Training consistency": ["exercise", false],
-      "Correlations": ["", true],
-    };
-    const badgesFor = (key) => {
-      const entry = key && metrics[key];
-      if (!entry) {
-        const node = document.createElement("span");
-        node.className = "source-badge unreported";
-        node.textContent = "Source unreported";
-        node.title = "The API did not provide source attribution for this metric sample.";
-        return [node];
-      }
-      const counts = new Map();
-      (entry.sources || []).forEach((source) => {
-        if (source.label) {
-          const name = source.label === "Unknown source" ? "Source unreported" : source.label;
-          counts.set(name, (counts.get(name) || 0) + (source.points || 0));
-        }
-      });
-      if (!counts.size && entry.dominant) counts.set(entry.dominant, entry.sampled || 0);
-      return [...counts].map(([name, count]) => {
-        const node = document.createElement("span");
-        node.className = "source-badge";
-        node.textContent = name;
-        if (name === "Source unreported") node.classList.add("unreported");
-        node.title = `${entry.label || key}: ${count} of ${entry.sampled || 0} sampled points`;
-        return node;
-      });
-    };
-    const addBadges = (host, keys, derived) => {
-      if (!host || host.querySelector(":scope > .source-badges")) return;
-      const group = document.createElement("span");
-      group.className = "source-badges";
-      const seen = new Map();
-      (keys || []).filter(Boolean).forEach((key) => {
-        badgesFor(key).forEach((node) => {
-          if (!seen.has(node.textContent)) seen.set(node.textContent, node);
-        });
-      });
-      const all = [...seen.values()];
-      // Named contributors are information; "Source unreported" next to named
-      // sources is noise, so it only appears when nothing else is known.
-      const named = all.filter((node) => !node.classList.contains("unreported"));
-      const visible = named.length ? named : all;
-      visible.slice(0, 3).forEach((node) => group.appendChild(node));
-      if (visible.length > 3) {
-        const more = document.createElement("span");
-        more.className = "source-badge more";
-        more.textContent = `+${visible.length - 3}`;
-        more.title = visible.slice(3).map((node) => node.title).join(" · ");
-        group.appendChild(more);
-      }
-      if (derived) {
-        const item = document.createElement("span");
-        item.className = "source-badge derived";
-        item.textContent = "Derived";
-        item.title = "Derived means calculated from measured data using documented rules; it is not a directly measured reading.";
-        group.appendChild(item);
-      }
-      if (group.childElementCount) host.appendChild(group);
-    };
-    document.querySelectorAll(".card-head").forEach((head) => {
-      const title = head.querySelector(".card-title, h3");
-      if (!title) return;
-      const spec = specs[title.textContent.trim()];
-      if (spec) addBadges(title.parentElement, spec[0].split(","), spec[1]);
-      else if (title.tagName === "H3") {
-        const keys = (title.closest(".coach-card")?.dataset.sourceKeys || "").split(",");
-        addBadges(title.parentElement, keys, true);
-      }
-    });
-    document.querySelectorAll(".ask-row[data-source-keys]").forEach((row) => {
-      const keys = (row.dataset.sourceKeys || "").split(",");
-      addBadges(row.querySelector(".k"), keys, false);
-    });
-    document.querySelectorAll(".pattern").forEach((row) => {
-      const keys = (row.dataset.sourceKeys || "").split(",");
-      addBadges(row.firstElementChild, keys, true);
-    });
-    document.querySelectorAll(".coach-card").forEach((card) => {
-      const keys = (card.dataset.sourceKeys || "").split(",");
-      addBadges(card.querySelector(".card-head"), keys, true);
-    });
-    document.querySelectorAll(".ringcard").forEach((card, index) => {
-      const foot = card.querySelector(".ringfoot");
-      const keys = [["hrv", "rhr", "spo2"], ["exercise"], ["sleep"]][index] || [];
-      addBadges(foot, keys, true);
-    });
-    document.querySelectorAll("#strip .cell").forEach((cell, index) => {
-      const keys = [[], ["rhr"], ["hrv"], ["resp"], ["spo2"], ["steps"], ["sleep"], ["active_minutes"]][index] || [];
-      addBadges(cell, keys, [0, 6].includes(index));
-    });
-    document.querySelectorAll(".source-badge").forEach((badge) => {
-      if (badge.title) badge.setAttribute("aria-label", badge.title);
-    });
-    document.querySelectorAll("#strip .source-badge").forEach((badge) => {
-      badge.tabIndex = 0;
-    });
-
-    const box = $("sources");
-    if (!box) return;
-    const devices = (data.sources && data.sources.devices) || [];
-    box.innerHTML = devices
-      .map(
-        (device) =>
-          `<div class="source-item"><span class="dot ${
-            device.platform === "FITBIT" ? "own" : "relay"
-          }"></span><b>${escapeHTML(device.label)}</b><span>${escapeHTML(
-            device.metrics.join(" · ")
-          )}</span></div>`
-      )
-      .join("");
-  }
-
-  function renderProvenance(data) {
-    const container = $("provenance");
-    if (!container) return;
-    const quality = data.data_quality || {};
-    container.innerHTML = "";
-    Object.values(quality.metrics || {}).forEach((metric) => {
-      const el = document.createElement("div");
-      el.className = "prov-item";
-      el.innerHTML = `<span class="name">${escapeHTML(metric.label)} <span class="faint">· ${
-        metric.source === "live" ? "live" : "missing"
-      }</span></span><span class="note">${escapeHTML(metric.note || "")}</span>`;
-      container.appendChild(el);
-    });
-
-    const clinical = data.clinical || {};
-    setText(
-      "footerMeta",
-      `Scores: ${clinical.score_source || "deterministic"} · Narrative: ${
-        clinical.narrative_source || "rules"
-      } · Schema ${data.schema || 1}`
-    );
-    setText("footerSync", data.generated_at ? new Date(data.generated_at).toLocaleString() : DASH);
-    setText("footerTz", data.timezone || DASH);
-  }
-
-  /* ---------------------------------------------------------------- render -- */
+  /* -------------------------------------------------------------- render -- */
   function render(data) {
     state.payload = data;
-    renderBand(data);
-    renderRecovery(data);
-    renderHero(data);
+    hideHelp();
+    if (window.Viz) window.Viz.reset();
+    renderChrome(data);
+    renderToday(data);
     renderVitals(data);
-    renderLoad(data);
-    renderPatterns(data);
-    renderCoach(data);
+    renderSleep(data);
+    renderHeart(data);
+    renderMarkers(data);
+    renderActivity(data);
+    renderInsights(data);
     renderSources(data);
-    renderProvenance(data);
-    renderCharts(data);
-    attachDisclosures();
-    observeReveals();
-  }
-
-  function attachDisclosures() {
-    document.querySelectorAll(".info-btn").forEach((button) => {
-      if (button.dataset.bound) return;
-      button.dataset.bound = "1";
-      button.addEventListener("click", () => {
-        const target = document.getElementById(button.dataset.info);
-        if (!target) return;
-        const open = target.classList.toggle("open");
-        button.setAttribute("aria-expanded", String(open));
-      });
-    });
-  }
-
-  function observeReveals() {
-    if (!("IntersectionObserver" in window)) {
-      document.querySelectorAll(".reveal").forEach((el) => el.classList.add("in"));
-      return;
-    }
-    let revealed = 0;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("in");
-            revealed += 1;
-            observer.unobserve(entry.target);
-          }
-        });
-      },
-      { rootMargin: "-40px 0px -8% 0px", threshold: 0.02 }
-    );
-    document.querySelectorAll(".reveal:not(.in)").forEach((el) => observer.observe(el));
-
-    // Failsafe, not a schedule: if the observer has revealed nothing at all the
-    // animation is broken, so publish every card. A working observer keeps the
-    // reveal tied to the reader's scroll instead of firing on a timer.
-    window.setTimeout(() => {
-      if (revealed > 0) return;
-      document.querySelectorAll(".reveal:not(.in)").forEach((el) => el.classList.add("in"));
-    }, 2500);
   }
 
   /* ------------------------------------------------------- remembered vault -- */
@@ -1120,10 +837,7 @@
     const existing = await idbRun("readonly", (store) => store.get(REMEMBER.key));
     if (existing) return existing;
     if (!create) return null;
-    const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, [
-      "encrypt",
-      "decrypt",
-    ]);
+    const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
     await idbRun("readwrite", (store) => store.put(key, REMEMBER.key));
     return key;
   }
@@ -1132,16 +846,9 @@
     try {
       const key = await deviceKey(true);
       const iv = crypto.getRandomValues(new Uint8Array(12));
-      const sealed = await crypto.subtle.encrypt(
-        { name: "AES-GCM", iv },
-        key,
-        new TextEncoder().encode(passphrase)
-      );
+      const sealed = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(passphrase));
       await idbRun("readwrite", (store) =>
-        store.put(
-          { iv: Array.from(iv), sealed: Array.from(new Uint8Array(sealed)), at: Date.now() },
-          REMEMBER.wrapped
-        )
+        store.put({ iv: Array.from(iv), sealed: Array.from(new Uint8Array(sealed)), at: Date.now() }, REMEMBER.wrapped)
       );
     } catch (error) {
       // Private mode, or a denied store: the passphrase is simply asked for again.
@@ -1159,9 +866,7 @@
       const key = await deviceKey(false);
       if (!key) return null;
       const plain = await crypto.subtle.decrypt(
-        { name: "AES-GCM", iv: new Uint8Array(record.iv) },
-        key,
-        new Uint8Array(record.sealed)
+        { name: "AES-GCM", iv: new Uint8Array(record.iv) }, key, new Uint8Array(record.sealed)
       );
       return new TextDecoder().decode(plain);
     } catch (error) {
@@ -1192,129 +897,46 @@
     return data;
   }
 
-  // Everything the render pass writes into, so locking can actually empty it.
-  // Hiding a container is not purging: the text would still sit in the DOM.
-  const RENDERED_IDS = [
-    "rcRecScore", "rcRecBand", "rcRecFoot", "rcStrScore", "rcStrBand", "rcStrFoot",
-    "rcSlpScore", "rcSlpBand", "rcSlpFoot",
-    "heroHeadline", "heroLede", "metaDevice", "metaSync",
-    "metaSource", "metaWindow", "kpiSleep", "kpiSleepSub", "kpiSleepBand", "kpiHrv", "kpiHrvSub",
-    "kpiHrvBand", "kpiRhr", "kpiRhrSub", "kpiRhrBand", "kpiSpo2", "kpiSpo2Sub", "kpiSpo2Band",
-    "sleepScoreBig", "sleepScoreBand", "stageDeepMins", "stageLightMins", "stageRemMins",
-    "stageAwakeMins", "sleepBed", "sleepWake", "sleepEfficiency", "sleepNeed", "sleepDebt",
-    "sleepNeedSource", "circadianOnset", "circadianSpread", "circadianAlign", "circadianTarget",
-    "loadScore", "loadBand", "loadText", "loadNote", "stepsBig", "stepsGoal", "stepsMean",
-    "activeToday", "activeWeek", "activePct", "caloriesToday", "caloriesMean", "vo2max",
-    "patternNote", "patternMethod", "footerMeta", "footerSync", "footerTz",
-    "targetText", "targetBasis", "targetHint", "watchHeadline",
-
-  ];
-
-  function purgeRendered() {
-    document.querySelectorAll(".source-badges").forEach((node) => node.remove());
-    ["patternList", "coachGrid", "sources", "provenance", "heatmap", "loadDaily", "recoveryFactors", "watchDrivers"].forEach((id) => {
-      const node = $(id);
-      if (node) node.innerHTML = "";
-    });
-    RENDERED_IDS.forEach((id) => setText(id, DASH));
-    ["rcRecArc", "rcStrArc", "rcSlpArc"].forEach((id) => setRing(id, 0, cssVar("--line-strong")));
-    const strip = $("strip");
-    if (strip) strip.innerHTML = "";
-    const dial = $("loadDial");
-    if (dial) dial.innerHTML = "";
-    const bar = $("activeBar");
-    if (bar) bar.style.width = "0%";
-    ["stageDeep", "stageLight", "stageRem", "stageAwake"].forEach((id) => {
-      const fill = $(id);
-      if (fill) fill.style.width = "0%";
-    });
-  }
-
   function lock() {
     state.passphrase = null;
     state.payload = null;
     // A manual lock means locked: leaving the remembered record behind would
     // reopen the vault on the next reload and make the button a lie.
     forgetPassphrase();
+    hideHelp();
     if (window.Viz) window.Viz.reset();
-    purgeRendered();
+    // Every rendered value lives inside a slot, so emptying the slots purges
+    // the data from the DOM rather than merely hiding it.
+    document.querySelectorAll("[data-slot]").forEach((node) => { node.innerHTML = ""; });
+    $("syncText").textContent = "";
+    $("staleBanner").hidden = true;
     $("app").hidden = true;
     $("lock").hidden = false;
     $("lockInput").value = "";
     $("lockError").textContent = "";
-    $("lockHint").textContent =
-      "Data purged from this tab and this browser forgotten. Enter the passphrase to read it again.";
+    $("lockHint").textContent = "Data purged from this tab and this browser forgotten.";
   }
 
   async function refresh() {
     if (!state.passphrase) return;
     const button = $("btnRefresh");
-    const label = button ? button.textContent : "";
-    if (button) {
-      button.disabled = true;
-      button.textContent = "Reading…";
-    }
+    button.disabled = true;
     try {
-      const data = await decryptVault(state.passphrase);
-      render(data);
-      if (button) button.textContent = "Up to date";
-      setTimeout(() => {
-        if (button) button.textContent = label || "Refresh";
-      }, 1800);
+      render(await decryptVault(state.passphrase));
+      button.title = "Up to date";
     } catch (error) {
-      if (button) button.textContent = "Failed";
-      setTimeout(() => {
-        if (button) button.textContent = label || "Refresh";
-      }, 1800);
+      button.title = "Refresh failed";
     } finally {
-      if (button) button.disabled = false;
+      button.disabled = false;
     }
-  }
-
-  /* ------------------------------------------------------- badge details -- */
-  // The sample count behind a badge lives in its title, which only a mouse can
-  // reach. A tap shows the same sentence as a popover, so a phone gets the
-  // attribution a desktop gets on hover.
-  let badgePop = null;
-  let lastBadge = null;
-
-  function hideBadgeDetail() {
-    if (badgePop) {
-      badgePop.remove();
-      badgePop = null;
-    }
-  }
-
-  function showBadgeDetail(badge) {
-    hideBadgeDetail();
-    const pop = document.createElement("div");
-    pop.className = "badge-pop";
-    pop.setAttribute("role", "tooltip");
-    pop.textContent = badge.title;
-    document.body.appendChild(pop);
-    badgePop = pop;
-
-    const box = badge.getBoundingClientRect();
-    const width = pop.offsetWidth;
-    const left = Math.min(
-      Math.max(8, box.left + box.width / 2 - width / 2),
-      document.documentElement.clientWidth - width - 8
-    );
-    const below = box.bottom + 8;
-    const flip = below + pop.offsetHeight > window.innerHeight - 8;
-    pop.style.left = `${left}px`;
-    pop.style.top = `${flip ? box.top - pop.offsetHeight - 8 : below}px`;
   }
 
   /* ----------------------------------------------------------------- init -- */
   function initControls() {
-    $("btnTheme").addEventListener("click", () =>
-      applyTheme(state.theme === "dark" ? "light" : "dark")
-    );
+    $("btnTheme").addEventListener("click", () => applyTheme(state.theme === "dark" ? "light" : "dark"));
     $("btnPrint").addEventListener("click", () => window.print());
     $("btnLock").addEventListener("click", lock);
-    const refreshButton = $("btnRefresh");
-    if (refreshButton) refreshButton.addEventListener("click", refresh);
+    $("btnRefresh").addEventListener("click", refresh);
 
     $("lockForm").addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -1322,8 +944,7 @@
       if (!value) return;
       $("lockError").textContent = "";
       try {
-        const box = $("rememberDevice");
-        const persist = box ? box.checked : false;
+        const persist = $("rememberDevice").checked;
         if (!persist) await forgetPassphrase();
         await unlock(value, persist);
       } catch (error) {
@@ -1334,47 +955,36 @@
       }
     });
 
-    // Active section in the nav
     const links = Array.from(document.querySelectorAll(".nav a"));
     if ("IntersectionObserver" in window) {
       const observer = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((entry) => {
-            if (!entry.isIntersecting) return;
-            links.forEach((link) =>
-              link.setAttribute(
-                "aria-current",
-                link.getAttribute("href") === "#" + entry.target.id ? "true" : "false"
-              )
-            );
-          });
-        },
+        (entries) => entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          links.forEach((link) =>
+            link.setAttribute("aria-current", String(link.getAttribute("href") === "#" + entry.target.id))
+          );
+        }),
         { rootMargin: "-20% 0px -70% 0px" }
       );
       document.querySelectorAll("main section[id]").forEach((section) => observer.observe(section));
     }
 
-    // Tap or click a badge to read what its tooltip says. Pointer devices keep
-    // the native hover; this is the path a phone can actually use.
     document.addEventListener("click", (event) => {
-      const badge = event.target.closest ? event.target.closest(".source-badge") : null;
-      const tappedAgain = Boolean(badge && badge === lastBadge && badgePop);
-      hideBadgeDetail();
-      lastBadge = badge || null;
-      if (badge && badge.title && !tappedAgain) showBadgeDetail(badge);
+      const button = event.target.closest ? event.target.closest(".info") : null;
+      if (button && button === helpButton) return hideHelp();
+      if (button) return showHelp(button);
+      if (!(event.target.closest && event.target.closest(".info-pop"))) hideHelp();
     });
-    window.addEventListener("scroll", hideBadgeDetail, { passive: true });
+    window.addEventListener("resize", hideHelp);
 
     document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") hideHelp();
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const tag = (event.target.tagName || "").toLowerCase();
       if (tag === "input" || tag === "textarea") return;
-      if (event.key === "Escape") hideBadgeDetail();
       if (event.key === "l") lock();
       if (event.key === "r") refresh();
     });
-
-    window.addEventListener("themechange", () => window.Viz && window.Viz.redrawAll());
   }
 
   async function boot() {
@@ -1384,8 +994,7 @@
     $("app").hidden = true;
 
     // A remembered browser opens straight to the data. If the record no longer
-    // opens the vault it is dropped and the lock screen simply stays up, which
-    // is the same thing the reader would do by hand.
+    // opens the vault it is dropped and the lock screen simply stays up.
     const remembered = await recallPassphrase();
     if (!remembered) return;
     try {

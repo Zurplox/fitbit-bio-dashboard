@@ -133,6 +133,53 @@ READINESS_BANDS = [
 ]
 
 # --------------------------------------------------------------------------
+# HRV status — Plews 2012/2013: the 7-day rolling mean of ln(RMSSD) read
+# against the athlete's own band of baseline mean ± 0.5 SD (the smallest
+# worthwhile change). One night is noise; the week is the signal.
+# --------------------------------------------------------------------------
+HRV_STATUS_WEEK = 7
+HRV_STATUS_MIN_WEEK_NIGHTS = 5
+HRV_STATUS_BASELINE_NIGHTS = 60
+HRV_STATUS_MIN_BASELINE_NIGHTS = 14
+HRV_STATUS_SWC_SD = 0.5
+HRV_STATUS_BANDS = {
+    "balanced": _band("balanced", "Balanced", "Your weekly HRV sits inside your usual range.", "good"),
+    "low": _band("low", "Below range", "Your weekly HRV is under your usual range: accumulated fatigue, illness or stress are common causes.", "warn"),
+    "high": _band("high", "Above range", "Your weekly HRV is over your usual range. Often a good sign after a lighter block; on its own it means little.", "neutral"),
+}
+
+# --------------------------------------------------------------------------
+# Intensity mix — share of workout heart-rate-zone time spent in the hard
+# (vigorous + peak) zones. Seiler 2010: endurance athletes converge on
+# roughly 80% easy, 20% hard. Described, not graded.
+# --------------------------------------------------------------------------
+INTENSITY_WINDOW_DAYS = 28
+INTENSITY_MIN_ZONE_MINUTES = 60
+INTENSITY_BANDS = [
+    (40, _band("hard", "Mostly hard", "Over 40% of workout time was vigorous or peak, well above the ~20% most endurance programmes use.", "warn")),
+    (25, _band("mixed", "Mixed", "A mix of aerobic base and hard work, a little above the ~20% hard share endurance programmes use.", "neutral")),
+    (0, _band("base", "Aerobic base", "Most workout time was easy aerobic work, close to the ~80/20 split endurance athletes use.", "good")),
+]
+
+# --------------------------------------------------------------------------
+# Social jetlag — Wittmann 2006: the gap between mid-sleep on free days and
+# work days. Roenneberg 2012 linked each hour of it to higher odds of
+# overweight. Fitbit dates a night by the morning it ends, so Saturday and
+# Sunday mornings are the free nights.
+# --------------------------------------------------------------------------
+JETLAG_WINDOW_NIGHTS = 56
+JETLAG_MIN_FREE = 4
+JETLAG_MIN_WORK = 8
+JETLAG_BANDS = [
+    (120, _band("high", "High", "Weekend sleep runs two hours or more off your weekday clock.", "bad")),
+    (60, _band("moderate", "Moderate", "Weekend sleep runs an hour or more off your weekday clock.", "warn")),
+    (0, _band("low", "Low", "Weekend and weekday sleep keep nearly the same clock.", "good")),
+]
+
+# Paluch 2022: the daily steps beyond which mortality risk stopped falling.
+STEP_PLATEAU = {"under_60": (8_000, 10_000), "60_plus": (6_000, 8_000)}
+
+# --------------------------------------------------------------------------
 # Targets and windows.
 # --------------------------------------------------------------------------
 DEFAULT_STEP_GOAL = 10_000
@@ -177,7 +224,49 @@ EVIDENCE = {
         "found": "Sleep regularity predicted mortality better than total sleep duration.",
         "not": "Observational: irregular sleep may mark other things that also affect health.",
     },
+    "vo2max": {
+        "cite": "Kodama 2009, JAMA",
+        "found": "Each 1-MET (3.5 ml/kg/min) higher cardiorespiratory fitness was linked to 13% lower all-cause and 15% lower cardiovascular mortality.",
+        "not": "Population averages from lab-measured fitness; a wrist estimate carries its own error and is not your personal risk.",
+    },
+    "rhr": {
+        "cite": "Zhang 2016, CMAJ",
+        "found": "Each 10 bpm higher resting heart rate was linked to 9% higher all-cause and 8% higher cardiovascular mortality.",
+        "not": "An association across populations; fitness, medication and genetics all move resting rate.",
+    },
+    "hrv_status": {
+        "cite": "Plews 2013, Sports Med",
+        "found": "A 7-day rolling mean of ln(RMSSD) tracks training adaptation better than single mornings.",
+        "not": "Developed in endurance athletes; illness, alcohol and stress move it too.",
+    },
+    "intensity": {
+        "cite": "Seiler 2010, Int J Sports Physiol Perform",
+        "found": "Successful endurance athletes spend about 80% of sessions easy and 20% hard.",
+        "not": "A descriptive pattern in athletes, not a rule for general health training.",
+    },
+    "jetlag": {
+        "cite": "Roenneberg 2012, Curr Biol",
+        "found": "Each hour of social jetlag was associated with about 33% higher odds of being overweight.",
+        "not": "Cross-sectional: it does not show that shifting your weekend sleep changes weight.",
+    },
+    "metabolic": {
+        "cite": "Metwally 2026, Nature (WEAR-ME)",
+        "found": "Resting heart rate, daily steps and HRV were the wearable signals most tied to insulin resistance.",
+        "not": "Predicting insulin resistance needed blood tests; wearable data alone reached only AUROC 0.70.",
+    },
 }
+
+
+def hrv_status_band(key):
+    return HRV_STATUS_BANDS.get(key) or _band(UNMEASURED, "Not enough nights", "Needs a week of nights and two weeks of baseline.", "neutral")
+
+
+def intensity_band(pct_hard):
+    return _pick(INTENSITY_BANDS, pct_hard)
+
+
+def jetlag_band(minutes):
+    return _pick(JETLAG_BANDS, minutes)
 
 
 def _pick(ladder, value):

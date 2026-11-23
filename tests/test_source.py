@@ -47,6 +47,20 @@ class FakeClient:
         return {"rollupDataPoints": self.rollup_points}
 
 
+class SkinTempTests(unittest.TestCase):
+    def test_deviation_from_baseline_and_no_baseline_dropped(self):
+        day = lambda d: {"year": 2026, "month": 11, "day": d}
+        fake = FakeClient(points={"daily-sleep-temperature-derivations": [
+            {"dailySleepTemperatureDerivations": {"date": day(2), "nightlyTemperatureCelsius": 34.1, "baselineTemperatureCelsius": 33.8}},
+            {"dailySleepTemperatureDerivations": {"date": day(1), "nightlyTemperatureCelsius": 33.5, "baselineTemperatureCelsius": 33.8}},
+            {"dailySleepTemperatureDerivations": {"date": day(3), "nightlyTemperatureCelsius": 34.0}},
+        ]})
+        dq = DataQuality()
+        rows = source.fetch_daily_skin_temp(fake, days=30, dq=dq)
+        self.assertEqual(rows, [{"date": "2026-11-01", "value": -0.3}, {"date": "2026-11-02", "value": 0.3}])
+        self.assertEqual(dq.as_dict()["metrics"]["skin_temp"]["source"], "live")
+
+
 class TimestampTests(unittest.TestCase):
     def test_civil_date_from_offset(self):
         # 23:30Z at +8h is the next morning, so the night belongs to the 2nd.

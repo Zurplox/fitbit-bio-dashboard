@@ -212,7 +212,7 @@
       }
 
       const gradient = ctx.createLinearGradient(0, bx.top, 0, bx.bottom);
-      gradient.addColorStop(0, color + "40");
+      gradient.addColorStop(0, color + "1a");
       gradient.addColorStop(1, color + "00");
       ctx.beginPath();
       points.forEach((row, index) => {
@@ -235,7 +235,7 @@
         else ctx.lineTo(x, y);
       });
       ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 1.75;
       ctx.lineJoin = "round";
       ctx.stroke();
 
@@ -429,7 +429,7 @@
     const yAt = (value) => bx.bottom - ((value - low) / (high - low)) * bx.height;
 
     const gradient = ctx.createLinearGradient(0, bx.top, 0, bx.bottom);
-    gradient.addColorStop(0, color + "55");
+    gradient.addColorStop(0, color + "1f");
     gradient.addColorStop(1, color + "00");
 
     ctx.beginPath();
@@ -453,7 +453,7 @@
       else ctx.lineTo(x, y);
     });
     ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.75;
     ctx.stroke();
 
     ctx.fillStyle = css("--faint", "#666");

@@ -11,6 +11,8 @@ which renders it as `--`. Nothing here invents a plausible value.
 
 from __future__ import annotations
 
+import math
+import statistics
 from datetime import date, datetime, timedelta, timezone
 
 import bio_policy as policy
@@ -237,9 +239,105 @@ def circadian(history):
     }
 
 
+def social_jetlag(history):
+    """Wittmann 2006: |median mid-sleep on free nights - on work nights|, minutes."""
+    def mid_sleep(night):
+        bed, wake = night.get("bed_minutes"), night.get("wake_minutes")
+        if bed is None or wake is None:
+            return None
+        bed = bed - 24 * 60 if bed >= 12 * 60 else bed  # evening onsets go negative
+        if wake < bed:
+            wake += 24 * 60
+        return (bed + wake) / 2
+
+    free, work = [], []
+    for night in history[-policy.JETLAG_WINDOW_NIGHTS:]:
+        day = _parse_date(night.get("date"))
+        mid = mid_sleep(night)
+        if day is None or mid is None:
+            continue
+        (free if day.weekday() >= 5 else work).append(mid)
+
+    if len(free) < policy.JETLAG_MIN_FREE or len(work) < policy.JETLAG_MIN_WORK:
+        return {"available": False, "free_nights": len(free), "work_nights": len(work)}
+    gap = median(free) - median(work)
+    return {
+        "available": True,
+        "minutes": round(abs(gap)),
+        "later_on_free_days": gap > 0,
+        "free_nights": len(free),
+        "work_nights": len(work),
+        "band": policy.jetlag_band(abs(gap)),
+    }
+
+
+def hrv_status(series):
+    """Plews 2012/2013 weekly ln(RMSSD) against the athlete's own baseline band.
+
+    `series` is [{"date", "value"}] in chronological order.
+    """
+    week = [r["value"] for r in series[-policy.HRV_STATUS_WEEK:] if r["value"] and r["value"] > 0]
+    base = [
+        r["value"]
+        for r in series[:-policy.HRV_STATUS_WEEK][-policy.HRV_STATUS_BASELINE_NIGHTS:]
+        if r["value"] and r["value"] > 0
+    ]
+    if len(week) < policy.HRV_STATUS_MIN_WEEK_NIGHTS or len(base) < policy.HRV_STATUS_MIN_BASELINE_NIGHTS:
+        return {"available": False, "band": policy.hrv_status_band(None)}
+
+    ln_week = [math.log(v) for v in week]
+    ln_base = [math.log(v) for v in base]
+    week_mean = sum(ln_week) / len(ln_week)
+    base_mean = sum(ln_base) / len(ln_base)
+    base_sd = statistics.stdev(ln_base)
+    swc = policy.HRV_STATUS_SWC_SD * base_sd
+    key = "low" if week_mean < base_mean - swc else "high" if week_mean > base_mean + swc else "balanced"
+    # Coefficient of variation of the week's ln(RMSSD): a rising CV is the
+    # other half of Plews' reading, since day-to-day swings precede fatigue.
+    cv = 100 * statistics.stdev(ln_week) / week_mean if len(ln_week) > 1 else None
+    return {
+        "available": True,
+        "week_ms": round(math.exp(week_mean), 1),
+        "range_ms": [round(math.exp(base_mean - swc), 1), round(math.exp(base_mean + swc), 1)],
+        "week_nights": len(week),
+        "baseline_nights": len(base),
+        "cv_pct": round(cv, 1) if cv is not None else None,
+        "band": policy.hrv_status_band(key),
+    }
+
+
 # --------------------------------------------------------------------------
 # Load
 # --------------------------------------------------------------------------
+def intensity_mix(sessions, today=None):
+    """Easy (light + moderate) vs hard (vigorous + peak) zone minutes, 28 days."""
+    today = _parse_date(today) or date.today()
+    since = today - timedelta(days=policy.INTENSITY_WINDOW_DAYS - 1)
+    easy = hard = 0.0
+    counted = 0
+    for session in sessions:
+        day = _parse_date(session.get("date"))
+        zones = session.get("zones")
+        if not zones or day is None or not since <= day <= today:
+            continue
+        easy += (zones.get("light") or 0) + (zones.get("moderate") or 0)
+        hard += (zones.get("vigorous") or 0) + (zones.get("peak") or 0)
+        counted += 1
+    total = easy + hard
+    if total < policy.INTENSITY_MIN_ZONE_MINUTES:
+        return {"available": False, "sessions": counted}
+    pct_hard = round(100 * hard / total)
+    return {
+        "available": True,
+        "easy_minutes": round(easy),
+        "hard_minutes": round(hard),
+        "pct_hard": pct_hard,
+        "sessions": counted,
+        "window_days": policy.INTENSITY_WINDOW_DAYS,
+        "band": policy.intensity_band(pct_hard),
+    }
+
+
 def day_load(steps, active_minutes, exercise_minutes):
     """0-100 reading of how much work a day contained.
 

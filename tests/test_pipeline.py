@@ -383,6 +383,42 @@ class PayloadTests(unittest.TestCase):
         json.dumps(self.payload)
 
 
+class MarkerTests(unittest.TestCase):
+    def test_hrv_status_reads_week_against_baseline_band(self):
+        start = date(2026, 1, 1)
+        base = [{"date": (start + timedelta(days=i)).isoformat(), "value": 50.0 + (i % 2) * 4} for i in range(30)]
+        low_week = [{"date": (start + timedelta(days=30 + i)).isoformat(), "value": 38.0} for i in range(7)]
+        status = analytics.hrv_status(base + low_week)
+        self.assertTrue(status["available"])
+        self.assertEqual(status["band"]["key"], "low")
+        self.assertEqual(status["week_ms"], 38.0)
+        low, high = status["range_ms"]
+        self.assertTrue(low < 52 < high)  # the band straddles the 50/54 baseline
+        self.assertFalse(analytics.hrv_status(low_week)["available"])
+
+    def test_intensity_mix_shares_hard_zone_minutes(self):
+        sessions = [
+            {"date": "2026-01-20", "zones": {"light": 20, "moderate": 40, "vigorous": 15, "peak": 5}},
+            {"date": "2025-11-01", "zones": {"light": 0, "moderate": 0, "vigorous": 500, "peak": 0}},
+        ]
+        mix = analytics.intensity_mix(sessions, today="2026-01-28")
+        self.assertEqual((mix["easy_minutes"], mix["hard_minutes"], mix["pct_hard"]), (60, 20, 25))
+        self.assertEqual(mix["sessions"], 1)
+        self.assertFalse(analytics.intensity_mix([], today="2026-01-28")["available"])
+
+    def test_social_jetlag_compares_weekend_and_weekday_mid_sleep(self):
+        nights = []
+        for i in range(28):
+            day = date(2026, 1, 5) + timedelta(days=i)  # 5 Jan 2026 is a Monday
+            weekend = day.weekday() >= 5
+            # Weekday 23:00-07:00 (mid 03:00); weekend 01:00-09:00 (mid 05:00).
+            nights.append({"date": day.isoformat(), "bed_minutes": 60 if weekend else 1380, "wake_minutes": 540 if weekend else 420})
+        jet = analytics.social_jetlag(nights)
+        self.assertEqual(jet["minutes"], 120)
+        self.assertTrue(jet["later_on_free_days"])
+        self.assertEqual(jet["band"]["key"], "high")
+
+
 class NarrativeTests(unittest.TestCase):
     def test_illness_needs_more_than_one_driver(self):
         one = clinical_engine.illness_signal({"rhr_delta_bpm": 7, "resp_delta": 0})

@@ -152,6 +152,7 @@ name and metric counts.
 | Workouts | `exercise` sessions | duration, calories, average HR, distance |
 | Intraday heart rate | `heartRate` rollup | hourly averages, last 24 h |
 | Cardio fitness | `daily-vo2-max` | device estimate |
+| Skin temperature | `daily-sleep-temperature-derivations` | nightly deviation from the device's 30-night baseline; hidden when absent |
 | Circadian timing | derived | median onset, spread, alignment |
 | Recovery / readiness / load ratio | derived | thresholds in `bio_policy.py` |
 | Correlations | derived | curated pairs, n ≥ 14 and \|r\| ≥ 0.35 |

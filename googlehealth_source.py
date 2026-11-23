@@ -246,6 +246,9 @@ class GoogleHealthClient:
     def identity(self):
         return self.request("GET", "/users/me/identity")
 
+    def profile(self):
+        return self.request("GET", "/users/me/profile")
+
     def list_points(self, data_type, filter_expr=None, max_pages=12, page_size=LIST_PAGE_SIZE):
         """Page through `dataPoints`. Pages are capped at 25 by the API."""
         points = []
@@ -374,7 +377,15 @@ def fetch_identity(client, dq=None):
 
 def fetch_profile(client, dq=None):
     """Height and weight, when the account has them. Absent stays absent."""
-    profile = {"height_cm": None, "weight_kg": None}
+    profile = {"height_cm": None, "weight_kg": None, "age": None}
+
+    try:
+        # Age only: it picks the step range Paluch 2022 reported for the age
+        # group. The API exposes no sex, so nothing sex-specific is derived.
+        age = _num(((client.profile() or {}).get("age")))
+        profile["age"] = int(age) if age else None
+    except Exception as error:  # noqa: BLE001 - optional
+        print(f"   profile age unavailable: {error}")
 
     try:
         heights = client.list_points("height", max_pages=2)
@@ -620,6 +631,41 @@ def fetch_daily_vo2max(client, days=90, dq=None):
     )
 
 
+def _zone_minutes(durations):
+    """Minutes per heart-rate zone from an exercise summary, or None if absent."""
+    if not durations:
+        return None
+    zones = {
+        zone: round(_seconds(durations.get(f"{zone}Time")) / 60, 1)
+        for zone in ("light", "moderate", "vigorous", "peak")
+    }
+    return zones if any(zones.values()) else None
+
+
+def _skin_temp_delta(body):
+    # Only a deviation against the device's own 30-night baseline is published;
+    # an absolute skin temperature means little and a missing baseline means
+    # there is nothing honest to compare against.
+    nightly = _num(body.get("nightlyTemperatureCelsius"))
+    baseline = _num(body.get("baselineTemperatureCelsius"))
+    if nightly is None or baseline is None:
+        return None
+    return round(nightly - baseline, 2)
+
+
+def fetch_daily_skin_temp(client, days=90, dq=None):
+    return _daily_series(
+        client,
+        "daily-sleep-temperature-derivations",
+        "dailySleepTemperatureDerivations",
+        days,
+        _skin_temp_delta,
+        dq,
+        ("skin_temp", "Skin temperature"),
+        "nights recorded",
+    )
+
+
 def _rollup_series(client, data_type, days, dq, label, note_unit, today=None):
     today = today or local_today()
     start = today - timedelta(days=days - 1)
@@ -700,6 +746,11 @@ def fetch_exercise(client, days=90, dq=None):
                 if metrics.get("distanceMillimeters") is not None
                 else None,
                 "active_zone_minutes": _num(metrics.get("activeZoneMinutes")),
+                "zones": _zone_minutes(metrics.get("heartRateZoneDurations")),
+                "elevation_m": round(_num(metrics.get("elevationGainMillimeters")) / 1000)
+                if metrics.get("elevationGainMillimeters") is not None
+                else None,
+                "run_vo2max": _num(metrics.get("runVo2Max")),
             }
         )
 

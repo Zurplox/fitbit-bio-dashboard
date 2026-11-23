@@ -54,7 +54,7 @@ def collect(client, dq):
     identity = source.fetch_identity(client, dq)
     profile = _attempt(
         dq, "profile", "Body metrics", lambda: source.fetch_profile(client, dq),
-        {"height_cm": None, "weight_kg": None}, "profile",
+        {"height_cm": None, "weight_kg": None, "age": None}, "profile",
     )
 
     sleep = _attempt(dq, "sleep", "Sleep", lambda: source.fetch_sleep(client, days=FETCH_DAYS, dq=dq), [], "sleep")
@@ -63,6 +63,7 @@ def collect(client, dq):
     spo2 = _attempt(dq, "spo2", "Blood oxygen", lambda: source.fetch_daily_spo2(client, days=FETCH_DAYS, dq=dq), [], "spo2")
     resp = _attempt(dq, "resp", "Breathing rate", lambda: source.fetch_daily_resp(client, days=FETCH_DAYS, dq=dq), [], "resp")
     vo2max = _attempt(dq, "vo2max", "Cardio fitness", lambda: source.fetch_daily_vo2max(client, days=FETCH_DAYS, dq=dq), [], "vo2max")
+    skin_temp = _attempt(dq, "skin_temp", "Skin temperature", lambda: source.fetch_daily_skin_temp(client, days=FETCH_DAYS, dq=dq), [], "skin temperature")
     steps = _attempt(dq, "steps", "Steps", lambda: source.fetch_daily_steps(client, days=FETCH_DAYS, dq=dq), [], "steps")
     calories = _attempt(dq, "calories", "Calories", lambda: source.fetch_daily_calories(client, days=FETCH_DAYS, dq=dq), [], "calories")
     active = _attempt(dq, "active_minutes", "Active minutes", lambda: source.fetch_daily_active_minutes(client, days=FETCH_DAYS, dq=dq), [], "active minutes")
@@ -88,6 +89,7 @@ def collect(client, dq):
         "spo2": spo2,
         "resp": resp,
         "vo2max": vo2max,
+        "skin_temp": skin_temp,
         "steps": steps,
         "calories": calories,
         "active_minutes": active,
@@ -131,6 +133,9 @@ def build_payload(fetched, dq, demo=False):
     calories_series = _value_series(fetched["calories"])
     active_series = _value_series(fetched["active_minutes"])
     vo2_series = _value_series(fetched["vo2max"])
+    # .get: payloads assembled before skin temperature existed have no key.
+    skin_series = _value_series(fetched.get("skin_temp") or [])
+    skin_latest = skin_series[-1] if skin_series else None
 
     # Baselines: the athlete's own recent median, on the windows policy owns.
     hrv_baseline = analytics.median(
@@ -268,6 +273,9 @@ def build_payload(fetched, dq, demo=False):
     )
 
     correlations = bio_correlate.build_correlations(channels)
+    markers = build_markers(
+        fetched, nights, hrv_series, rhr_series, steps_series, vo2_series, today
+    )
 
     quality = dq.as_dict()
     if not dq.publishable():
@@ -364,6 +372,10 @@ def build_payload(fetched, dq, demo=False):
             ),
         },
         "vo2max": {"value": signals["vo2max"]},
+        "skin_temp": {
+            "delta_c": skin_latest["value"] if skin_latest else None,
+            "date": skin_latest["date"] if skin_latest else None,
+        },
         "recovery": {
             "score": recovery["score"],
             "band": band_of(policy.recovery_band(recovery["score"])),
@@ -440,6 +452,7 @@ def build_payload(fetched, dq, demo=False):
             "spo2": [{"date": r["date"], "pct": r["value"]} for r in spo2_series],
             "resp": [{"date": r["date"], "brpm": r["value"]} for r in resp_series],
             "vo2max": [{"date": r["date"], "value": r["value"]} for r in vo2_series],
+            "skin_temp": [{"date": r["date"], "delta_c": r["value"]} for r in skin_series],
             "hr_intraday": fetched["hr_intraday"],
             "exercise": fetched["exercise"],
         },
@@ -453,10 +466,76 @@ def build_payload(fetched, dq, demo=False):
         },
         "circadian": circadian,
         "correlations": correlations,
+        "markers": markers,
         "coaching": coaching,
         "clinical": clinical,
         "data_quality": quality,
         "policy": policy.policy_snapshot(),
+    }
+
+
+def build_markers(fetched, nights, hrv_series, rhr_series, steps_series, vo2_series, today):
+    """Derived markers with the study behind each. Absent inputs give absent
+    markers; the page leaves those off rather than estimating them."""
+    profile = fetched.get("profile") or {}
+    age = profile.get("age")
+    evidence = policy.EVIDENCE
+
+    vo2 = None
+    if vo2_series:
+        first, last = vo2_series[0], vo2_series[-1]
+        vo2 = {
+            "value": last["value"],
+            "mets": round(last["value"] / 3.5, 1),
+            "change_mets": round((last["value"] - first["value"]) / 3.5, 2) if len(vo2_series) > 1 else None,
+            "since": first["date"],
+            "evidence": evidence["vo2max"],
+        }
+
+    rhr = None
+    recent, prior = rhr_series[-30:], rhr_series[-60:-30]
+    if len(recent) >= 20 and len(prior) >= 20:
+        now_mean = _mean([r["value"] for r in recent])
+        then_mean = _mean([r["value"] for r in prior])
+        rhr = {
+            "mean_30d": now_mean,
+            "prior_30d": then_mean,
+            "change": round(now_mean - then_mean, 1),
+            "evidence": evidence["rhr"],
+        }
+
+    steps = None
+    if len(steps_series) >= 14:
+        group = "60_plus" if age and age >= 60 else "under_60"
+        steps = {
+            "mean_28d": _mean([r["value"] for r in steps_series[-28:]]),
+            # Without an age both ranges are true statements; the page shows
+            # the one for the configured age group or both.
+            "plateau": policy.STEP_PLATEAU[group] if age else None,
+            "plateaus": policy.STEP_PLATEAU,
+            "evidence": evidence["steps"],
+        }
+
+    height, weight = profile.get("height_cm"), profile.get("weight_kg")
+    bmi = round(weight / (height / 100) ** 2, 1) if height and weight else None
+
+    hrv_status = analytics.hrv_status(hrv_series)
+    hrv_status["evidence"] = evidence["hrv_status"]
+    intensity = analytics.intensity_mix(fetched["exercise"], today=today)
+    intensity["evidence"] = evidence["intensity"]
+    jetlag = analytics.social_jetlag(nights)
+    jetlag["evidence"] = evidence["jetlag"]
+
+    return {
+        "age": age,
+        "bmi": bmi,
+        "vo2max": vo2,
+        "rhr_trend": rhr,
+        "steps": steps,
+        "hrv_status": hrv_status,
+        "intensity": intensity,
+        "social_jetlag": jetlag,
+        "metabolic_evidence": evidence["metabolic"],
     }
 
 

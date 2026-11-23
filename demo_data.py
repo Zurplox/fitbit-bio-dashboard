@@ -26,7 +26,7 @@ def synthetic_fetch(days=DEMO_DAYS, seed=11):
 
     sleep, rhr, hrv, spo2, resp = [], [], [], [], []
     steps, calories, active, vo2max = [], [], [], []
-    exercise = []
+    exercise, skin_temp = [], []
 
     rhr_base = 54.0
     hrv_base = 44.0
@@ -73,6 +73,7 @@ def synthetic_fetch(days=DEMO_DAYS, seed=11):
         if rng.random() < 0.8:
             spo2.append({"date": day.isoformat(), "value": round(rng.gauss(96.1, 0.9), 1)})
         resp.append({"date": day.isoformat(), "value": round(rng.gauss(14.3, 0.35) + 0.9 * rough, 2)})
+        skin_temp.append({"date": day.isoformat(), "value": round(rng.gauss(0, 0.25) + 0.6 * rough, 2)})
 
         steps.append({"date": day.isoformat(), "value": round(step_count)})
         active.append({"date": day.isoformat(), "value": round(max(0, rng.gauss(29, 14)))})
@@ -94,6 +95,12 @@ def synthetic_fetch(days=DEMO_DAYS, seed=11):
                     "steps": round(minutes * rng.uniform(90, 160)),
                     "distance_m": round(minutes * rng.uniform(120, 240)) if offset % 2 else None,
                     "active_zone_minutes": round(minutes * 0.6),
+                    "zones": {
+                        "light": round(minutes * 0.25, 1),
+                        "moderate": round(minutes * 0.45, 1),
+                        "vigorous": round(minutes * rng.uniform(0.15, 0.25), 1),
+                        "peak": round(minutes * rng.uniform(0.0, 0.08), 1),
+                    },
                 }
             )
 
@@ -110,13 +117,14 @@ def synthetic_fetch(days=DEMO_DAYS, seed=11):
     return {
         "today": today.isoformat(),
         "identity": {"health_user_id": "demo-user"},
-        "profile": {"height_cm": 174.0, "weight_kg": 68.4},
+        "profile": {"height_cm": 174.0, "weight_kg": 68.4, "age": 34},
         "sleep": sleep,
         "rhr": rhr,
         "hrv": hrv,
         "spo2": spo2,
         "resp": resp,
         "vo2max": vo2max,
+        "skin_temp": skin_temp,
         "steps": steps,
         "calories": calories,
         "active_minutes": active,
@@ -142,6 +150,7 @@ def main():
         ("calories", "Calories", f"{len(fetched['calories'])} synthetic days"),
         ("active_minutes", "Active minutes", f"{len(fetched['active_minutes'])} synthetic days"),
         ("vo2max", "Cardio fitness", f"{len(fetched['vo2max'])} synthetic readings"),
+        ("skin_temp", "Skin temperature", f"{len(fetched['skin_temp'])} synthetic nights"),
         ("exercise", "Workouts", f"{len(fetched['exercise'])} synthetic sessions"),
         ("heart_rate", "Heart rate", f"{len(fetched['hr_intraday'])} synthetic hours"),
         ("profile", "Body metrics", "synthetic profile"),
