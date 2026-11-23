@@ -32,6 +32,11 @@
   --sleep-light: #c7d2fe;
   --sleep-awake: #e5e7eb;
 
+  --range-fill: rgba(22, 163, 74, .16);
+  --seg-1: #e5e7eb;
+  --seg-2: rgba(217, 119, 6, .22);
+  --seg-3: rgba(220, 38, 38, .2);
+
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", Inter, system-ui, sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
   --r-sm: 6px;
@@ -65,7 +70,17 @@
   --sleep-rem: #a5b4fc;
   --sleep-light: #3730a3;
   --sleep-awake: #3f3f46;
+
+  --range-fill: rgba(34, 197, 94, .18);
+  --seg-1: #27272a;
+  --seg-2: rgba(245, 158, 11, .25);
+  --seg-3: rgba(248, 113, 113, .25);
 }
+
+/* Theme switch: the new theme sweeps in as a growing circle (see app.js). */
+::view-transition-old(root),
+::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+::view-transition-new(root) { z-index: 2; }
 
 /* ---------------------------------------------------------------- base -- */
 * { box-sizing: border-box; }
@@ -291,6 +306,16 @@ a { color: inherit; }
 .marker:first-of-type { border-top: 0; padding-top: 0; }
 .marker-head { display: flex; justify-content: space-between; gap: 16px; font-size: 14px; }
 .marker-head b { font-weight: 600; }
+.marker-viz { margin-top: 12px; }
+.spark { display: block; width: 100%; height: 36px; }
+.scale { position: relative; height: 8px; border-radius: 9999px; background: var(--surface-2); overflow: visible; }
+.scale .seg { position: absolute; top: 0; bottom: 0; }
+.scale .seg:first-child { border-radius: 9999px 0 0 9999px; }
+.scale .seg:last-of-type { border-radius: 0 9999px 9999px 0; }
+.scale .mark { position: absolute; top: -4px; width: 4px; height: 16px; margin-left: -2px; border-radius: 2px; background: var(--text); }
+.scale-labels { position: relative; height: 16px; margin-top: 6px; font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.scale-labels span { position: absolute; transform: translateX(-50%); }
+.scale-labels span:first-child[style^="left:0"] { transform: none; }
 details.study { margin-top: 8px; }
 details.study > summary { font-size: 12px; font-weight: 500; }
 details.study > div { margin-top: 6px; max-width: 65ch; }

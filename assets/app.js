@@ -361,7 +361,6 @@
       ["Sleep debt, 14 nights", has(sleep.debt_minutes) ? (sleep.debt_minutes ? hm(sleep.debt_minutes) : "None") : null],
       ["Bedtime target", circ.bedtime_target],
       ["Consistency", has(circ.alignment_pct) ? `${circ.alignment_pct}% of nights within 45 min` : null],
-      ["Social jetlag", jet.available ? `${hm(jet.minutes)} · ${bandLabel(jet.band)}` : null],
     ].filter(([, v]) => has(v) && v !== "");
 
     slot("sleep").innerHTML = `<div class="grid cols-2-3">
@@ -381,7 +380,26 @@
         <div class="legend">${[["Deep", "--sleep-deep"], ["REM", "--sleep-rem"], ["Light", "--sleep-light"], ["Awake", "--sleep-awake"]]
           .map(([l, c]) => `<span><i style="background:var(${c})"></i>${l}</span>`).join("")}</div>
       </div>
-    </div>`;
+    </div>
+    ${history.some((r) => has(r.bed_minutes)) ? `<div class="card" style="margin-top:16px">
+      <div class="card-head"><h3>Sleep timing${info("jetlag")}</h3>${jet.available ? status(jet.band, `Social jetlag ${hm(jet.minutes)}`) : ""}</div>
+      <div class="chart"><canvas id="timingChart"></canvas><div id="timingTip" class="tooltip"></div></div>
+      <div class="legend"><span><i style="background:var(--sleep)"></i>Weeknight</span><span><i style="background:var(--sleep-rem)"></i>Weekend</span></div>
+      ${jet.available ? `<p class="note">${esc(jet.band.plain)} You sleep ${jet.later_on_free_days ? "later" : "earlier"} on weekends, by ${hm(jet.minutes)} at mid-sleep.</p>${study(jet.evidence)}` : ""}
+    </div>` : ""}`;
+
+    const timingRows = history.slice(-28).map((r) => {
+      const [y, mo, d] = r.date.split("-").map(Number);
+      const dow = new Date(Date.UTC(y, mo - 1, d)).getUTCDay();
+      return { date: r.date, bed: r.bed_minutes, wake: r.wake_minutes, bedText: r.bed, wakeText: r.wake, weekend: dow === 0 || dow === 6 };
+    });
+    chart("timingChart", (canvas) => window.Viz.timing(canvas, {
+      rows: timingRows, height: 220, color: cssVar("--sleep"), weekendColor: cssVar("--sleep-rem"),
+      tooltip: $("timingTip"),
+      tipHTML: (i, r) => `<div class="tt-date">${shortDate(r.date)}${r.weekend ? " · weekend" : ""}</div>
+        <div class="tt-row"><span>Asleep</span><b>${esc(r.bedText || "")}</b></div>
+        <div class="tt-row"><span>Woke</span><b>${esc(r.wakeText || "")}</b></div>`,
+    }));
 
     const rows = history.slice(-21).map((r) => ({
       date: r.date, deep: r.deep || 0, rem: r.rem || 0, light: r.light || 0, awake: r.awake || 0, minutes: r.minutes,
@@ -424,10 +442,10 @@
       <div class="sub">Median ${num(b.rhr_bpm)} bpm</div>
       <div class="chart" style="margin-top:16px"><canvas id="rhrChart"></canvas><div id="rhrTip" class="tooltip"></div></div>
     </div>`);
-    if (hr.length > 1) cards.push(`<div class="card">
+    const hrCard = hr.length > 1 ? `<div class="card" style="grid-column:1 / -1">
       <div class="card-head"><h3>Heart rate, last 24 hours</h3><span class="faint small">Hourly averages</span></div>
       <div class="chart"><canvas id="hrChart"></canvas></div>
-    </div>`);
+    </div>` : "";
     if (vo2.length > 1) cards.push(`<div class="card">
       <div class="card-head"><h3>Cardio fitness${info("vo2")}</h3><span class="faint small">VO₂ max estimate</span></div>
       <div class="figure">${num(vo2[vo2.length - 1].value, 1)}<small>ml/kg/min</small></div>
@@ -435,6 +453,15 @@
       <div class="chart" style="margin-top:16px"><canvas id="vo2Chart"></canvas><div id="vo2Tip" class="tooltip"></div></div>
     </div>`);
 
+    const skin = (h.skin_temp || []).slice(-60);
+    if (skin.length > 1) cards.push(`<div class="card">
+      <div class="card-head"><h3>Skin temperature${info("skin")}</h3><span class="faint small">${skin.length} nights</span></div>
+      <div class="figure">${signed(skin[skin.length - 1].delta_c, 1, "")}<small>°C vs baseline</small></div>
+      <div class="sub">Dashed line is your 30-night baseline</div>
+      <div class="chart" style="margin-top:16px"><canvas id="skinChart"></canvas><div id="skinTip" class="tooltip"></div></div>
+    </div>`);
+
+    if (hrCard) cards.push(hrCard);
     slot("heart").innerHTML = cards.length
       ? `<div class="grid cols-2">${cards.join("")}</div>`
       : `<p class="muted">No heart data in this sync.</p>`;
@@ -443,13 +470,19 @@
       chart(id, (canvas) => window.Viz.line(canvas, {
         rows, key, color: cssVar("--chart"), height: 160,
         band: has(baseline) ? { value: baseline } : null,
-        format: (v) => Math.round(v),
+        format: (v) => (digits ? v.toFixed(digits) : Math.round(v)),
         tooltip: $(id.replace("Chart", "Tip")),
         tipHTML: (i, r) => `<div class="tt-date">${shortDate(r.date)}</div><div class="tt-row"><span></span><b>${num(r[key], digits)} ${unit}</b></div>`,
       }));
     line("hrvChart", hrv, "ms", "ms", b.hrv_ms);
     line("rhrChart", rhr, "bpm", "bpm", b.rhr_bpm);
     line("vo2Chart", vo2, "value", "", null, 1);
+    chart("skinChart", (canvas) => window.Viz.line(canvas, {
+      rows: skin, key: "delta_c", color: cssVar("--chart"), height: 160, band: { value: 0 },
+      format: (v) => v.toFixed(1),
+      tooltip: $("skinTip"),
+      tipHTML: (i, r) => `<div class="tt-date">${shortDate(r.date)}</div><div class="tt-row"><span></span><b>${signed(r.delta_c, 1, " °C")}</b></div>`,
+    }));
     chart("hrChart", (canvas) => window.Viz.area(canvas, { rows: hr, color: cssVar("--chart"), height: 140 }));
   }
 
@@ -466,20 +499,12 @@
 
     if (hs.available) {
       const [lo, hi] = hs.range_ms;
-      // Scale the bar to the range ± its own width, so the week is visible
-      // whichever side of the range it falls on.
-      const span = hi - lo;
-      const min = Math.min(lo - span, hs.week_ms - span * 0.2);
-      const max = Math.max(hi + span, hs.week_ms + span * 0.2);
-      const pos = (v) => ((v - min) / (max - min)) * 100;
       cards.push(`<div class="card">
         <div class="card-head"><h3>HRV status${info("hrv_status")}</h3>${status(hs.band)}</div>
         <div class="figure">${num(hs.week_ms, 1)}<small>ms, 7-night average</small></div>
         <div class="sub">Your usual range ${num(lo, 1)}–${num(hi, 1)} ms, from ${num(hs.baseline_nights)} nights</div>
-        <div class="rangebar" role="img" aria-label="Weekly HRV against your usual range">
-          <span class="range" style="left:${pos(lo)}%;width:${pos(hi) - pos(lo)}%"></span>
-          <span class="mark" style="left:${pos(hs.week_ms)}%"></span>
-        </div>
+        <div class="chart" style="margin-top:20px"><canvas id="hrvStatusChart"></canvas><div id="hrvStatusTip" class="tooltip"></div></div>
+        <div class="legend"><span><i style="background:var(--chart)"></i>7-night average</span><span><i style="background:var(--faint);border-radius:50%"></i>Nightly</span><span><i style="background:var(--range-fill)"></i>Usual range</span></div>
         <p class="note">${esc(hs.band.plain)}${has(hs.cv_pct) ? ` Night-to-night variation ${num(hs.cv_pct, 1)}%.` : ""}</p>
         ${study(hs.evidence)}
       </div>`);
@@ -491,12 +516,14 @@
       value: `${num(m.vo2max.value, 1)} ml/kg/min`,
       detail: `${num(m.vo2max.mets, 1)} METs${has(m.vo2max.change_mets) ? ` · ${signed(m.vo2max.change_mets, 1, " MET")} since ${shortDate(m.vo2max.since)}` : ""}`,
       ev: m.vo2max.evidence,
+      viz: spark(((data.history && data.history.vo2max) || []).map((r) => r.value), cssVar("--chart")),
     });
     if (m.rhr_trend) rows.push({
       help: "rhr_trend", name: "Resting heart rate, 30 days",
       value: `${num(m.rhr_trend.mean_30d, 1)} bpm`,
       detail: `${signed(m.rhr_trend.change, 1, " bpm")} vs the 30 days before`,
       ev: m.rhr_trend.evidence,
+      viz: spark(((data.history && data.history.rhr) || []).slice(-60).map((r) => r.bpm), cssVar("--chart")),
     });
     if (m.steps && has(m.steps.mean_28d)) {
       const range = m.steps.plateau;
@@ -507,13 +534,23 @@
           ? `Benefit levelled off at ${num(range[0])}–${num(range[1])} for your age group`
           : `Benefit levelled off at 8,000–10,000 under 60, 6,000–8,000 over 60`,
         ev: m.steps.evidence,
+        viz: (() => {
+          const band = range || m.steps.plateaus.under_60;
+          const max = Math.max(12000, m.steps.mean_28d * 1.15);
+          const tint = "var(--range-fill)";
+          return scale(m.steps.mean_28d, 0, max, [[band[0], band[1], tint]],
+            [[0, "0"], [band[0], num(band[0])], [band[1], num(band[1])]]);
+        })(),
       });
     }
     if (has(m.bmi)) rows.push({
       help: "bmi", name: "Body mass index",
       value: num(m.bmi, 1),
-      detail: "From the height and weight in your profile",
+      detail: "From the height and weight in your profile. WHO bands shown",
       ev: null,
+      viz: scale(m.bmi, 15, 35, [
+        [15, 18.5, "var(--seg-1)"], [18.5, 25, "var(--range-fill)"], [25, 30, "var(--seg-2)"], [30, 35, "var(--seg-3)"],
+      ], [[18.5, "18.5"], [25, "25"], [30, "30"]]),
     });
 
     if (rows.length) cards.push(`<div class="card">
@@ -521,6 +558,7 @@
       ${rows.map((r) => `<div class="marker">
         <div class="marker-head"><span>${esc(r.name)}${info(r.help)}</span><b class="tnum">${esc(r.value)}</b></div>
         <div class="sub">${esc(r.detail)}</div>
+        ${r.viz ? `<div class="marker-viz">${r.viz}</div>` : ""}
         ${study(r.ev)}
       </div>`).join("")}
       <p class="note">Research context, not a diagnosis or a personal risk estimate. Insulin resistance and blood glucose are not estimated:
@@ -529,6 +567,46 @@
 
     $("markers").hidden = !cards.length;
     slot("markers").innerHTML = cards.length ? `<div class="grid cols-2">${cards.join("")}</div>` : "";
+
+    if (hs.available) {
+      // Display-only rolling mean, matching the 7-night window the status reads.
+      const nights = ((data.history && data.history.hrv) || []).slice(-66);
+      const rows = nights.map((row, i) => {
+        const week = nights.slice(Math.max(0, i - 6), i + 1).map((r) => r.ms).filter(has);
+        return { date: row.date, ms: row.ms, avg: week.length >= 5 ? week.reduce((a, b) => a + b, 0) / week.length : null };
+      }).slice(-60);
+      chart("hrvStatusChart", (canvas) => window.Viz.line(canvas, {
+        rows, key: "avg", dotsKey: "ms", range: hs.range_ms, color: cssVar("--chart"), height: 170,
+        format: (v) => Math.round(v),
+        tooltip: $("hrvStatusTip"),
+        tipHTML: (i, r) => `<div class="tt-date">${shortDate(r.date)}</div>
+          <div class="tt-row"><span>7-night average</span><b>${num(r.avg, 1)} ms</b></div>
+          <div class="tt-row"><span>That night</span><b>${num(r.ms)} ms</b></div>`,
+      }));
+    }
+  }
+
+  /** Inline SVG sparkline; the last point is marked. */
+  function spark(values, color) {
+    const v = values.filter(has);
+    if (v.length < 2) return "";
+    const lo = Math.min(...v), hi = Math.max(...v), span = hi - lo || 1;
+    const pts = v.map((y, i) => [(i / (v.length - 1)) * 196 + 2, 30 - ((y - lo) / span) * 26]);
+    const [lx, ly] = pts[pts.length - 1];
+    return `<svg class="spark" viewBox="0 0 200 34" preserveAspectRatio="none" aria-hidden="true">
+      <polyline points="${pts.map((p) => p.map((n) => n.toFixed(1)).join(",")).join(" ")}" fill="none" stroke="${color}" stroke-width="1.75" vector-effect="non-scaling-stroke" stroke-linejoin="round" />
+      <circle cx="${lx}" cy="${ly}" r="2.5" fill="${color}" />
+    </svg>`;
+  }
+
+  /** A horizontal scale with shaded segments and a marker at `value`. */
+  function scale(value, min, max, segments, labels) {
+    const pos = (x) => Math.max(0, Math.min(100, ((x - min) / (max - min)) * 100));
+    return `<div class="scale" role="img">
+      ${segments.map(([a, b, color]) => `<span class="seg" style="left:${pos(a)}%;width:${pos(b) - pos(a)}%;background:${color}"></span>`).join("")}
+      <span class="mark" style="left:${pos(value)}%"></span>
+    </div>
+    <div class="scale-labels">${labels.map(([x, text]) => `<span style="left:${pos(x)}%">${text}</span>`).join("")}</div>`;
   }
 
   /* ------------------------------------------------------------ activity -- */
@@ -928,7 +1006,24 @@
 
   /* ----------------------------------------------------------------- init -- */
   function initControls() {
-    $("btnTheme").addEventListener("click", () => applyTheme(state.theme === "dark" ? "light" : "dark"));
+    $("btnTheme").addEventListener("click", (event) => {
+      const next = state.theme === "dark" ? "light" : "dark";
+      const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (!document.startViewTransition || reduce) return applyTheme(next);
+      // The new theme is revealed as a circle growing from the button until it
+      // covers the farthest corner of the viewport.
+      const box = event.currentTarget.getBoundingClientRect();
+      const x = box.left + box.width / 2;
+      const y = box.top + box.height / 2;
+      const radius = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y));
+      const transition = document.startViewTransition(() => applyTheme(next));
+      transition.ready.then(() => {
+        document.documentElement.animate(
+          { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
+          { duration: 700, easing: "cubic-bezier(.2, .8, .2, 1)", pseudoElement: "::view-transition-new(root)" }
+        );
+      }).catch(() => {});
+    });
     $("btnPrint").addEventListener("click", () => window.print());
     $("btnLock").addEventListener("click", lock);
     $("btnRefresh").addEventListener("click", refresh);

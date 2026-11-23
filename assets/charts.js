@@ -19,6 +19,8 @@
   // paint, so a re-render cannot leave hover reading the previous payload.
   const holders = new WeakMap();
 
+  const has = (v) => v !== null && v !== undefined && !Number.isNaN(v);
+
   const css = (name, fallback) => {
     const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
     return value || fallback || "#888";
@@ -169,6 +171,8 @@
     const extra = [];
     if (band && band.value !== null && band.value !== undefined) extra.push(band.value);
     if (goal !== null && goal !== undefined) extra.push(goal);
+    if (options.range) extra.push(...options.range);
+    if (options.dotsKey) points.forEach((row) => has(row[options.dotsKey]) && extra.push(row[options.dotsKey]));
     let min = Math.min(...values, ...extra);
     let max = Math.max(...values, ...extra);
     const padY = (max - min) * 0.18 || 2;
@@ -186,6 +190,22 @@
       const xAt = (index) =>
         bx.left + (points.length === 1 ? bx.width / 2 : (index / (points.length - 1)) * bx.width);
       const yAt = (value) => bx.bottom - ((value - low) / (high - low)) * bx.height;
+
+      // A shaded "usual range" band, and faint raw readings behind the line.
+      if (options.range) {
+        const top = yAt(options.range[1]);
+        ctx.fillStyle = css("--range-fill", "rgba(22,163,74,.12)");
+        ctx.fillRect(bx.left, top, bx.width, yAt(options.range[0]) - top);
+      }
+      if (options.dotsKey) {
+        ctx.fillStyle = css("--faint", "#999");
+        points.forEach((row, index) => {
+          if (!has(row[options.dotsKey])) return;
+          ctx.beginPath();
+          ctx.arc(xAt(index), yAt(row[options.dotsKey]), 1.8, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
 
       if (band && band.value !== null && band.value !== undefined) {
         const y = yAt(band.value);
@@ -224,7 +244,8 @@
       ctx.lineTo(xAt(points.length - 1), bx.bottom);
       ctx.lineTo(xAt(0), bx.bottom);
       ctx.closePath();
-      ctx.fillStyle = gradient;
+      // With a shaded range the area fill would muddy it, so it is skipped.
+      ctx.fillStyle = options.range ? "transparent" : gradient;
       ctx.fill();
 
       ctx.beginPath();
@@ -461,6 +482,80 @@
     ctx.fillText(String(data[0].t).slice(11, 16), bx.left, h - 6);
     ctx.textAlign = "right";
     ctx.fillText(String(data[data.length - 1].t).slice(11, 16), bx.right, h - 6);
+  };
+
+  /* -------------------------------------------------------------- timing --- */
+  /** One column per night, a bar from falling asleep to waking, clock on the
+   *  y axis running down. Weekend nights take the second colour. */
+  Viz.timing = function (canvas, options) {
+    const { rows, height = 220, color, weekendColor, tooltip: tipEl, tipHTML = () => "" } = options;
+    // Evening-anchored minutes: 23:30 -> 1410, 00:40 -> 1480, 07:00 -> 1860.
+    const anchor = (m) => (m < 12 * 60 ? m + 24 * 60 : m);
+    const data = (rows || [])
+      .filter((r) => has(r.bed) && has(r.wake))
+      .map((r) => {
+        const bed = anchor(r.bed);
+        let wake = anchor(r.wake);
+        if (wake <= bed) wake += 24 * 60;
+        return Object.assign({}, r, { a: bed, b: wake });
+      });
+    if (!data.length) return;
+
+    const low = Math.floor((Math.min(...data.map((r) => r.a)) - 30) / 60) * 60;
+    const high = Math.ceil((Math.max(...data.map((r) => r.b)) + 30) / 60) * 60;
+    const holder = { positions: [], onIndex: null };
+    const clock = (m) => {
+      const h = Math.floor((m / 60) % 24);
+      return `${h % 12 || 12}${h < 12 ? "a" : "p"}`;
+    };
+
+    const paint = (highlight = -1) => {
+      const { ctx, w, h } = prep(canvas, height);
+      const bx = box(w, h, { left: 38, right: 10, top: 10, bottom: 24 });
+      const yAt = (m) => bx.top + ((m - low) / (high - low)) * bx.height;
+
+      ctx.save();
+      ctx.strokeStyle = css("--line", "#eee");
+      ctx.fillStyle = css("--faint", "#999");
+      ctx.textAlign = "right";
+      const step = high - low > 12 * 60 ? 180 : 120;
+      for (let m = low; m <= high; m += step) {
+        const y = Math.round(yAt(m)) + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(bx.left, y);
+        ctx.lineTo(bx.right, y);
+        ctx.stroke();
+        ctx.fillText(clock(m), bx.left - 8, y);
+      }
+      ctx.restore();
+
+      const slot = bx.width / data.length;
+      const barWidth = Math.max(3, Math.min(12, slot - 3));
+      data.forEach((row, index) => {
+        const x = bx.left + slot * index + (slot - barWidth) / 2;
+        ctx.globalAlpha = highlight < 0 || highlight === index ? 1 : 0.45;
+        ctx.fillStyle = row.weekend ? weekendColor : color;
+        ctx.beginPath();
+        ctx.roundRect(x, yAt(row.a), barWidth, yAt(row.b) - yAt(row.a), 3);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+
+      ctx.fillStyle = css("--faint", "#999");
+      ctx.textAlign = "left";
+      ctx.fillText(data[0].date.slice(5), bx.left, h - 8);
+      ctx.textAlign = "right";
+      ctx.fillText(data[data.length - 1].date.slice(5), bx.right, h - 8);
+      holder.positions = data.map((_, index) => ({ x: bx.left + slot * index + slot / 2, y: bx.top }));
+    };
+
+    holder.onIndex = (index) => {
+      paint(index);
+      if (index < 0) return hideTip(tipEl);
+      showTip(tipEl, canvas, tipHTML(index, data[index]), holder.positions[index].x, 18);
+    };
+    bindHover(canvas, holder);
+    paint();
   };
 
   /* ---------------------------------------------------------------- dial --- */

@@ -28,5 +28,7 @@ then update this file at the end of the session.
 
 - Round 3: an "i" button on each metric opens a plain-English callout (`HELP` map + `info(key)` in app.js). Add a `HELP` entry whenever you add a metric.
 
+- Round 4: app-style score tiles (value inside ring), vitals as tiles; charts for every marker (HRV status band chart, sleep timing `Viz.timing`, skin temp, sparklines, steps/BMI scales); theme switch is a View Transitions circle sweep from the button. History sleep rows now carry `bed_minutes`/`wake_minutes`.
+
 ## Next steps
 - After the next real sync, check that zone data, age and skin temperature arrive (look for "not measured" in the Data sources panel).

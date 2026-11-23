@@ -433,6 +433,8 @@ def build_payload(fetched, dq, demo=False):
                     "light": (n.get("stages") or {}).get("light"),
                     "rem": (n.get("stages") or {}).get("rem"),
                     "awake": (n.get("stages") or {}).get("awake"),
+                    "bed_minutes": n.get("bed_minutes"),
+                    "wake_minutes": n.get("wake_minutes"),
                     "bed": policy.format_clock(n.get("bed_minutes")),
                     "wake": policy.format_clock(n.get("wake_minutes")),
                 }
