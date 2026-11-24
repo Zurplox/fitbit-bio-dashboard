@@ -8,7 +8,7 @@
   "use strict";
 
   const $ = (id) => document.getElementById(id);
-  const state = { payload: null, passphrase: null, theme: null };
+  const state = { payload: null, passphrase: null, theme: null, source: "fitbit" };
 
   /* ------------------------------------------------------------- helpers -- */
   const DASH = "–";
@@ -192,6 +192,28 @@
       stored = null;
     }
     applyTheme(stored || "light");
+  }
+
+  function initSource() {
+    try {
+      const stored = localStorage.getItem("ma-source");
+      if (stored === "fitbit" || stored === "all") state.source = stored;
+    } catch (error) {
+      /* private mode: use the default */
+    }
+    const select = $("sourceSelect");
+    if (select) select.value = state.source;
+  }
+
+  function setSource(next) {
+    if (next !== "fitbit" && next !== "all") return;
+    state.source = next;
+    try {
+      localStorage.setItem("ma-source", next);
+    } catch (error) {
+      /* preference is not essential */
+    }
+    if (state.payload) render(state.payload);
   }
 
   /* --------------------------------------------------------------- today -- */
@@ -1083,15 +1105,30 @@
   function render(data) {
     state.payload = data;
     hideHelp();
+
+    // New vaults carry two complete views so switching needs no refetch.
+    // Old vaults are shown as-is with the control hidden.
+    const views = data.views;
+    let source = state.source;
+    if (views && !views[source]) source = data.default_view || Object.keys(views)[0];
+    if (!views) source = "all";
+    state.source = source;
+    const view = views ? views[source] : data;
+    const select = $("sourceSelect");
+    if (select) {
+      select.hidden = !views;
+      select.value = source;
+    }
+
     renderChrome(data);
-    renderToday(data);
-    renderVitals(data);
-    renderSleep(data);
-    renderHeart(data);
-    renderMarkers(data);
-    renderActivity(data);
-    renderInsights(data);
-    renderSources(data);
+    renderToday(view);
+    renderVitals(view);
+    renderSleep(view);
+    renderHeart(view);
+    renderMarkers(view);
+    renderActivity(view);
+    renderInsights(view);
+    renderSources(view);
   }
 
   /* ------------------------------------------------------- remembered vault -- */
@@ -1220,6 +1257,7 @@
     // the data from the DOM rather than merely hiding it.
     document.querySelectorAll("[data-slot]").forEach((node) => { node.innerHTML = ""; });
     $("syncText").textContent = "";
+    $("sourceSelect").hidden = true;
     $("staleBanner").hidden = true;
     $("app").hidden = true;
     $("lock").hidden = false;
@@ -1263,6 +1301,7 @@
       }).catch(() => {});
     });
     $("btnPrint").addEventListener("click", () => window.print());
+    $("sourceSelect").addEventListener("change", (event) => setSource(event.target.value));
     $("btnLock").addEventListener("click", lock);
     $("btnRefresh").addEventListener("click", refresh);
 
@@ -1319,6 +1358,7 @@
 
   async function boot() {
     initTheme();
+    initSource();
     initControls();
     $("lock").hidden = false;
     $("app").hidden = true;

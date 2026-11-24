@@ -141,6 +141,20 @@ def _mobility(raw):
     return out or None
 
 
+def source_tags(point):
+    """Per-point attribution so a view can show one device only.
+
+    Rollup endpoints have no point-level dataSource; those records are tagged
+    as an aggregate and are never counted as a single device's measurement.
+    """
+    label, platform = source_of(point)
+    return {"source_label": label, "source_platform": platform}
+
+
+def rollup_tags():
+    return {"source_label": "Google Health rollup", "source_platform": "ROLLUP"}
+
+
 def _seconds(duration):
     """'28800s' -> 28800. Accepts numbers and None."""
     if duration is None:
@@ -531,6 +545,7 @@ def fetch_sleep(client, days=90, dq=None):
                 "is_main": bool(metadata.get("mainSleep", True)),
                 "nap": bool(metadata.get("nap", False)),
                 "device": ((point.get("dataSource") or {}).get("device") or {}).get("displayName"),
+                **source_tags(point),
             }
         )
 
@@ -601,7 +616,9 @@ def _daily_series(client, data_type, field, days, extractor, dq, label, note_uni
         value = extractor(body)
         if value is None:
             continue
-        records.append({"date": day, "value": value})
+        record = {"date": day, "value": value}
+        record.update(source_tags(point))
+        records.append(record)
     # Sorted by date, then windowed: an unfiltered read would otherwise hand the
     # dashboard the oldest N readings and label the last one "today", whichever
     # order the pages happen to arrive in.
@@ -734,7 +751,7 @@ def _rollup_series(client, data_type, days, dq, label, note_unit, today=None):
                 collected[day] = round(value, 1)
         time.sleep(0.2)
 
-    series = [{"date": d, "value": collected[d]} for d in sorted(collected)]
+    series = [dict({"date": d, "value": collected[d]}, **rollup_tags()) for d in sorted(collected)]
     if dq:
         dq.record(label[0], bool(series), f"{len(series)} days" if series else "none returned", label[1])
     return series
@@ -813,6 +830,7 @@ def fetch_exercise(client, days=90, dq=None):
                 else None,
                 "swim_lengths": _num(metrics.get("totalSwimLengths")),
                 "mobility": _mobility(metrics.get("mobilityMetrics")),
+                **source_tags(point),
             }
         )
 
@@ -839,7 +857,7 @@ def fetch_intraday_hr(client, hours=24, dq=None):
         stamp = point.get("startTime")
         value = _rollup_value(point, "heart-rate")
         if stamp and value is not None:
-            series.append({"t": stamp, "bpm": round(value)})
+            series.append(dict({"t": stamp, "bpm": round(value)}, **rollup_tags()))
     series.sort(key=lambda r: r["t"])
 
     if dq:
@@ -872,7 +890,7 @@ def fetch_workout_hr(client, session, dq=None, window="60s"):
             stamp = point.get("startTime")
             value = _rollup_value(point, "heart-rate")
             if stamp and value is not None:
-                series.append({"t": stamp, "bpm": round(value)})
+                series.append(dict({"t": stamp, "bpm": round(value)}, **rollup_tags()))
         used = candidate
         if series:
             break
@@ -907,6 +925,7 @@ def fetch_heart_rate_zones(client, day, dq=None):
             if key in ("light", "moderate", "vigorous", "peak") and low is not None and high is not None:
                 zones[key] = [round(low), round(high)]
         if zones:
+            zones.update(source_tags(point))
             if dq:
                 dq.record("hr_zones", True, f"{len(zones)} zones", "Heart rate zones")
             return zones
@@ -971,6 +990,13 @@ def source_of(point):
     if package:
         return package.rsplit(".", 1)[-1].replace("_", " ").title(), platform
     return "Unknown source", platform
+
+
+def is_fitbit(record):
+    """True only for a point the API attributed to a Fitbit device/app."""
+    label = str(record.get("source_label") or record.get("label") or "").lower()
+    platform = str(record.get("source_platform") or record.get("platform") or "").upper()
+    return platform == "FITBIT" or label.startswith("fitbit")
 
 
 def steps_sources(entries):

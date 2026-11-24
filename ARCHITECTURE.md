@@ -47,6 +47,12 @@ owner; if you are about to write a threshold somewhere else, you are in the wron
 
 ## Payload contract
 
+The published vault is a thin envelope (`schema`, `generated_at`, `demo`, `timezone`,
+`default_view`, `views`) holding two complete payloads from `sync.build_payload()`: `views.fitbit`
+(default) and `views.all`. `filter_fetched()` keeps only records whose API `dataSource` is a Fitbit
+device; daily rollups that merge devices are withheld from the Fitbit view instead of being
+mislabelled. Each view has its own `data_quality`.
+
 `sync.build_payload()` emits:
 
 * `schema`, `generated_at` (timezone-aware), `demo`, `timezone`, `device`, `athlete`;
@@ -62,8 +68,8 @@ Two invariants:
 
 1. **Bands arrive resolved.** If a new derived metric is needed, add it in `bio_analytics` (with its
    band in `bio_policy`) and ship it resolved. Do not add a threshold ladder to the frontend.
-2. **Absence is explicit.** A missing measurement is `null` in the payload and `--` on the page. It
-   is never a zero, a midpoint or a plausible default.
+2. **Absence is explicit.** A missing measurement is `null` in the payload and the row or card is
+   left off the page. It is never a zero, a midpoint or a plausible default.
 
 ## The page
 

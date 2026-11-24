@@ -24,7 +24,7 @@ Light theme by default; dark is a toggle.
 
 ## Shell
 
-A consumer fitness app, not a console or a landing page: a quiet top bar, a hero with three rings (Recovery, Sleep, Training load), generous white space, and one chart moment (the workout zone ribbon). Type is self-hosted Manrope (OFL licence in `assets/fonts/`); no runtime font request. The hero takes a 5% wash from the recovery tone, the recovery ring has fine instrument ticks, and the workout ribbon adds a zone-minute strip and first/middle/last-third readouts. Details are flat rows inside a few rounded cards; no sidebar, no walls of equal tiles, no mono labels. Phone gets a floating glass tab bar.
+A consumer fitness app, not a console or a landing page: a quiet top bar with a data-source selector (Fitbit Air only by default), a hero with three rings (Recovery, Sleep, Training load), generous white space, and one chart moment (the workout zone ribbon). Type is self-hosted Manrope (OFL licence in `assets/fonts/`); no runtime font request. The hero takes a 5% wash from the recovery tone, the recovery ring has fine instrument ticks, and the workout ribbon adds a zone-minute strip and first/middle/last-third readouts. Details are flat rows inside a few rounded cards; no sidebar, no walls of equal tiles, no mono labels. Phone gets a floating glass tab bar.
 
 **Glass** (after glisse's rules, in native CSS because no third-party script may run on a page holding decrypted health data) sits only on the control layer that floats over scrolling content: the toolbar, the phone tab bar, popovers and chart tooltips. Frosted fill, a lit top rim, a soft neutral float; solid fallback when `backdrop-filter` or transparency is unavailable. Content panels stay solid.
 

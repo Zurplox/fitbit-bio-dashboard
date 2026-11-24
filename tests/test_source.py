@@ -70,7 +70,8 @@ class SkinTempTests(unittest.TestCase):
         ]})
         dq = DataQuality()
         rows = source.fetch_daily_skin_temp(fake, days=30, dq=dq)
-        self.assertEqual(rows, [{"date": "2026-11-01", "value": -0.3}, {"date": "2026-11-02", "value": 0.3}])
+        self.assertEqual([(r["date"], r["value"]) for r in rows], [("2026-11-01", -0.3), ("2026-11-02", 0.3)])
+        self.assertTrue(all(r["source_platform"] == "UNKNOWN" for r in rows))
         self.assertEqual(dq.as_dict()["metrics"]["skin_temp"]["source"], "live")
 
 
@@ -129,7 +130,8 @@ class WorkoutHeartTests(unittest.TestCase):
             {"startTime": "2026-11-23T03:03:00Z", "heartRate": {}},
         ]})
         rows = source.fetch_workout_hr(fake, {"start": "2026-11-23T03:01:00Z", "end": "2026-11-23T03:04:00Z"})
-        self.assertEqual(rows, [{"t": "2026-11-23T03:01:00Z", "bpm": 118}, {"t": "2026-11-23T03:02:00Z", "bpm": 162}])
+        self.assertEqual([(r["t"], r["bpm"]) for r in rows], [("2026-11-23T03:01:00Z", 118), ("2026-11-23T03:02:00Z", 162)])
+        self.assertTrue(all(r["source_platform"] == "ROLLUP" for r in rows))
         self.assertEqual(fake.rollup_bodys[0]["window"], "60s")
 
     def test_device_zone_boundaries_are_kept(self):
@@ -142,7 +144,9 @@ class WorkoutHeartTests(unittest.TestCase):
             ],
         }}
         fake = FakeClient(points={"daily-heart-rate-zones": [point]})
-        self.assertEqual(source.fetch_heart_rate_zones(fake, "2026-11-23"), {"light": [95, 125], "peak": [175, 220]})
+        zones = source.fetch_heart_rate_zones(fake, "2026-11-23")
+        self.assertEqual((zones["light"], zones["peak"]), ([95, 125], [175, 220]))
+        self.assertEqual(zones["source_platform"], "UNKNOWN")
 
 
 class TimestampTests(unittest.TestCase):

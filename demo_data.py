@@ -134,6 +134,22 @@ def synthetic_fetch(days=DEMO_DAYS, seed=11):
                 "bpm": round(bpm),
             })
 
+    # Attribute every record so the Fitbit-only view can recalculate from the
+    # same rules as the all-sources view.
+    for row in sleep + rhr + hrv + spo2 + resp + skin_temp + vo2max + exercise:
+        row.update({"source_label": "Fitbit Air", "source_platform": "FITBIT"})
+    for row in steps + calories + active + intraday + workout_hr:
+        row.update({"source_label": "Google Health rollup", "source_platform": "ROLLUP"})
+
+    hr_zones = {
+        "source_label": "Fitbit Air",
+        "source_platform": "FITBIT",
+        "light": [95, 125],
+        "moderate": [126, 150],
+        "vigorous": [151, 174],
+        "peak": [175, 220],
+    }
+
     return {
         "today": today.isoformat(),
         "identity": {"health_user_id": "demo-user"},
@@ -151,12 +167,9 @@ def synthetic_fetch(days=DEMO_DAYS, seed=11):
         "exercise": exercise,
         "hr_intraday": intraday,
         "workout_hr": workout_hr,
-        "hr_zones": {
-            "light": [95, 125],
-            "moderate": [126, 150],
-            "vigorous": [151, 174],
-            "peak": [175, 220],
-        },
+        "fitbit_workout_hr": workout_hr,
+        "hr_zones": hr_zones,
+        "fitbit_hr_zones": hr_zones,
     }
 
 
@@ -185,7 +198,19 @@ def main():
     ):
         dq.record(key, True, note, label)
 
-    payload = sync.build_payload(fetched, dq, demo=True)
+    all_view = sync.build_payload(fetched, dq, demo=True, view="all")
+    fitbit_fetched = sync.filter_fetched(fetched)
+    fitbit_view = sync.build_payload(
+        fitbit_fetched, sync.quality_for(fitbit_fetched, dq), demo=True, view="fitbit"
+    )
+    payload = {
+        "schema": 2,
+        "generated_at": all_view["generated_at"],
+        "demo": True,
+        "timezone": all_view["timezone"],
+        "default_view": "fitbit",
+        "views": {"fitbit": fitbit_view, "all": all_view},
+    }
     os.makedirs("data", exist_ok=True)
     with open("data/biometrics.json", "w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2, ensure_ascii=False)

@@ -11,6 +11,10 @@ Handoff for any LLM working here. The owner switches models often: **run `git pu
 - Demo: `python demo_data.py` then `DASHBOARD_PASS=meridian-demo python encrypt_data.py`. Restore with `git checkout -- data/` before committing.
 - Vault passphrase is saved in OpenChamber project secrets; use `secret.run`, never print it.
 
+## Source views
+- Vault is an envelope with `views.fitbit` (default) and `views.all`; each is a complete payload built by `sync.build_payload()`. `filter_fetched()` keeps points whose `dataSource` is Fitbit; rollups (steps, calories, active minutes, intraday HR) are withheld from the Fitbit view because they merge devices.
+- Toolbar selector `sourceSelect` persists to `ma-source`. Legacy vaults without `views` still render, with the selector hidden.
+
 ## Design direction
 Consumer fitness app: quiet top bar, hero with three rings (Recovery, Sleep, Training load), self-hosted Manrope (OFL licence in `assets/fonts/`), one chart moment (workout zone ribbon), no runtime font request, no gradients/glow/emoji. Details are flat rows in a few rounded cards. Phone gets a floating glass tab bar. Theme switch is a View Transitions circle sweep.
 

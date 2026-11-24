@@ -17,6 +17,7 @@ import bio_policy as policy
 import clinical_engine
 import demo_data
 import encrypt_data
+import googlehealth_source as source
 import sync
 from provenance import DataQuality
 
@@ -445,6 +446,37 @@ class TrainingEffectTests(unittest.TestCase):
         # Age 30: max HR 208 - 21 = 187; 15.3 * 187 / 55 = 52.0
         self.assertEqual(analytics.vo2_uth(55, 30), 52.0)
         self.assertIsNone(analytics.vo2_uth(55, None))
+
+
+class SourceViewTests(unittest.TestCase):
+    def test_fitbit_view_keeps_only_attributed_points(self):
+        fetched = demo_data.synthetic_fetch(days=30)
+        fetched["sources"] = {
+            "metrics": {},
+            "devices": [
+                {"label": "Fitbit Air", "platform": "FITBIT", "points": 10, "metrics": []},
+                {"label": "Garmin Connect", "platform": "HEALTH_CONNECT", "points": 5, "metrics": []},
+            ],
+        }
+        filtered = sync.filter_fetched(fetched)
+        self.assertTrue(all(source.is_fitbit(row) for row in filtered["sleep"]))
+        self.assertEqual(filtered["steps"], [])
+        self.assertEqual(len(filtered["workout_hr"]), len(fetched["fitbit_workout_hr"]))
+        self.assertEqual([d["label"] for d in filtered["sources"]["devices"]], ["Fitbit Air"])
+
+    def test_both_views_are_built(self):
+        fetched = demo_data.synthetic_fetch(days=30)
+        fetched["sources"] = {"metrics": {}, "devices": []}
+        dq = DataQuality()
+        for key, label in (("sleep", "Sleep"), ("rhr", "Resting heart rate"), ("hrv", "Overnight HRV")):
+            dq.record(key, True, "synthetic", label)
+        all_view = sync.build_payload(fetched, dq, view="all")
+        fitbit = sync.filter_fetched(fetched)
+        fitbit_view = sync.build_payload(fitbit, sync.quality_for(fitbit, dq), view="fitbit")
+        self.assertEqual(all_view["view"], "all")
+        self.assertEqual(fitbit_view["view"], "fitbit")
+        self.assertGreater(len(all_view["history"]["steps"]), 0)
+        self.assertEqual(fitbit_view["history"]["steps"], [])
 
 
 class NarrativeTests(unittest.TestCase):

@@ -130,6 +130,11 @@ a { color: inherit; }
 .icon-btn { width: 36px; height: 36px; display: inline-grid; place-items: center; border: 0; background: none; border-radius: 10px; cursor: pointer; color: var(--muted); transition: background-color .15s var(--ease), color .15s var(--ease); }
 .icon-btn:hover { background: var(--surface-2); color: var(--text); }
 .icon-btn svg, .tabbar svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.source-select {
+  height: 30px; padding: 0 9px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--text); font-size: 12px; font-weight: 500; cursor: pointer;
+}
+.source-select:hover { background: var(--surface-2); }
 .tag { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 600; }
 .status { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); white-space: nowrap; }
 .status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--neutral); }

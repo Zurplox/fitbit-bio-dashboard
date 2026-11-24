@@ -96,6 +96,16 @@ static; the only thing it fetches is `data/biometrics.enc.json`.
 
 ---
 
+## Source views
+
+The toolbar has a **Fitbit Air only / All sources** selector. Fitbit Air only is the default. The
+vault holds both complete views: switching is instant, with no refetch or re-decrypt. Daily steps,
+calories and active minutes come from a Google Health rollup that merges devices, so they cannot be
+attributed to Fitbit alone and are omitted from the Fitbit-only view rather than mislabelled. The
+Fitbit view recalculates every score from Fitbit-attributed records.
+
+---
+
 ## Privacy model — stated precisely
 
 The vault is encrypted with **AES-256-GCM**, keyed by **PBKDF2-HMAC-SHA256 at 600,000

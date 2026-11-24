@@ -86,15 +86,19 @@ def main():
     OUTPUT_FILE.write_text(json.dumps(envelope, indent=2), encoding="utf-8")
 
     payload = json.loads(raw_json)
+    # New vaults hold several views; status.json describes the default one.
+    default = payload.get("default_view") or "all"
+    view = (payload.get("views") or {}).get(default) or payload
+    quality = view.get("data_quality") or {}
     STATUS_FILE.write_text(
         json.dumps(
             {
                 # Timezone-aware, so a browser cannot read a UTC sync time as local.
                 "updated_at": datetime.now(timezone.utc).isoformat(),
                 "demo": bool(payload.get("demo")),
-                "device": (payload.get("device") or {}).get("name"),
-                "metrics_live": (payload.get("data_quality") or {}).get("live_count"),
-                "metrics_total": (payload.get("data_quality") or {}).get("total_count"),
+                "device": (view.get("device") or payload.get("device") or {}).get("name"),
+                "metrics_live": quality.get("live_count"),
+                "metrics_total": quality.get("total_count"),
                 "version": payload.get("schema", 1),
             },
             indent=2,

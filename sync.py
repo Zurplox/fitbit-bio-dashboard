@@ -80,6 +80,19 @@ def collect(client, dq):
         lambda: source.fetch_heart_rate_zones(client, date.fromisoformat(latest["date"]), dq=dq) if latest else None,
         None, "heart rate zones",
     )
+    # A Fitbit-only view needs a trace for the newest Fitbit workout, which may
+    # not be the newest workout overall when Garmin also uploads sessions.
+    latest_fitbit = next((s for s in reversed(exercise) if source.is_fitbit(s)), None)
+    fitbit_workout_hr = _attempt(
+        dq, "fitbit_workout_hr", "Workout heart rate",
+        lambda: source.fetch_workout_hr(client, latest_fitbit, dq=dq) if latest_fitbit else [],
+        [], "workout samples",
+    )
+    fitbit_hr_zones = _attempt(
+        dq, "fitbit_hr_zones", "Heart rate zones",
+        lambda: source.fetch_heart_rate_zones(client, date.fromisoformat(latest_fitbit["date"]), dq=dq) if latest_fitbit else None,
+        None, "heart rate zones",
+    )
 
     # Attribution is a footnote, so it is attempted outside the data-quality
     # gate: losing it must not mark a metric missing, and the page copes with an
@@ -108,8 +121,67 @@ def collect(client, dq):
         "hr_intraday": hr_intraday,
         "workout_hr": workout_hr,
         "hr_zones": hr_zones,
+        "fitbit_workout_hr": fitbit_workout_hr,
+        "fitbit_hr_zones": fitbit_hr_zones,
         "sources": sources,
     }
+
+
+# Metric groups whose points carry a device attribution and can be filtered.
+FITBIT_SERIES = (
+    "sleep", "rhr", "hrv", "spo2", "resp", "vo2max", "skin_temp", "exercise",
+)
+# Daily rollups merge every source into one total; they cannot be attributed
+# to one device and are withheld from the Fitbit-only view.
+ROLLUP_SERIES = ("steps", "calories", "active_minutes", "hr_intraday", "workout_hr")
+
+DQ_FETCH_KEY = {
+    "identity": "identity", "profile": "profile", "sleep": "sleep", "rhr": "rhr",
+    "hrv": "hrv", "spo2": "spo2", "resp": "resp", "vo2max": "vo2max",
+    "skin_temp": "skin_temp", "steps": "steps", "calories": "calories",
+    "active_minutes": "active_minutes", "exercise": "exercise",
+    "heart_rate": "hr_intraday", "workout_hr": "workout_hr", "hr_zones": "hr_zones",
+}
+
+
+def fitbit_sources(sources):
+    """Keep only Fitbit attribution in the Fitbit-only view."""
+    devices = [d for d in sources.get("devices", []) if source.is_fitbit(d)]
+    metrics = {}
+    for key, entry in sources.get("metrics", {}).items():
+        keep = [s for s in entry.get("sources", []) if source.is_fitbit(s)]
+        if not keep:
+            continue
+        metrics[key] = dict(entry, sources=keep, dominant=keep[0]["label"])
+    return {"metrics": metrics, "devices": devices}
+
+
+def filter_fetched(fetched):
+    """A second view with only points the API attributed to a Fitbit device."""
+    out = dict(fetched)
+    for key in FITBIT_SERIES:
+        out[key] = [row for row in fetched.get(key) or [] if source.is_fitbit(row)]
+    for key in ROLLUP_SERIES:
+        out[key] = []
+    out["workout_hr"] = fetched.get("fitbit_workout_hr") or []
+    zones = fetched.get("fitbit_hr_zones")
+    out["hr_zones"] = zones if zones and source.is_fitbit(zones) else None
+    out["sources"] = fitbit_sources(fetched.get("sources") or {})
+    return out
+
+
+def quality_for(fetched, base):
+    """Data quality for a filtered view: no credit for withheld rollups."""
+    quality = DataQuality()
+    for key, metric in base.as_dict()["metrics"].items():
+        if key in ("identity", "profile"):
+            quality.record(key, True, metric.get("note", ""), metric["label"])
+            continue
+        rows = fetched.get(DQ_FETCH_KEY.get(key, key))
+        live = bool(rows)
+        note = f"{len(rows)} Fitbit records" if live else "not measured by Fitbit"
+        quality.record(key, live, note, metric["label"])
+    return quality
 
 
 def _value_series(records):
@@ -121,7 +193,7 @@ def _mean(values):
     return round(sum(clean) / len(clean), 1) if clean else None
 
 
-def build_payload(fetched, dq, demo=False):
+def build_payload(fetched, dq, demo=False, view="all"):
     today = fetched["today"]
     need = analytics.sleep_need(
         [analytics.summarise_night(n) for n in fetched["sleep"] if n]
@@ -408,13 +480,14 @@ def build_payload(fetched, dq, demo=False):
 
     return {
         "schema": 2,
+        "view": view,
         "generated_at": utc_now_iso(),
         "demo": demo,
         "timezone": os.environ.get("DASHBOARD_TZ") or "Asia/Singapore",
         "hr_zones": fetched.get("hr_zones"),
         "device": {
-            "name": _device_name(fetched["sleep"]) or "Fitbit",
-            "platform": "FITBIT",
+            "name": _device_name(fetched["sleep"]) or ("Fitbit Air" if view == "fitbit" else "All sources"),
+            "platform": "FITBIT" if view == "fitbit" else "MULTI",
             "api": "Google Health API v4",
             "sources": [
                 entry["label"]
@@ -604,7 +677,19 @@ def main():
         print(f"\nauthentication failed: {error}\n")
         sys.exit(2)
 
-    payload = build_payload(fetched, dq)
+    all_view = build_payload(fetched, dq, view="all")
+    fitbit_fetched = filter_fetched(fetched)
+    fitbit_view = build_payload(fitbit_fetched, quality_for(fitbit_fetched, dq), view="fitbit")
+    # The page defaults to the Fitbit-only view; the all-sources view stays
+    # available in the same vault so switching needs no refetch or re-decrypt.
+    payload = {
+        "schema": 2,
+        "generated_at": all_view["generated_at"],
+        "demo": False,
+        "timezone": all_view["timezone"],
+        "default_view": "fitbit",
+        "views": {"fitbit": fitbit_view, "all": all_view},
+    }
 
     out_file = DATA_DIR / "biometrics.json"
     # allow_nan=False: a NaN that slips past the parsers fails the run here,
@@ -612,22 +697,22 @@ def main():
     # browser cannot parse.
     out_file.write_text(json.dumps(payload, indent=2, ensure_ascii=False, allow_nan=False), encoding="utf-8")
 
-    quality = payload["data_quality"]
-    today = payload["today"]
+    quality = fitbit_view["data_quality"]
+    today = fitbit_view["today"]
     print("\n" + "=" * 68)
     print(f"payload written: {out_file}")
-    print(f"  sleep        : {len(payload['history']['sleep'])} nights")
-    print(f"  hrv          : {len(payload['history']['hrv'])} nights")
-    print(f"  resting rate : {len(payload['history']['rhr'])} days")
-    print(f"  steps        : {len(payload['history']['steps'])} days")
-    print(f"  workouts     : {len(payload['history']['exercise'])} sessions")
+    print(f"  sleep        : {len(fitbit_view['history']['sleep'])} nights")
+    print(f"  hrv          : {len(fitbit_view['history']['hrv'])} nights")
+    print(f"  resting rate : {len(fitbit_view['history']['rhr'])} days")
+    print(f"  steps        : {len(fitbit_view['history']['steps'])} days")
+    print(f"  workouts     : {len(fitbit_view['history']['exercise'])} sessions")
     print(
         f"  recovery     : {today['recovery']['score']}% ({today['recovery']['band']['label']})"
         f" | readiness {today['readiness']['score']}"
     )
     print(
-        f"  load ratio   : {payload['load']['acwr']} "
-        f"({(payload['load']['acwr_band'] or {}).get('label')})"
+        f"  load ratio   : {fitbit_view['load']['acwr']} "
+        f"({(fitbit_view['load']['acwr_band'] or {}).get('label')})"
     )
     print(
         f"  provenance   : {quality['live_count']}/{quality['total_count']} groups live "
