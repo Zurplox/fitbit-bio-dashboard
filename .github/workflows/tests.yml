@@ -34,7 +34,7 @@ jobs:
           payload = json.loads(encrypt_data.decrypt_payload(envelope, "ci-only"))
           assert payload["schema"] == 2
           assert payload["default_view"] == "fitbit"
-          assert set(payload["views"]) == {"fitbit", "all"}
+          assert set(payload["views"]) == {"fitbit", "garmin", "other", "all"}
           view = payload["views"][payload["default_view"]]
           assert "today" in view and "data_quality" in view
           print("vault round-trip ok:", view["today"]["recovery"]["score"])
