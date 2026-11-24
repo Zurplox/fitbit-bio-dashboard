@@ -222,78 +222,42 @@
     const recovery = today.recovery || {};
     const sleep = today.sleep || {};
     const load = data.load || {};
-
-    const blocks = [];
-    if (has(recovery.score)) {
-      blocks.push(scoreBlock({
-        help: "recovery", label: "Recovery",
-        figure: Math.round(recovery.score),
-        unit: "%",
-        ratio: recovery.score / 100,
-        color: toneColor(recovery.band),
-        band: recovery.band,
-        sub: has(today.hrv && today.hrv.delta_pct) ? `HRV ${signed(today.hrv.delta_pct, 0, "%")} vs your median` : "",
-      }));
-    }
     const readiness = today.readiness || {};
-    if (has(readiness.score)) {
-      blocks.push(scoreBlock({
-        help: "readiness", label: "Training readiness",
-        figure: Math.round(readiness.score),
-        unit: "",
-        ratio: readiness.score / 100,
-        color: toneColor(readiness.band),
-        band: readiness.band,
-        sub: "Recovery, tempered by load trend",
-      }));
-    }
-    // Sleep performance: hours slept against the night's need, the same idea
-    // WHOOP uses. Not the device's composite score.
-    if (has(sleep.minutes) && sleep.need_minutes) {
-      const pct = Math.min(100, (sleep.minutes / sleep.need_minutes) * 100);
-      blocks.push(scoreBlock({
-        help: "sleep_perf", label: "Sleep performance",
-        figure: Math.round(pct),
-        unit: "%",
-        ratio: pct / 100,
-        color: cssVar("--sleep"),
-        bandText: pct >= 100 ? "Need met" : sleep.debt_minutes ? "Short of need" : "Near need",
-        sub: `${hm(sleep.minutes)} of ${hm(sleep.need_minutes)} needed`,
-      }));
-    }
-    // Training load is the acute:chronic minutes ratio, shown as itself rather
-    // than rescaled to look like a proprietary strain score.
-    if (has(load.acwr)) {
-      blocks.push(scoreBlock({
-        help: "load", label: "Training load",
-        figure: load.acwr.toFixed(2),
-        unit: "",
-        ratio: Math.min(2, load.acwr) / 2,
-        // Status colour, like recovery: a full blue ring read as "done" when
-        // the ratio was actually spiking.
-        color: tone(load.acwr_band) === "good" ? cssVar("--strain") : toneColor(load.acwr_band),
-        band: load.acwr_band,
-        sub: `${num(load.acute_minutes)} min this week vs ${num(load.chronic_minutes)} usual`,
-      }));
-    }
 
-    const device = (data.device && data.device.name) || "Fitbit";
+    const score = has(recovery.score) ? Math.round(recovery.score) : null;
     const dateText = today.date
       ? new Date(today.date + "T12:00:00").toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })
       : "";
-    const lede = recovery.band && recovery.band.plain ? recovery.band.plain : (data.clinical && data.clinical.headline) || "";
+    const device = (data.device && data.device.name) || "Fitbit";
+    const lede = recovery.band && recovery.band.plain
+      ? recovery.band.plain
+      : (data.clinical && data.clinical.headline) || "";
 
-    // One panel, not a hero: the toolbar already names the page and date.
-    $("pageDate").textContent = dateText;
-    $("sideDevice").textContent = device;
-    slot("today").innerHTML = `<div class="card today">
-      <div class="today-head">
-        <div>
-          <div class="today-title">${esc(has(recovery.score) ? `Recovery is ${bandLabel(recovery.band).toLowerCase()}` : "Today")}${info("scores")}</div>
-          ${lede ? `<p class="sub">${esc(lede)}</p>` : ""}
+    const small = (label, value, note, help) => `<div class="hero-stat">
+      <div class="label">${label}${info(help)}</div>
+      <div class="hero-stat-value">${value}</div>
+      <div class="sub">${esc(note)}</div>
+    </div>`;
+
+    const perf = has(sleep.minutes) && sleep.need_minutes
+      ? Math.min(100, (sleep.minutes / sleep.need_minutes) * 100) : null;
+    const stats = [
+      perf !== null ? small("Sleep", `${Math.round(perf)}%`, `${hm(sleep.minutes)} of ${hm(sleep.need_minutes)} needed`, "sleep_perf") : "",
+      has(readiness.score) ? small("Readiness", String(Math.round(readiness.score)), bandLabel(readiness.band), "readiness") : "",
+      has(load.acwr) ? small("Load", load.acwr.toFixed(2), bandLabel(load.acwr_band), "load") : "",
+    ].filter(Boolean).join("");
+
+    $("pageTitle").textContent = "Today";
+    slot("today").innerHTML = `<div class="hero-card">
+      <div class="hero-main">
+        ${score !== null ? ring(score / 100, toneColor(recovery.band), `<div class="hero-ring-value">${score}<small>%</small></div>`) : ""}
+        <div class="hero-copy">
+          <p class="eyebrow">${esc(dateText)} · ${esc(device)}</p>
+          <h1>${score !== null ? esc(bandLabel(recovery.band)) : "Today"}</h1>
+          ${lede ? `<p class="hero-lede">${esc(lede)}</p>` : ""}
         </div>
       </div>
-      ${blocks.length ? `<div class="scores">${blocks.join("")}</div>` : ""}
+      ${stats ? `<div class="hero-stats">${stats}</div>` : ""}
     </div>`;
   }
 
@@ -383,37 +347,62 @@
     const samples = ((data.history && data.history.workout_hr) || []).filter((row) => has(row.bpm)).slice(-180);
     if (samples.length < 2) {
       return `<div class="section-mini">Heart rate${info("workout_hr")}</div>
-        <p class="sub">No per-minute heart-rate samples were returned for this workout. The summary above uses the measured average; no line is drawn from an estimate.</p>`;
+        <p class="sub">No per-minute heart-rate samples were returned for this workout. The measured average is above; no line is drawn from an estimate.</p>`;
     }
 
     const zones = data.hr_zones || null;
-    const w = 720, h = 150, left = 36, right = 12, top = 12, bottom = 24;
+    const w = 720, h = 220, left = 44, right = 18, top = 16, bottom = 30;
     const values = samples.map((row) => row.bpm);
-    const low = Math.max(30, Math.floor((Math.min(...values) - 5) / 5) * 5);
-    const high = Math.ceil((Math.max(...values) + 5) / 5) * 5;
+    const low = Math.max(30, Math.floor((Math.min(...values) - 8) / 10) * 10);
+    const high = Math.ceil((Math.max(...values) + 8) / 10) * 10;
     const xAt = (index) => left + (index / (samples.length - 1)) * (w - left - right);
     const yAt = (bpm) => top + ((high - bpm) / (high - low)) * (h - top - bottom);
-    const used = new Set();
-    const segments = samples.slice(0, -1).map((row, index) => {
-      const next = samples[index + 1];
-      const zone = zones ? hrZone((row.bpm + next.bpm) / 2, zones) : "moderate";
-      used.add(zone);
-      return `<line x1="${xAt(index).toFixed(1)}" y1="${yAt(row.bpm).toFixed(1)}"
-        x2="${xAt(index + 1).toFixed(1)}" y2="${yAt(next.bpm).toFixed(1)}"
-        stroke="var(${HR_ZONES[zone][0]})" stroke-width="2.5" stroke-linecap="round" />`;
-    }).join("");
+    const points = samples.map((row, index) => ({ x: xAt(index), y: yAt(row.bpm), bpm: row.bpm }));
+
+    const bands = zones ? Object.keys(HR_ZONES).filter((key) => zones[key]).map((key) => {
+      const [a, b] = zones[key];
+      const y1 = yAt(Math.min(high, Math.max(low, b)));
+      const y2 = yAt(Math.min(high, Math.max(low, a)));
+      if (y2 <= y1) return "";
+      return `<rect x="${left}" y="${y1.toFixed(1)}" width="${w - left - right}" height="${(y2 - y1).toFixed(1)}"
+        fill="var(${HR_ZONES[key][0]})" opacity="0.08" />`;
+    }).join("") : "";
+
     const grid = [low, Math.round((low + high) / 2), high].map((value) => `
-      <line x1="${left}" y1="${yAt(value).toFixed(1)}" x2="${w - right}" y2="${yAt(value).toFixed(1)}" stroke="var(--line)" stroke-width="1" />
-      <text x="${left - 8}" y="${yAt(value).toFixed(1)}" text-anchor="end" dominant-baseline="middle">${value}</text>`).join("");
+      <line x1="${left}" y1="${yAt(value).toFixed(1)}" x2="${w - right}" y2="${yAt(value).toFixed(1)}" stroke="var(--line)" />
+      <text x="${left - 10}" y="${yAt(value).toFixed(1)}" text-anchor="end" dominant-baseline="middle">${value}</text>`).join("");
+
+    const used = new Set();
+    let strokes = "";
+    for (let i = 0; i < points.length - 1; i += 1) {
+      const p0 = points[Math.max(0, i - 1)];
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      const p3 = points[Math.min(points.length - 1, i + 2)];
+      const c1x = p1.x + (p2.x - p0.x) / 6;
+      const c1y = p1.y + (p2.y - p0.y) / 6;
+      const c2x = p2.x - (p3.x - p1.x) / 6;
+      const c2y = p2.y - (p3.y - p1.y) / 6;
+      const zone = zones ? hrZone((p1.bpm + p2.bpm) / 2, zones) : "moderate";
+      used.add(zone);
+      strokes += `<path d="M ${p1.x.toFixed(1)} ${p1.y.toFixed(1)} C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}"
+        fill="none" stroke="var(${HR_ZONES[zone][0]})" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />`;
+    }
+
+    const topIndex = values.indexOf(Math.max(...values));
+    const topPoint = points[topIndex];
+    const marker = `<circle cx="${topPoint.x.toFixed(1)}" cy="${topPoint.y.toFixed(1)}" r="4" fill="var(--surface)" stroke="var(--text)" stroke-width="2" />
+      <text x="${Math.min(w - right - 34, topPoint.x + 10).toFixed(1)}" y="${Math.max(top + 12, topPoint.y - 12).toFixed(1)}" text-anchor="start" fill="var(--text)" font-size="12">${topPoint.bpm} bpm</text>`;
+
     const legend = zones
       ? [...used].map((key) => `<span><i style="background:var(${HR_ZONES[key][0]})"></i>${HR_ZONES[key][1]}${
           zones[key] ? ` <b>${zones[key][0]}–${zones[key][1]}</b>` : ""}</span>`).join("")
       : `<span><i style="background:var(--zone-moderate)"></i>Heart rate · zone limits not reported</span>`;
 
     return `<div class="section-mini">Heart rate during workout${info("workout_hr")}</div>
-      <div class="hr-chart">
+      <div class="hr-ribbon">
         <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Heart rate during the latest workout, coloured by heart-rate zone">
-          ${grid}${segments}
+          ${bands}${grid}${strokes}${marker}
         </svg>
         <div class="hr-axis"><span>${clockInZone(samples[0].t, data.timezone)}</span><span>${clockInZone(samples[samples.length - 1].t, data.timezone)}</span></div>
       </div>
@@ -1070,7 +1059,7 @@
     // Every rendered value lives inside a slot, so emptying the slots purges
     // the data from the DOM rather than merely hiding it.
     document.querySelectorAll("[data-slot]").forEach((node) => { node.innerHTML = ""; });
-    ["syncText", "pageDate", "sideDevice"].forEach((id) => { $(id).textContent = ""; });
+    $("syncText").textContent = "";
     $("staleBanner").hidden = true;
     $("app").hidden = true;
     $("lock").hidden = false;

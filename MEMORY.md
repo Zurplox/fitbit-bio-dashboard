@@ -45,5 +45,7 @@ then update this file at the end of the session.
 
 - Round 11: Latest workout heart-rate trace. `fetch_workout_hr` rolls the `heart-rate` type into 60s buckets (10s fallback) over the exercise interval; `fetch_heart_rate_zones` reads the device's zone boundaries. The card draws an inline SVG line coloured by zone, with no chart library.
 
+- Round 12: consumer-fitness rebuild after the user rejected the console look. Top bar instead of sidebar; one hero ring with three supporting stats; sans type with tabular numbers; fewer borders; HR trace is now a smooth, taller zone ribbon with faint zone bands and a peak marker. Cache-buster consumer-v4.
+
 ## Next steps
 - After the next real sync, check that zone data, age and skin temperature arrive (look for "not measured" in the Data sources panel).

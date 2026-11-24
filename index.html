@@ -6,16 +6,16 @@
   <title>Meridian Air</title>
   <meta name="description" content="A private, end-to-end encrypted dashboard for Fitbit data via the Google Health API." />
   <meta name="color-scheme" content="light dark" />
-  <link rel="stylesheet" href="assets/theme.css?v=workout-v3" />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111827'/%3E%3Cpath d='M6 20h5l3-8 4 12 3-7h5' stroke='%23fff' stroke-width='2.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="assets/theme.css?v=consumer-v4" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23161820'/%3E%3Cpath d='M6 20h5l3-8 4 12 3-7h5' stroke='%23fff' stroke-width='2.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
 </head>
 <body>
 
   <!-- ================================================================ lock -->
   <div id="lock" class="lock">
     <div class="lock-panel">
-      <div class="brand">Meridian Air</div>
-      <h1>Your vault is locked</h1>
+      <div class="lock-mark">Meridian Air</div>
+      <h1>Your data, only you</h1>
       <p class="muted">Your health data is encrypted. It is decrypted here, in this tab, with your passphrase, which is never sent anywhere.</p>
       <form id="lockForm" class="lock-form" autocomplete="off">
         <label class="sr-only" for="lockInput">Passphrase</label>
@@ -33,33 +33,21 @@
 
   <!-- ================================================================= app -->
   <div id="app" hidden>
-    <aside class="sidebar">
-      <div class="side-brand">
+    <header class="topbar glass">
+      <div class="topbar-in">
         <span class="brand">Meridian Air</span>
-        <span class="mono faint small" id="sideDevice"></span>
-      </div>
-      <nav class="nav" aria-label="Sections">
-        <a href="#today" aria-current="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg><span>Today</span></a>
-        <a href="#vitals"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg><span>Vitals</span></a>
-        <a href="#sleep"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg><span>Sleep</span></a>
-        <a href="#heart"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg><span>Heart</span></a>
-        <a href="#markers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg><span>Markers</span></a>
-        <a href="#activity"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg><span>Activity</span></a>
-        <a href="#insights"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg><span>Insights</span></a>
-      </nav>
-      <div class="side-foot">
-        <span id="syncText" class="sync mono small"></span>
-        <span id="demoChip" class="tag" hidden>Demo data</span>
-      </div>
-    </aside>
-
-    <div class="main-col">
-      <header class="toolbar glass">
-        <div class="toolbar-title">
-          <span id="pageTitle" class="page-title">Today</span>
-          <span id="pageDate" class="faint small"></span>
-        </div>
+        <span id="pageTitle" class="page-title">Today</span>
+        <nav class="nav" aria-label="Sections">
+          <a href="#today" aria-current="true">Today</a>
+          <a href="#vitals">Vitals</a>
+          <a href="#sleep">Sleep</a>
+          <a href="#heart">Heart</a>
+          <a href="#activity">Activity</a>
+          <a href="#insights">Insights</a>
+        </nav>
         <div class="actions">
+          <span id="demoChip" class="tag" hidden>Demo</span>
+          <span id="syncText" class="sync small"></span>
           <button id="btnRefresh" class="icon-btn" type="button" aria-label="Re-read the published vault" title="Refresh">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" /></svg>
           </button>
@@ -73,7 +61,8 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3" /></svg>
           </button>
         </div>
-      </header>
+      </div>
+    </header>
 
     <main class="shell">
       <div id="staleBanner" class="banner" hidden></div>
@@ -83,45 +72,32 @@
       </section>
 
       <section id="vitals" class="section">
-        <div class="section-head">
-          <h2>Overnight vitals</h2>
-          <p class="muted">Last night against your own baseline</p>
-        </div>
+        <div class="section-head"><h2>Vitals</h2></div>
         <div data-slot="vitals"></div>
       </section>
 
       <section id="sleep" class="section">
-        <div class="section-head">
-          <h2>Sleep</h2>
-        </div>
+        <div class="section-head"><h2>Sleep</h2></div>
         <div data-slot="sleep"></div>
       </section>
 
       <section id="heart" class="section">
-        <div class="section-head">
-          <h2>Heart</h2>
-        </div>
+        <div class="section-head"><h2>Heart</h2></div>
         <div data-slot="heart"></div>
       </section>
 
       <section id="markers" class="section">
-        <div class="section-head">
-          <h2>Health markers</h2>
-        </div>
+        <div class="section-head"><h2>Health markers</h2></div>
         <div data-slot="markers"></div>
       </section>
 
       <section id="activity" class="section">
-        <div class="section-head">
-          <h2>Activity</h2>
-        </div>
+        <div class="section-head"><h2>Activity</h2></div>
         <div data-slot="activity"></div>
       </section>
 
       <section id="insights" class="section">
-        <div class="section-head">
-          <h2>Insights</h2>
-        </div>
+        <div class="section-head"><h2>Insights</h2></div>
         <div data-slot="insights"></div>
       </section>
 
@@ -129,9 +105,8 @@
         <div data-slot="sources"></div>
       </section>
 
-      <footer class="footer faint small" data-slot="footer"></footer>
+      <footer class="footer faint" data-slot="footer"></footer>
     </main>
-    </div>
 
     <nav class="tabbar glass" aria-label="Sections">
       <a href="#today" aria-current="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg><span>Today</span></a>
@@ -142,6 +117,6 @@
     </nav>
   </div>
 
-  <script src="assets/app.js?v=workout-v3"></script>
+  <script src="assets/app.js?v=consumer-v4"></script>
 </body>
 </html>
