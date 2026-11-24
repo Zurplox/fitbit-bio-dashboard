@@ -6,7 +6,7 @@
   <title>Meridian Air</title>
   <meta name="description" content="A private, end-to-end encrypted dashboard for Fitbit data via the Google Health API." />
   <meta name="color-scheme" content="light dark" />
-  <link rel="stylesheet" href="assets/theme.css?v=sourceicons-v4" />
+  <link rel="stylesheet" href="assets/theme.css?v=deck-v7" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23161820'/%3E%3Cpath d='M6 20h5l3-8 4 12 3-7h5' stroke='%23fff' stroke-width='2.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
 </head>
 <body>
@@ -146,11 +146,11 @@
       </div>
 
       <footer class="footer faint" data-slot="footer"></footer>
-      <div class="stack-controls" id="stackControls" title="Wheel, arrows or swipe to flip cards. Hold Shift while scrolling to read a long card." hidden>
+      <div class="stack-controls" id="stackControls" title="Press the top card to send it to the back. Buttons and arrow keys also work." hidden>
         <button id="stackPrev" class="stack-arrow" type="button" aria-label="Previous card">←</button>
         <span id="stackCount" class="stack-count">1 / 8</span>
         <button id="stackNext" class="stack-arrow" type="button" aria-label="Next card">→</button>
-        <span class="stack-hint">Wheel / arrows · Shift+wheel scrolls</span>
+        <span class="stack-hint">Press the top card to move it back</span>
         <span id="stackLive" class="sr-only" aria-live="polite"></span>
       </div>
     </main>
@@ -164,6 +164,6 @@
     </nav>
   </div>
 
-  <script src="assets/app.js?v=sourceicons-v4"></script>
+  <script src="assets/app.js?v=deck-v7"></script>
 </body>
 </html>

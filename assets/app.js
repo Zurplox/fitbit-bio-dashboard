@@ -9,10 +9,14 @@
 
   const $ = (id) => document.getElementById(id);
   const state = { payload: null, passphrase: null, theme: null, source: "fitbit", stackMode: true, stackIndex: 0, celebrated: new Set() };
+  // Cards mode lifts every measured card into one deck; remember the slot
+  // it came from so switching back to Page mode restores the layout.
+  const cardOrigins = new Map();
 
   /* ------------------------------------------------------------- helpers -- */
   const DASH = "–";
   const has = (value) => value !== null && value !== undefined && !Number.isNaN(value);
+  const tierOf = (score) => !has(score) ? "" : score >= 92 ? "gold" : score >= 80 ? "silver" : score >= 70 ? "standard" : "";
 
   function num(value, digits = 0) {
     if (!has(value)) return DASH;
@@ -419,9 +423,11 @@
           const score = Math.max(0, Math.min(100, Number(item.score) || 0));
           const foil = score >= 70;
           const gold = score >= 92;
+          const silver = foil && !gold && score >= 80;
+          const tier = gold ? "gold" : silver ? "silver" : foil ? "standard" : "none";
           const offset = deckOffsets[index % deckOffsets.length];
-          return `<button class="deck-card${foil ? " foil" : ""}${gold ? " gold" : ""}" type="button" role="listitem" data-index="${index}"
-            data-foil="${foil}" data-good="${foil}" data-gold="${gold}" data-score="${score}"
+          return `<button class="deck-card${foil ? " foil" : ""}${gold ? " gold" : ""}${silver ? " silver" : ""}" type="button" role="listitem" data-index="${index}"
+            data-foil="${foil}" data-good="${foil}" data-gold="${gold}" data-tier="${tier}" data-score="${score}"
             data-result-key="${esc(item.key)}" data-label="${esc(item.label)}"
             style="--bx:${offset.x}px;--by:${offset.y}px;--br:${offset.r}deg"
             aria-label="${esc(item.label)}: ${esc(item.read)}">
@@ -429,7 +435,7 @@
               <span class="deck-num">${String(index + 1).padStart(2, "0")} / ${String(deckItems.length).padStart(2, "0")}</span>
               <span class="deck-score">${score}<small>%</small></span>
             </span>
-            ${foil ? `<span class="foil-badge">${gold ? "Near perfect" : "Strong signal"}</span>` : ""}
+            ${foil ? `<span class="foil-badge">${gold ? "Near perfect" : silver ? "Silver tier" : "Strong signal"}</span>` : ""}
             <span class="deck-label">${esc(item.label)}</span>
             <span class="deck-weight">${esc(item.note)}</span>
             <span class="deck-read">${esc(item.read)}</span>
@@ -438,12 +444,14 @@
           </button>`;
         }).join("")}
       </div>
-      <p class="sub deck-hint">Tap a card to bring it forward. Flick the top card to send it to the back.</p>
+      <p class="sub deck-hint">Press the top card to send it to the back.</p>
     </div>` : "";
 
-    slot("today").innerHTML = `<div class="hero-card" data-tone="${esc(tone(recovery.band))}"
+    const recoveryTier = tierOf(recovery.score);
+    slot("today").innerHTML = `<div class="hero-card${recoveryTier ? " foil" : ""}${recoveryTier === "gold" ? " gold" : recoveryTier === "silver" ? " silver" : ""}"
+      data-tone="${esc(tone(recovery.band))}"
       data-good="${has(recovery.score) && recovery.score >= 80}" data-gold="${has(recovery.score) && recovery.score >= 92}"
-      data-result-key="recovery" data-label="Recovery">
+      data-tier="${recoveryTier}" data-result-key="recovery" data-label="Recovery">
       <div class="hero-intro">
         <p class="eyebrow">${esc(dateText)} · ${esc(device)}</p>
         <h1>${has(recovery.score) && bandLabel(recovery.band) ? esc(bandLabel(recovery.band)) : "Today"}</h1>
@@ -487,24 +495,13 @@
 
     cards.forEach((card) => {
       const index = Number(card.dataset.index);
-      let startX = 0;
-      let dragged = false;
-      card.addEventListener("pointerdown", (event) => {
-        startX = event.clientX;
-        dragged = false;
-      });
-      card.addEventListener("pointermove", (event) => {
-        if (Math.abs(event.clientX - startX) > 32) dragged = true;
-      });
-      card.addEventListener("pointerup", () => {
-        if (dragged && order[order.length - 1] === index) toBack(index);
-      });
       card.addEventListener("click", () => {
-        if (dragged) return;
+        if (state.stackMode) return; // the deck viewport owns presses in Cards mode
         if (order[order.length - 1] === index) toBack(index);
         else toFront(index);
       });
       card.addEventListener("keydown", (event) => {
+        if (state.stackMode) return;
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           if (order[order.length - 1] === index) toBack(index);
@@ -554,8 +551,9 @@
       ? `<div class="metric-grid">${rows.map((r) => {
           const foil = Boolean(r.band) && tone(r.band) === "good";
           const gold = foil && ["primed", "optimal", "normal"].includes(r.band.key);
-          return `<div class="card metric-card${foil ? " foil" : ""}${gold ? " gold" : ""}"
-            data-good="${foil}" data-gold="${gold}" data-score="${gold ? 100 : foil ? 80 : 0}"
+          const tier = gold ? "gold" : foil ? "silver" : "";
+          return `<div class="card metric-card${foil ? " foil" : ""}${gold ? " gold" : ""}${tier === "silver" ? " silver" : ""}"
+            data-good="${foil}" data-gold="${gold}" data-tier="${tier}" data-score="${gold ? 100 : foil ? 80 : 0}"
             data-result-key="vital-${esc(r.name)}" data-label="${esc(r.name)}">
             <div class="label">${esc(r.name)}${info(r.help)}</div>
             <div class="figure">${esc(r.value)}</div>
@@ -795,6 +793,41 @@
     return [...document.querySelectorAll("#stackViewport .section")].filter((section) => !section.hidden);
   }
 
+  // Every measured result becomes one card in the deck. Sections hold the
+  // cards in Page mode, so each lifted card gets a throwaway section wrapper
+  // and the real section is hidden until the deck is released.
+  function collectResultCards() {
+    if (cardOrigins.size) return;
+    const viewport = $("stackViewport");
+    document.querySelectorAll("#stackViewport [data-result-key]").forEach((card) => {
+      const proxy = document.createElement("section");
+      proxy.className = "section stack-proxy";
+      proxy.dataset.label = card.dataset.label || "";
+      proxy.dataset.tier = card.dataset.tier
+        || (card.dataset.gold === "true" ? "gold" : card.dataset.good === "true" ? "silver" : "");
+      cardOrigins.set(card, { parent: card.parentElement, next: card.nextSibling, proxy });
+      proxy.appendChild(card);
+      viewport.appendChild(proxy);
+    });
+    document.querySelectorAll("#stackViewport > .section:not(.stack-proxy)").forEach((section) => {
+      section.hidden = true;
+    });
+  }
+
+  function restoreResultCards() {
+    // Reverse order: a card's saved "next" sibling may be another card that
+    // has not been put back yet, and insertBefore would yank it from its proxy.
+    [...cardOrigins.entries()].reverse().forEach(([card, origin]) => {
+      card.classList.remove("stack-card");
+      origin.parent.insertBefore(card, origin.next);
+      origin.proxy.remove();
+    });
+    cardOrigins.clear();
+    document.querySelectorAll("#stackViewport > .section").forEach((section) => {
+      section.hidden = false;
+    });
+  }
+
   function initMode() {
     try {
       const stored = localStorage.getItem("ma-mode");
@@ -821,16 +854,18 @@
       button.setAttribute("aria-pressed", String(next));
       button.textContent = next ? "Cards" : "Page";
     }
-    const controls = $("stackControls");
-    if (controls) controls.hidden = !next || !stackSections().length;
     if (!next) {
+      restoreResultCards();
       stackSections().forEach((section) => {
         section.classList.remove("active");
         ["--stack-x", "--stack-y", "--stack-r", "--stack-s", "--stack-o", "--stack-z"].forEach((prop) => section.style.removeProperty(prop));
       });
     } else {
+      collectResultCards();
       stackTo(state.stackIndex);
     }
+    const controls = $("stackControls");
+    if (controls) controls.hidden = !next || !stackSections().length;
   }
 
   function celebrate(card) {
@@ -892,13 +927,13 @@
     state.stackIndex = Math.max(0, Math.min(sections.length - 1, (index + sections.length) % sections.length));
     sections.forEach((section, position) => {
       const distance = (position - state.stackIndex + sections.length) % sections.length;
-      const depth = Math.min(distance, 2);
+      const depth = Math.min(distance, 3);
       section.classList.toggle("active", distance === 0);
-      section.style.setProperty("--stack-x", `${depth * 14}px`);
-      section.style.setProperty("--stack-y", `${depth * 8}px`);
-      section.style.setProperty("--stack-r", `${depth * 1.4}deg`);
-      section.style.setProperty("--stack-s", String(1 - depth * 0.018));
-      section.style.setProperty("--stack-o", distance <= 2 ? String(1 - depth * 0.36) : "0");
+      section.style.setProperty("--stack-x", `${depth * 6}px`);
+      section.style.setProperty("--stack-y", `${depth * 6}px`);
+      section.style.setProperty("--stack-r", `${depth * 0.9}deg`);
+      section.style.setProperty("--stack-s", String(1 - depth * 0.01));
+      section.style.setProperty("--stack-o", distance <= 3 ? String(1 - depth * 0.14) : "0");
       section.style.setProperty("--stack-z", String(sections.length - depth));
     });
     const active = sections[state.stackIndex];
@@ -907,7 +942,7 @@
       .find((card) => card.dataset.good === "true" && !state.celebrated.has(card.dataset.resultKey));
     if (celebrationTarget) celebrate(celebrationTarget);
     const fallbackTitles = { today: "Today", markers: "Health markers", sources: "Data sources" };
-    const title = active.querySelector("h2")?.textContent || fallbackTitles[active.id] || active.id;
+    const title = active.dataset.label || active.querySelector("h2")?.textContent || fallbackTitles[active.id] || active.id;
     $("pageTitle").textContent = title;
     const live = $("stackLive");
     if (live) live.textContent = `Card ${state.stackIndex + 1} of ${sections.length}: ${title}`;
@@ -1041,10 +1076,12 @@
       ${recent.length ? `<div class="night-grid">${recent.map((r) => {
         const foil = has(r.efficiency) && r.efficiency >= 90;
         const gold = has(r.efficiency) && r.efficiency >= 95;
-        return `<div class="night-card${foil ? " foil" : ""}${gold ? " gold" : ""}"
-          data-good="${foil}" data-gold="${gold}" data-score="${has(r.efficiency) ? r.efficiency : 0}"
+        const silver = foil && !gold;
+        return `<div class="night-card${foil ? " foil" : ""}${gold ? " gold" : ""}${silver ? " silver" : ""}"
+          data-good="${foil}" data-gold="${gold}" data-tier="${gold ? "gold" : silver ? "silver" : "standard"}"
+          data-score="${has(r.efficiency) ? r.efficiency : 0}"
           data-result-key="night-${esc(r.date)}" data-label="Night ${shortDate(r.date)}">
-          <div class="night-top"><span class="faint">${shortDate(r.date)}</span>${foil ? `<span class="foil-badge">${gold ? "Near perfect" : "Restful"}</span>` : ""}</div>
+          <div class="night-top"><span class="faint">${shortDate(r.date)}</span>${foil ? `<span class="foil-badge">${gold ? "Near perfect" : silver ? "Silver tier" : "Restful"}</span>` : ""}</div>
           <div class="figure">${hm(r.minutes)}</div>
           <div class="night-detail">
             <span>Deep <b>${r.deep ? hm(r.deep) : DASH}</b></span>
@@ -1508,6 +1545,7 @@
   function render(data) {
     state.payload = data;
     hideHelp();
+    restoreResultCards();
 
     // New vaults carry two complete views so switching needs no refetch.
     // Old vaults are shown as-is with the control hidden.
@@ -1530,7 +1568,7 @@
     renderInsights(view);
     renderSources(view);
     bindFoilTilt();
-    if (state.stackMode) stackTo(state.stackIndex);
+    if (state.stackMode) { collectResultCards(); stackTo(state.stackIndex); }
   }
 
   /* ------------------------------------------------------- remembered vault -- */
@@ -1772,29 +1810,15 @@
     window.addEventListener("resize", hideHelp);
 
     const viewport = $("stackViewport");
-    let lastWheel = 0;
-    viewport.addEventListener("wheel", (event) => {
+    // Press the top card to send it to the back. Swipe and wheel do not flip.
+    viewport.addEventListener("click", (event) => {
       if (!state.stackMode) return;
-      if (event.shiftKey) return; // deliberate inner scroll on a long card
-      if (Date.now() - lastWheel < 260) return;
-      event.preventDefault();
-      const down = event.deltaY > 0;
-      lastWheel = Date.now();
-      cycleStack(down ? 1 : -1);
-    }, { passive: false });
-
-    let swipeStart = null;
-    viewport.addEventListener("pointerdown", (event) => {
-      if (!state.stackMode) return;
-      if (event.pointerType !== "touch" || event.target.closest(".hr-ribbon svg, .deck")) return;
-      swipeStart = { x: event.clientX, y: event.clientY };
-    });
-    viewport.addEventListener("pointerup", (event) => {
-      if (!state.stackMode || !swipeStart) return;
-      const dx = event.clientX - swipeStart.x;
-      const dy = event.clientY - swipeStart.y;
-      swipeStart = null;
-      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.3) cycleStack(dx < 0 ? 1 : -1);
+      const active = stackSections()[state.stackIndex];
+      if (!active || !active.contains(event.target)) return;
+      if (active.classList.contains("stack-proxy")) {
+        if (event.target.closest(".info, .stack-controls, .source-picker")) return;
+      } else if (event.target.closest("button, a, select, input, summary, details, [contenteditable], .info, .source-picker, .stack-controls, .deck, .hr-ribbon svg")) return;
+      cycleStack(1);
     });
 
     document.addEventListener("keydown", (event) => {
