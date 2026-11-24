@@ -37,6 +37,8 @@ Consumer fitness app: quiet top bar, hero with three rings (Recovery, Sleep, Tra
 
 - One metric per card: Vitals split into five metric cards. Good/fulfilled cards (factor score ≥70% of weight, or band tone good) get a restrained `.foil` sheen using `--foil-a/b/c`; no glow. Fixed factor score maths (contribution ÷ weight, not ÷100).
 
+- Foil cards respond to pointer: `bindFoilTilt()` sets `--tilt-x/y`, `--shine-x/y`, `--hue`; hover is ±5°, drag ±9°. Reduced motion resets tilt. Recent nights and workout stats became cards; `fetch_exercise` now keeps manual `notes` when present.
+
 ## Next steps
 - After a real sync, check the Data sources panel for anything still "not measured".
 - Keep `MEMORY.md` short; condense this again if it grows.

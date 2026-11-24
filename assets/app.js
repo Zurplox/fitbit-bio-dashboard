@@ -692,6 +692,51 @@
     });
   }
 
+  function bindFoilTilt() {
+    document.querySelectorAll(".foil").forEach((card) => {
+      if (card.dataset.tiltBound) return;
+      card.dataset.tiltBound = "1";
+      let down = false;
+
+      const update = (event) => {
+        const box = card.getBoundingClientRect();
+        if (!box.width || !box.height) return;
+        const x = Math.max(0, Math.min(1, (event.clientX - box.left) / box.width));
+        const y = Math.max(0, Math.min(1, (event.clientY - box.top) / box.height));
+        const max = down ? 9 : 5;
+        card.style.setProperty("--tilt-x", `${((0.5 - y) * 2 * max).toFixed(1)}deg`);
+        card.style.setProperty("--tilt-y", `${((x - 0.5) * 2 * max).toFixed(1)}deg`);
+        card.style.setProperty("--shine-x", `${Math.round(x * 100)}%`);
+        card.style.setProperty("--shine-y", `${Math.round(y * 100)}%`);
+        card.style.setProperty("--hue", `${Math.round((x - 0.5) * 50)}deg`);
+      };
+
+      const reset = () => {
+        down = false;
+        card.classList.remove("dragging");
+        card.style.setProperty("--tilt-x", "0deg");
+        card.style.setProperty("--tilt-y", "0deg");
+        card.style.setProperty("--shine-x", "50%");
+        card.style.setProperty("--shine-y", "50%");
+        card.style.setProperty("--hue", "0deg");
+      };
+
+      card.addEventListener("pointermove", update);
+      card.addEventListener("pointerdown", (event) => {
+        down = true;
+        card.classList.add("dragging");
+        try { card.setPointerCapture(event.pointerId); } catch (error) { /* not available */ }
+        update(event);
+      });
+      card.addEventListener("pointerup", (event) => {
+        try { card.releasePointerCapture(event.pointerId); } catch (error) { /* not captured */ }
+        reset();
+      });
+      card.addEventListener("pointercancel", reset);
+      card.addEventListener("pointerleave", () => { if (!down) reset(); });
+    });
+  }
+
   function renderSleep(data) {
     const sleep = (data.today && data.today.sleep) || {};
     const circ = data.circadian || {};
@@ -753,17 +798,19 @@
       </div>
       <div class="card">
         <div class="card-head"><h3>Recent nights</h3><span class="faint small">Last ${recent.length}</span></div>
-        ${recent.length ? `<div class="data-table">
-          <div class="data-tr data-th sleep-tr"><span>Night</span><span>Asleep</span><span>Deep</span><span>REM</span><span class="col-bed">Bed</span><span class="col-eff">Eff.</span></div>
-          ${recent.map((r) => `<div class="data-tr sleep-tr">
-            <span class="muted">${shortDate(r.date)}</span>
-            <b>${hm(r.minutes)}</b>
-            <span>${r.deep ? hm(r.deep) : DASH}</span>
-            <span>${r.rem ? hm(r.rem) : DASH}</span>
-            <span class="col-bed">${esc(r.bed || DASH)}</span>
-            <span class="col-eff">${has(r.efficiency) ? `${num(r.efficiency)}%` : DASH}</span>
-          </div>`).join("")}
-        </div>` : `<p class="muted">No recent nights recorded.</p>`}
+        ${recent.length ? `<div class="night-grid">${recent.map((r) => {
+          const foil = has(r.efficiency) && r.efficiency >= 90;
+          return `<div class="night-card${foil ? " foil" : ""}">
+            <div class="night-top"><span class="faint">${shortDate(r.date)}</span>${foil ? '<span class="foil-badge">Restful</span>' : ""}</div>
+            <div class="figure">${hm(r.minutes)}</div>
+            <div class="night-detail">
+              <span>Deep <b>${r.deep ? hm(r.deep) : DASH}</b></span>
+              <span>REM <b>${r.rem ? hm(r.rem) : DASH}</b></span>
+              <span>Bed <b>${esc(r.bed || DASH)}</b></span>
+              <span>Efficiency <b>${has(r.efficiency) ? `${num(r.efficiency)}%` : DASH}</b></span>
+            </div>
+          </div>`;
+        }).join("")}</div>` : `<p class="muted">No recent nights recorded.</p>`}
         ${spanText ? `<p class="note">Across these nights, sleep ran from ${spanText}.</p>` : ""}
       </div>
     </div>
@@ -1027,25 +1074,27 @@
 
       const mob = latest.mobility || {};
       const pace = paceOf(latest);
-      const stats = readouts([
-        ["Started", latest.start_local],
-        ["Duration", has(latest.minutes) ? hm(latest.minutes) : null],
-        ["Average HR", has(latest.avg_hr) ? `${num(latest.avg_hr)} bpm` : null],
-        ["Calories", has(latest.calories) ? `${num(latest.calories)} kcal` : null],
-        ["Distance", has(latest.distance_m) ? `${num(latest.distance_m)} m` : null],
-        ["Steps", has(latest.steps) ? num(latest.steps) : null],
-        ["Active zone min", has(latest.active_zone_minutes) ? `${num(latest.active_zone_minutes)} min` : null],
-        ["Elevation", has(latest.elevation_m) ? `${num(latest.elevation_m)} m` : null],
-        ["Run VO₂ max", has(latest.run_vo2max) ? `${num(latest.run_vo2max, 1)} ml/kg/min` : null],
-        [has(latest.pace_s_per_m) ? "Pace" : "Pace (from distance)", has(pace) ? `${pace.toFixed(1)} min/km` : null],
-        ["Speed", has(latest.speed_kmh) ? `${num(latest.speed_kmh, 1)} km/h` : null],
-        ["Swim lengths", has(latest.swim_lengths) ? num(latest.swim_lengths) : null],
-        ["Cadence", has(mob.cadence_spm) ? `${num(mob.cadence_spm)} spm` : null],
-        ["Stride", has(mob.stride_m) ? `${num(mob.stride_m, 2)} m` : null],
-        ["Ground contact", has(mob.ground_contact_ms) ? `${num(mob.ground_contact_ms)} ms` : null],
-        ["Vertical oscillation", has(mob.vertical_cm) ? `${num(mob.vertical_cm, 1)} cm` : null],
-        ["Vertical ratio", has(mob.vertical_ratio) ? num(mob.vertical_ratio, 1) : null],
-      ]);
+      const statPairs = [
+        ["Started", latest.start_local, "Local start"],
+        ["Duration", has(latest.minutes) ? hm(latest.minutes) : null, "This session"],
+        ["Average HR", has(latest.avg_hr) ? `${num(latest.avg_hr)} bpm` : null, "Whole session"],
+        ["Calories", has(latest.calories) ? `${num(latest.calories)} kcal` : null, "Session total"],
+        ["Distance", has(latest.distance_m) ? `${num(latest.distance_m)} m` : null, "Session total"],
+        ["Steps", has(latest.steps) ? num(latest.steps) : null, "Session total"],
+        ["Active zone min", has(latest.active_zone_minutes) ? `${num(latest.active_zone_minutes)} min` : null, "Reported by device"],
+        ["Elevation", has(latest.elevation_m) ? `${num(latest.elevation_m)} m` : null, "Gain"],
+        ["Run VO₂ max", has(latest.run_vo2max) ? `${num(latest.run_vo2max, 1)} ml/kg/min` : null, "Running estimate"],
+        [has(latest.pace_s_per_m) ? "Pace" : "Pace (from distance)", has(pace) ? `${pace.toFixed(1)} min/km` : null, has(latest.pace_s_per_m) ? "Reported by device" : "Calculated"],
+        ["Speed", has(latest.speed_kmh) ? `${num(latest.speed_kmh, 1)} km/h` : null, "Reported by device"],
+        ["Swim lengths", has(latest.swim_lengths) ? num(latest.swim_lengths) : null, "Pool workout"],
+        ["Cadence", has(mob.cadence_spm) ? `${num(mob.cadence_spm)} spm` : null, "Running form"],
+        ["Stride", has(mob.stride_m) ? `${num(mob.stride_m, 2)} m` : null, "Running form"],
+        ["Ground contact", has(mob.ground_contact_ms) ? `${num(mob.ground_contact_ms)} ms` : null, "Running form"],
+        ["Vertical oscillation", has(mob.vertical_cm) ? `${num(mob.vertical_cm, 1)} cm` : null, "Running form"],
+        ["Vertical ratio", has(mob.vertical_ratio) ? num(mob.vertical_ratio, 1) : null, "Running form"],
+      ].filter(([, value]) => has(value) && value !== "");
+      const stats = statPairs.length ? `<div class="mini-grid">${statPairs.map(([label, value, detail]) =>
+        `<div class="mini-metric"><span>${esc(label)}</span><b>${esc(value)}</b><small>${esc(detail)}</small></div>`).join("")}</div>` : "";
 
       const zones = latest.zones;
       const zoneTotal = zones ? Object.values(zones).reduce((sum, value) => sum + (value || 0), 0) : 0;
@@ -1089,6 +1138,7 @@
       latestCard = `<div class="card">
         <div class="card-head"><h3>Latest workout${info("workout")}</h3><span class="faint small">${shortDate(latest.date)} · ${workoutName(latest)}</span></div>
         ${stats}
+        ${latest.notes ? `<p class="note">Notes: ${esc(latest.notes)}</p>` : ""}
         ${workoutHrChart(data, zones)}
         ${zoneTable ? `<div class="section-mini">Time in zones</div>${zoneTable}` : ""}
         ${teBlock ? `<div class="section-mini">Training effect</div>${teBlock}` : ""}
@@ -1228,6 +1278,7 @@
     renderActivity(view);
     renderInsights(view);
     renderSources(view);
+    bindFoilTilt();
   }
 
   /* ------------------------------------------------------- remembered vault -- */

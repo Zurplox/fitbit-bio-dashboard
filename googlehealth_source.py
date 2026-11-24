@@ -812,6 +812,7 @@ def fetch_exercise(client, days=90, dq=None):
                 "minutes": minutes,
                 "type": str(exercise.get("exerciseType") or "OTHER").lower(),
                 "name": exercise.get("displayName") or str(exercise.get("exerciseType") or "Session").title(),
+                "notes": exercise.get("notes"),
                 "calories": _num(metrics.get("caloriesKcal")),
                 "avg_hr": _num(metrics.get("averageHeartRateBeatsPerMinute")),
                 "steps": _num(metrics.get("steps")),

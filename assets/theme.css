@@ -187,21 +187,34 @@ a { color: inherit; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 32px; min-width: 0; }
 
 /* A restrained foil for good or fulfilled readings, not a glow. */
-.foil { position: relative; overflow: hidden; }
+.foil {
+  --tilt-x: 0deg; --tilt-y: 0deg; --shine-x: 50%; --shine-y: 50%; --hue: 0deg;
+  position: relative; overflow: hidden; transform-style: preserve-3d;
+  transition: transform .18s var(--ease), box-shadow .3s var(--ease);
+}
+.foil.dragging { transition: transform .06s linear, box-shadow .2s var(--ease); }
+.metric-card.foil { transform: perspective(900px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y)); }
 .foil > * { position: relative; z-index: 1; }
 .foil::before {
   content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-  background: linear-gradient(115deg,
-    color-mix(in srgb, var(--foil-a) 14%, transparent),
-    color-mix(in srgb, var(--foil-b) 10%, transparent) 42%,
-    color-mix(in srgb, var(--foil-c) 10%, transparent) 72%,
-    transparent 92%);
+  background:
+    radial-gradient(circle at var(--shine-x) var(--shine-y),
+      color-mix(in srgb, var(--foil-a) 22%, transparent),
+      color-mix(in srgb, var(--foil-b) 12%, transparent) 32%,
+      transparent 62%),
+    linear-gradient(115deg,
+      color-mix(in srgb, var(--foil-a) 12%, transparent),
+      color-mix(in srgb, var(--foil-b) 9%, transparent) 42%,
+      color-mix(in srgb, var(--foil-c) 9%, transparent) 72%,
+      transparent 92%);
+  filter: hue-rotate(var(--hue));
   opacity: .9;
 }
 .foil::after {
   content: ""; position: absolute; top: 0; left: 22px; right: 22px; height: 2px;
   border-radius: 2px; pointer-events: none;
   background: linear-gradient(90deg, var(--foil-a), var(--foil-b), var(--foil-c));
+  filter: hue-rotate(var(--hue));
   opacity: .7;
 }
 .foil-badge { display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; color: var(--muted); }
@@ -254,6 +267,12 @@ a { color: inherit; }
 .readout { display: grid; gap: 3px; min-width: 0; }
 .readout span { font-size: 12px; color: var(--muted); }
 .readout b { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+
+.mini-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(138px, 1fr)); gap: 10px; }
+.mini-metric { display: grid; gap: 3px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; min-width: 0; }
+.mini-metric span { font-size: 12px; color: var(--muted); }
+.mini-metric b { font-size: 18px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.mini-metric small { font-size: 11px; color: var(--faint); }
 
 .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; }
 .metric-card { display: grid; gap: 6px; align-content: start; min-height: 168px; }
@@ -324,6 +343,14 @@ a { color: inherit; }
 
 /* --------------------------------------------------------- sleep/coach -- */
 .stagebar + .legend { margin-bottom: 8px; }
+.night-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 12px; }
+.night-card { border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: grid; gap: 7px; align-content: start; min-width: 0; }
+.night-card.foil { transform: perspective(800px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y)); }
+.night-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.night-card .figure { font-size: 24px; }
+.night-detail { display: grid; gap: 5px; font-size: 12px; color: var(--muted); }
+.night-detail span { display: flex; justify-content: space-between; gap: 8px; }
+.night-detail b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
 .deck-section { margin-top: 16px; }
 .deck { position: relative; height: 300px; margin-top: 16px; }
 .deck-card {
@@ -335,6 +362,10 @@ a { color: inherit; }
   z-index: var(--z); user-select: none; touch-action: pan-y;
   box-shadow: 0 8px 24px rgba(23, 23, 27, .06);
   transition: transform .45s var(--ease), box-shadow .3s var(--ease);
+}
+.deck-card.foil {
+  transform: translateX(-50%) translate(var(--x), var(--y)) rotate(var(--r))
+    perspective(900px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y));
 }
 .deck-card[data-front="true"] { box-shadow: none; cursor: grab; }
 .deck-card[data-front="true"]:active { cursor: grabbing; }
@@ -450,7 +481,11 @@ details.plain > div { margin-top: 14px; }
   .tabbar { left: 12px; right: 12px; transform: none; justify-content: space-around; }
   .tabbar a { min-width: 0; flex: 1; padding: 7px 2px; }
 }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; }
+  .metric-card.foil, .night-card.foil { transform: none !important; }
+  .deck-card.foil { transform: translateX(-50%) translate(var(--x), var(--y)) rotate(var(--r)) !important; }
+}
 
 @media print {
   .topbar, .tabbar, .banner, .info, .info-pop { display: none !important; }
