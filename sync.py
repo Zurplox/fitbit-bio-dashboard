@@ -486,7 +486,7 @@ def build_payload(fetched, dq, demo=False, view="all"):
         "timezone": os.environ.get("DASHBOARD_TZ") or "Asia/Singapore",
         "hr_zones": fetched.get("hr_zones"),
         "device": {
-            "name": _device_name(fetched["sleep"]) or ("Fitbit Air" if view == "fitbit" else "All sources"),
+            "name": "Fitbit Air" if view == "fitbit" else "All sources",
             "platform": "FITBIT" if view == "fitbit" else "MULTI",
             "api": "Google Health API v4",
             "sources": [
@@ -657,13 +657,6 @@ def build_markers(fetched, nights, hrv_series, rhr_series, steps_series, vo2_ser
         "social_jetlag": jetlag,
         "metabolic_evidence": evidence["metabolic"],
     }
-
-
-def _device_name(sleep_records):
-    for record in reversed(sleep_records or []):
-        if record.get("device"):
-            return record["device"]
-    return None
 
 
 def main():
