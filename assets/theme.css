@@ -161,6 +161,7 @@ a { color: inherit; }
 .section:first-of-type { margin-top: 32px; }
 .section-head { margin-bottom: 16px; }
 .section-head h2 { font-size: 24px; font-weight: 600; letter-spacing: -0.025em; }
+.section-sub { margin-top: 4px; font-size: 14px; color: var(--muted); }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 26px; min-width: 0; }
 .grid { display: grid; gap: 16px; }
 .cols-2 { grid-template-columns: 1fr 1fr; }
@@ -242,16 +243,22 @@ a { color: inherit; }
 /* --------------------------------------------------------- HR ribbon -- */
 .hr-ribbon { margin-top: 14px; }
 .hr-plot { display: grid; grid-template-columns: 42px minmax(0, 1fr); }
-.hr-y { height: 220px; padding: 16px 0 30px; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
-.hr-ribbon svg { display: block; width: 100%; height: 220px; overflow: visible; }
+.hr-y { height: 240px; padding: 16px 0 30px; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.hr-ribbon svg { display: block; width: 100%; height: 240px; overflow: visible; }
 .hr-ribbon path, .hr-ribbon line { vector-effect: non-scaling-stroke; }
 .hr-axis { display: flex; justify-content: space-between; padding: 0 18px 0 42px; font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.hr-head { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: baseline; }
+.hr-summary { font-size: 12px; color: var(--muted); font-weight: 400; }
+.hr-summary b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.zone-strip { display: flex; height: 10px; margin: 14px 0 0 42px; border-radius: 5px; overflow: hidden; background: var(--surface-2); }
+.zone-strip span { height: 100%; display: block; border-right: 2px solid var(--surface); }
+.zone-strip span:last-child { border-right: 0; }
 .hr-peak { margin: 10px 0 0 42px; font-size: 12px; color: var(--muted); }
-.hr-peak b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
 .hr-legend { margin-top: 16px; }
 
 /* --------------------------------------------------------- sleep/coach -- */
 .stagebar + .legend { margin-bottom: 8px; }
+.factors-card { margin-top: 16px; }
 .factor { padding: 13px 0; border-top: 1px solid var(--line); }
 .factor:first-child { border-top: 0; padding-top: 0; }
 .factor-head { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
@@ -326,7 +333,7 @@ details.plain > div { margin-top: 14px; }
   .zone-tr { grid-template-columns: 1fr 64px 48px; }
   .te-tr { grid-template-columns: 52px 1fr 48px 56px; gap: 6px; }
   .te-grid { gap: 18px; }
-  .hr-ribbon svg, .hr-y { height: 190px; }
+  .hr-ribbon svg, .hr-y { height: 210px; }
   .signal-row { display: flex; flex-wrap: wrap; gap: 4px 12px; }
   .signal-name { flex: 1 1 auto; }
   .signal-row b { flex: 0 0 auto; }

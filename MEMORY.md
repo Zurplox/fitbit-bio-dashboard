@@ -49,5 +49,7 @@ then update this file at the end of the session.
 
 - Round 13: restored three hero rings (Recovery, Sleep, Training load). HR chart text moved out of the stretched SVG into HTML, so labels stay sharp; peak shown as a caption with a marker on the line.
 
+- Round 14: richer workout panel (area fill, average/dash line, peak marker, zone-minute strip, drift) and recovery factors moved under the hero. Chart text stays in HTML. Fixed a runtime bug where the zone strip used boundary arrays instead of zone minutes.
+
 ## Next steps
 - After the next real sync, check that zone data, age and skin temperature arrive (look for "not measured" in the Data sources panel).

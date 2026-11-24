@@ -259,6 +259,20 @@
     ].filter(Boolean).join('<span class="foot-sep">·</span>');
 
     $("pageTitle").textContent = "Today";
+    const factors = Array.isArray(recovery.factors) ? recovery.factors : [];
+    const labels = (data.policy && data.policy.labels) || {};
+    const factorCard = factors.length ? `<div class="card factors-card">
+      <div class="card-head"><h3>What shaped today's recovery${info("factors")}</h3><span class="faint small">Weight in score</span></div>
+      ${factors.map((f) => {
+        const score = Math.max(0, Math.min(100, Number(f.contribution) || 0));
+        return `<div class="factor">
+          <div class="factor-head"><b>${esc(labels[f.key] || f.key)}</b><span class="muted tnum">${Math.round(Number(f.weight) || 0)}%</span></div>
+          <div class="factor-read">${esc(f.read || "")}</div>
+          <div class="progress"><i style="width:${score}%"></i></div>
+        </div>`;
+      }).join("")}
+    </div>` : "";
+
     slot("today").innerHTML = `<div class="hero-card">
       <div class="hero-intro">
         <p class="eyebrow">${esc(dateText)} · ${esc(device)}</p>
@@ -267,7 +281,7 @@
       </div>
       ${rings ? `<div class="hero-rings">${rings}</div>` : ""}
       ${foot ? `<div class="hero-foot">${foot}</div>` : ""}
-    </div>`;
+    </div>${factorCard ? `<div style="height:16px"></div>${factorCard}` : ""}`;
   }
 
   /* -------------------------------------------------------------- vitals -- */
@@ -352,7 +366,7 @@
     }
   }
 
-  function workoutHrChart(data) {
+  function workoutHrChart(data, workoutZones) {
     const samples = ((data.history && data.history.workout_hr) || []).filter((row) => has(row.bpm)).slice(-180);
     if (samples.length < 2) {
       return `<div class="section-mini">Heart rate${info("workout_hr")}</div>
@@ -360,13 +374,18 @@
     }
 
     const zones = data.hr_zones || null;
-    const w = 720, h = 220, left = 44, right = 18, top = 16, bottom = 30;
+    const w = 720, h = 240, left = 44, right = 18, top = 18, bottom = 34;
     const values = samples.map((row) => row.bpm);
     const low = Math.max(30, Math.floor((Math.min(...values) - 8) / 10) * 10);
     const high = Math.ceil((Math.max(...values) + 8) / 10) * 10;
     const xAt = (index) => left + (index / (samples.length - 1)) * (w - left - right);
     const yAt = (bpm) => top + ((high - bpm) / (high - low)) * (h - top - bottom);
     const points = samples.map((row, index) => ({ x: xAt(index), y: yAt(row.bpm), bpm: row.bpm }));
+    const mean = (v) => v.reduce((a, c) => a + c, 0) / v.length;
+    const average = Math.round(mean(values));
+    const peak = Math.max(...values);
+    const third = Math.max(1, Math.floor(values.length / 3));
+    const drift = Math.round(mean(values.slice(-third)) - mean(values.slice(0, third)));
 
     const bands = zones ? Object.keys(HR_ZONES).filter((key) => zones[key]).map((key) => {
       const [a, b] = zones[key];
@@ -374,13 +393,14 @@
       const y2 = yAt(Math.min(high, Math.max(low, a)));
       if (y2 <= y1) return "";
       return `<rect x="${left}" y="${y1.toFixed(1)}" width="${w - left - right}" height="${(y2 - y1).toFixed(1)}"
-        fill="var(${HR_ZONES[key][0]})" opacity="0.08" />`;
+        fill="var(${HR_ZONES[key][0]})" opacity="0.09" />`;
     }).join("") : "";
 
     const grid = [low, Math.round((low + high) / 2), high].map((value) =>
       `<line x1="${left}" y1="${yAt(value).toFixed(1)}" x2="${w - right}" y2="${yAt(value).toFixed(1)}" stroke="var(--line)" />`).join("");
 
     const used = new Set();
+    let full = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
     let strokes = "";
     for (let i = 0; i < points.length - 1; i += 1) {
       const p0 = points[Math.max(0, i - 1)];
@@ -391,31 +411,49 @@
       const c1y = p1.y + (p2.y - p0.y) / 6;
       const c2x = p2.x - (p3.x - p1.x) / 6;
       const c2y = p2.y - (p3.y - p1.y) / 6;
+      full += ` C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
       const zone = zones ? hrZone((p1.bpm + p2.bpm) / 2, zones) : "moderate";
       used.add(zone);
       strokes += `<path d="M ${p1.x.toFixed(1)} ${p1.y.toFixed(1)} C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}"
         fill="none" stroke="var(${HR_ZONES[zone][0]})" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />`;
     }
+    const area = `${full} L ${points[points.length - 1].x.toFixed(1)} ${h - bottom} L ${points[0].x.toFixed(1)} ${h - bottom} Z`;
 
-    const topIndex = values.indexOf(Math.max(...values));
+    const topIndex = values.indexOf(peak);
     const topPoint = points[topIndex];
-    const marker = `<circle cx="${topPoint.x.toFixed(1)}" cy="${topPoint.y.toFixed(1)}" r="4" fill="var(--surface)" stroke="var(--text)" stroke-width="2" />`;
+    const avgY = yAt(average);
+    const marker = `<line x1="${left}" y1="${avgY.toFixed(1)}" x2="${w - right}" y2="${avgY.toFixed(1)}" stroke="var(--line-strong)" stroke-dasharray="4 5" />
+      <circle cx="${topPoint.x.toFixed(1)}" cy="${topPoint.y.toFixed(1)}" r="4.5" fill="var(--surface)" stroke="var(--text)" stroke-width="2" />`;
+
+    // The device's own zone-minute summary gives a clean second reading;
+    // per-sample runs are too fragmented to use as a strip.
+    const stripData = workoutZones
+      ? Object.keys(HR_ZONES).filter((key) => workoutZones[key] > 0).map((key) => [key, workoutZones[key]])
+      : [["moderate", 1]];
+    const stripTotal = stripData.reduce((sum, [, minutes]) => sum + minutes, 0);
+    const strip = stripData.map(([key, minutes]) =>
+      `<span style="width:${(100 * minutes / stripTotal).toFixed(1)}%;background:var(${HR_ZONES[key][0]})"
+        title="${HR_ZONES[key][1]} · ${hm(minutes)}"></span>`).join("");
+
     const ticks = [high, Math.round((low + high) / 2), low];
     const legend = zones
       ? [...used].map((key) => `<span><i style="background:var(${HR_ZONES[key][0]})"></i>${HR_ZONES[key][1]}${
           zones[key] ? ` <b>${zones[key][0]}–${zones[key][1]}</b>` : ""}</span>`).join("")
       : `<span><i style="background:var(--zone-moderate)"></i>Heart rate · zone limits not reported</span>`;
 
-    return `<div class="section-mini">Heart rate during workout${info("workout_hr")}</div>
+    return `<div class="section-mini hr-head"><span>Heart rate during workout${info("workout_hr")}</span>
+        <span class="hr-summary">Average <b>${average}</b> · Peak <b>${peak}</b> · Drift <b>${signed(drift, 0, " bpm")}</b></span>
+      </div>
       <div class="hr-ribbon">
         <div class="hr-plot">
           <div class="hr-y">${ticks.map((value) => `<span>${value}</span>`).join("")}</div>
           <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Heart rate during the latest workout, coloured by heart-rate zone">
-            ${bands}${grid}${strokes}${marker}
+            ${bands}${grid}<path d="${area}" fill="var(--accent-soft)" />${marker}${strokes}
           </svg>
         </div>
         <div class="hr-axis"><span>${clockInZone(samples[0].t, data.timezone)}</span><span>${clockInZone(samples[samples.length - 1].t, data.timezone)}</span></div>
-        <p class="hr-peak">Peak <b>${topPoint.bpm} bpm</b> at ${clockInZone(samples[topIndex].t, data.timezone)}</p>
+        <div class="zone-strip" role="img" aria-label="Time spent in each heart-rate zone">${strip}</div>
+        <p class="hr-peak">Dashed line is your average. Drift compares the first and last third of the session.</p>
       </div>
       <div class="legend hr-legend">${legend}</div>`;
   }
@@ -812,7 +850,7 @@
       latestCard = `<div class="card">
         <div class="card-head"><h3>Latest workout${info("workout")}</h3><span class="faint small">${shortDate(latest.date)} · ${workoutName(latest)}</span></div>
         ${stats}
-        ${workoutHrChart(data)}
+        ${workoutHrChart(data, zones)}
         ${zoneTable ? `<div class="section-mini">Time in zones</div>${zoneTable}` : ""}
         ${teBlock ? `<div class="section-mini">Training effect</div>${teBlock}` : ""}
         ${compareRows.length ? `<div class="section-mini">Against ${peerLabel}</div>
@@ -843,18 +881,6 @@
     const findings = corr.findings || [];
     const cards = (data.coaching && data.coaching.cards) || [];
 
-    const factorCard = factors.length ? `<div class="card">
-      <div class="card-head"><h3>What moved your recovery${info("factors")}</h3><span class="faint small">Weight in score</span></div>
-      ${factors.map((f) => {
-        const score = Math.max(0, Math.min(100, Number(f.contribution) || 0));
-        return `<div class="factor">
-          <div class="factor-head"><b>${esc(labels[f.key] || f.key)}</b><span class="muted tnum">${Math.round(Number(f.weight) || 0)}%</span></div>
-          <div class="factor-read">${esc(f.read || "")}</div>
-          <div class="progress"><i style="width:${score}%"></i></div>
-        </div>`;
-      }).join("")}
-    </div>` : "";
-
     const patternCard = `<div class="card">
       <div class="card-head"><h3>Patterns in your data${info("patterns")}</h3><span class="faint small">${corr.window_days ? `Last ${corr.window_days} days` : ""}</span></div>
       ${findings.length ? findings.map((f) => `<div class="pattern">
@@ -883,8 +909,9 @@
       }).join("")}
     </div>` : "";
 
-    slot("insights").innerHTML = `<div class="grid cols-2">${factorCard}${patternCard}</div>
-      ${coachCard ? `<div style="height:16px"></div>${coachCard}` : ""}`;
+    slot("insights").innerHTML = coachCard
+      ? `<div class="grid cols-2">${patternCard}${coachCard}</div>`
+      : patternCard;
   }
 
   /* ------------------------------------------------------------- sources -- */

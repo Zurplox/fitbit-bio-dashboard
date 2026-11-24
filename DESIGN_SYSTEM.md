@@ -38,7 +38,8 @@ A consumer fitness app, not a console or a landing page: a quiet top bar, a hero
 - Motion: ring fill and progress width only; `prefers-reduced-motion` disables both.
 - Each section adds something new. Heart no longer repeats the big HRV/resting-HR/VO₂ figures from Vitals and Markers; it shows only baseline context, skin temperature and the 24-hour readouts.
 - Activity opens with one full-width "Latest workout" card: every measurement the API sent, a heart-rate-zone table, training-effect scores and a comparison with the last eight similar sessions. Missing fields are omitted, never shown as zero.
-- The workout card carries the one exception to the no-charts rule: a thin inline-SVG heart-rate trace, coloured by the zone boundaries the device reported. No canvas, no library, no gradient. If samples or zone limits are missing, it says so instead of drawing an estimate.
+- The workout card carries the one exception to the no-charts rule: a tall inline-SVG heart-rate trace with a flat area fill, zone bands, average line, peak marker and a clean zone-minute strip underneath. All chart text is HTML so it never stretches with the SVG. No canvas, no library, no gradient. If samples or zone limits are missing, it says so instead of drawing an estimate.
+- The recovery factors live directly under the hero, so the first screen explains the score instead of just showing it.
 - No trend charts, sparklines, heatmaps or canvas. History is shown as a short data table or labelled readouts (lowest, highest, mean, median, range). A single stage bar for last night's sleep and the five-segment training-effect gauge stay: they describe one reading, not a trend.
 
 ## Metric vocabulary
