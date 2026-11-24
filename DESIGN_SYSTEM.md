@@ -23,7 +23,7 @@ Light theme by default; dark is a toggle.
 
 ## Shell
 
-An instrument console, not a landing page: a 232px sidebar (sections, device, sync dot), a toolbar naming the current section and date, dense solid panels, and monospaced readings for every figure. Below 1024px the sidebar becomes a floating tab bar.
+A consumer fitness app, not a console or a landing page: a quiet top bar, one large recovery hero, generous white space, sans-serif human typography with tabular figures, and one chart moment (the workout zone ribbon). Details are flat rows inside a few rounded cards; no sidebar, no walls of equal tiles, no mono labels. Phone gets a floating glass tab bar.
 
 **Glass** (after glisse's rules, in native CSS because no third-party script may run on a page holding decrypted health data) sits only on the control layer that floats over scrolling content: the toolbar, the phone tab bar, popovers and chart tooltips. Frosted fill, a lit top rim, a soft neutral float; solid fallback when `backdrop-filter` or transparency is unavailable. Content panels stay solid.
 
