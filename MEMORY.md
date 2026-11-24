@@ -27,6 +27,8 @@ Consumer fitness app: quiet top bar, hero with three rings (Recovery, Sleep, Tra
 
 - Final craft audit: defined `--chart` alias so the load ring is blue when optimal; fixed sync dot classes; base desktop styling for baseline rows; AA contrast for faint text; guard against NaN thirds with <3 samples; skip empty readouts; guard empty hero title; help popover is a live region with `aria-describedby`; gauge fill uses solid spans instead of a gradient; focus shows a coaching card title, not a raw key. Docs token table refreshed.
 
+- HR ribbon is scrubbable: pointer hover/drag with capture, touch drag via pointer events, and arrow/Home/End/Escape keys. Tooltip shows minute, bpm and zone; crosshair is SVG line + dot. `bindHrScrub()` is called after Activity renders.
+
 ## Next steps
 - After a real sync, check the Data sources panel for anything still "not measured".
 - Keep `MEMORY.md` short; condense this again if it grows.

@@ -83,7 +83,7 @@
     intensity: "How your workout time splits between easy effort, where you could still talk, and hard effort, where you are breathing heavily. Most endurance plans aim for about 80% easy.",
     active: "Minutes you moved briskly enough to raise your heart rate. Health guidelines suggest at least 150 a week.",
     workout: "Every measurement the API reported for your most recent session, plus how it compares with your recent sessions of the same kind. Pace and speed are only shown when measured or calculable from distance and time.",
-    workout_hr: "One-minute average heart rate during the workout. Each stretch is coloured by the zone your device reported: grey below light, grey-blue light, blue moderate, amber vigorous, red peak. If the device sent no samples or no zone limits, the chart says so rather than guessing.",
+    workout_hr: "One-minute average heart rate during the workout. Each stretch is coloured by the zone your device reported: grey below light, grey-blue light, blue moderate, amber vigorous, red peak. Hover or drag over the line to read any minute; arrow keys work too. If the device sent no samples or no zone limits, the chart says so rather than guessing.",
     te: "How hard your workout was for you, Garmin-style. Aerobic counts steady effort (moderate and vigorous heart-rate zones; easy light-zone time doesn't count, as with Fitbit's Active Zone Minutes); anaerobic counts all-out bursts (peak zone). 5.0 means as hard as your toughest recent sessions.",
     heatmap: "Each square is one day. Darker squares mean more training minutes.",
     factors: "How each signal scored against your own normal, and how much it counts toward your recovery score.",
@@ -362,6 +362,7 @@
   }
 
   /* ------------------------------------------- latest workout HR trace -- */
+  const HR_CHART = { w: 720, h: 240, left: 44, right: 18, top: 18, bottom: 34 };
   const HR_ZONES = {
     below: ["--faint", "Below zones"],
     light: ["--zone-light", "Light"],
@@ -397,7 +398,7 @@
     }
 
     const zones = data.hr_zones || null;
-    const w = 720, h = 240, left = 44, right = 18, top = 18, bottom = 34;
+    const { w, h, left, right, top, bottom } = HR_CHART;
     const values = samples.map((row) => row.bpm);
     const low = Math.max(30, Math.floor((Math.min(...values) - 8) / 10) * 10);
     const high = Math.ceil((Math.max(...values) + 8) / 10) * 10;
@@ -475,9 +476,13 @@
       <div class="hr-ribbon">
         <div class="hr-plot">
           <div class="hr-y">${ticks.map((value) => `<span>${value}</span>`).join("")}</div>
-          <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Heart rate during the latest workout, coloured by heart-rate zone">
+          <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" tabindex="0"
+            aria-label="Heart rate during the latest workout, coloured by heart-rate zone. Hover or drag to inspect a minute; arrow keys also work.">
             ${bands}${grid}<path d="${area}" fill="var(--accent-soft)" />${marker}${strokes}
+            <line class="scrub-line" x1="0" y1="${top}" x2="0" y2="${h - bottom}" />
+            <circle class="scrub-dot" cx="0" cy="0" r="4.5" />
           </svg>
+          <div class="hr-tip" hidden></div>
         </div>
         <div class="hr-axis"><span>${clockInZone(samples[0].t, data.timezone)}</span><span>${clockInZone(samples[samples.length - 1].t, data.timezone)}</span></div>
         <div class="zone-strip" role="img" aria-label="Time spent in each heart-rate zone">${strip}</div>
@@ -486,9 +491,90 @@
           <div><span>Middle third</span><b>${thirdText(thirds[1])}</b></div>
           <div><span>Last third</span><b>${thirdText(thirds[2])}</b></div>
         </div>
-        <p class="hr-peak">Dashed line is your average. Drift compares the first and last third of the session.</p>
+        <p class="hr-peak">Move over the line, or drag on a phone, to read any minute. Dashed line is your average.</p>
       </div>
       <div class="legend hr-legend">${legend}</div>`;
+  }
+
+  function bindHrScrub(samples, zones, timezone) {
+    const svg = document.querySelector(".hr-ribbon svg");
+    if (!svg || samples.length < 2) return;
+    const plot = svg.parentElement;
+    const tip = plot.querySelector(".hr-tip");
+    const line = svg.querySelector(".scrub-line");
+    const dot = svg.querySelector(".scrub-dot");
+    const { w, h, left, right, top, bottom } = HR_CHART;
+    const values = samples.map((row) => row.bpm);
+    const low = Math.max(30, Math.floor((Math.min(...values) - 8) / 10) * 10);
+    const high = Math.ceil((Math.max(...values) + 8) / 10) * 10;
+    const xAt = (index) => left + (index / (samples.length - 1)) * (w - left - right);
+    const yAt = (bpm) => top + ((high - bpm) / (high - low)) * (h - top - bottom);
+    let index = -1;
+
+    function show(next) {
+      index = Math.max(0, Math.min(samples.length - 1, next));
+      const sample = samples[index];
+      const px = xAt(index);
+      const py = yAt(sample.bpm);
+      line.setAttribute("x1", px);
+      line.setAttribute("x2", px);
+      line.setAttribute("opacity", "1");
+      dot.setAttribute("cx", px);
+      dot.setAttribute("cy", py);
+      dot.setAttribute("opacity", "1");
+
+      const zone = hrZone(sample.bpm, zones);
+      const range = zones && zones[zone] ? ` ${zones[zone][0]}–${zones[zone][1]}` : "";
+      tip.innerHTML = `<i style="background:var(${HR_ZONES[zone][0]})"></i>
+        <b>${sample.bpm} bpm</b>
+        <span>${clockInZone(sample.t, timezone)} · ${HR_ZONES[zone][1]}${range}</span>`;
+      tip.hidden = false;
+
+      const svgBox = svg.getBoundingClientRect();
+      const plotBox = plot.getBoundingClientRect();
+      const x = svgBox.left - plotBox.left + (px / w) * svgBox.width;
+      const y = svgBox.top - plotBox.top + (py / h) * svgBox.height;
+      tip.style.left = `${Math.max(76, Math.min(plotBox.width - 76, x))}px`;
+      tip.style.top = `${Math.max(8, y - 12)}px`;
+    }
+
+    function hide() {
+      tip.hidden = true;
+      line.setAttribute("opacity", "0");
+      dot.setAttribute("opacity", "0");
+      index = -1;
+    }
+
+    function fromPointer(event) {
+      const box = svg.getBoundingClientRect();
+      const viewX = ((event.clientX - box.left) / box.width) * w;
+      show(Math.round(((viewX - left) / (w - left - right)) * (samples.length - 1)));
+    }
+
+    svg.addEventListener("pointermove", fromPointer);
+    svg.addEventListener("pointerdown", (event) => {
+      try { svg.setPointerCapture(event.pointerId); } catch (error) { /* synthetic or stale pointer */ }
+      fromPointer(event);
+    });
+    svg.addEventListener("pointerup", (event) => {
+      try {
+        if (svg.hasPointerCapture(event.pointerId)) svg.releasePointerCapture(event.pointerId);
+      } catch (error) { /* nothing captured */ }
+    });
+    svg.addEventListener("pointerleave", (event) => {
+      try {
+        if (!svg.hasPointerCapture(event.pointerId)) hide();
+      } catch (error) { hide(); }
+    });
+    svg.addEventListener("pointercancel", hide);
+    svg.addEventListener("blur", hide);
+    svg.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowRight") { show(index < 0 ? 0 : index + 1); event.preventDefault(); }
+      else if (event.key === "ArrowLeft") { show(index < 0 ? samples.length - 1 : index - 1); event.preventDefault(); }
+      else if (event.key === "Home") { show(0); event.preventDefault(); }
+      else if (event.key === "End") { show(samples.length - 1); event.preventDefault(); }
+      else if (event.key === "Escape") hide();
+    });
   }
 
   function renderSleep(data) {
@@ -903,6 +989,9 @@
       pair(loadCard, mixCard),
       consistency,
     ].filter(Boolean).join('<div style="height:16px"></div>') || `<p class="muted">No activity in this sync.</p>`;
+
+    const hrSamples = ((data.history && data.history.workout_hr) || []).filter((row) => has(row.bpm)).slice(-180);
+    if (latestCard && hrSamples.length > 1) bindHrScrub(hrSamples, data.hr_zones || null, data.timezone);
   }
 
   /* ------------------------------------------------------------ insights -- */
