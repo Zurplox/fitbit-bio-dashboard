@@ -33,6 +33,9 @@ jobs:
           envelope = json.load(open("data/biometrics.enc.json"))
           payload = json.loads(encrypt_data.decrypt_payload(envelope, "ci-only"))
           assert payload["schema"] == 2
-          assert "today" in payload and "data_quality" in payload
-          print("vault round-trip ok:", payload["today"]["recovery"]["score"])
+          assert payload["default_view"] == "fitbit"
+          assert set(payload["views"]) == {"fitbit", "all"}
+          view = payload["views"][payload["default_view"]]
+          assert "today" in view and "data_quality" in view
+          print("vault round-trip ok:", view["today"]["recovery"]["score"])
           PY
