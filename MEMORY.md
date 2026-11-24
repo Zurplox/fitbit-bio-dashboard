@@ -1,57 +1,32 @@
 # MEMORY — Meridian Air (fitbit-bio-dashboard)
 
-Handoff for any LLM working here. The owner switches models often: **run `git pull` first**,
-then update this file at the end of the session.
+Handoff for any LLM working here. The owner switches models often: **run `git pull` first**, then update this file when done.
 
 ## Facts
-- Repo: https://github.com/Zurplox/fitbit-bio-dashboard (public). Live: https://zurplox.github.io/fitbit-bio-dashboard/ (encrypted vault; you only see the lock screen without the passphrase).
-- Stack: Python pipeline (Google Health API v4; legacy Fitbit API died on 2 Nov 2026) → rule engine → AES-256-GCM `data/biometrics.enc.json` → static `index.html` + `assets/{app.js,charts.js,theme.css}`.
-- Docs to read before changes: `README.md`, `ARCHITECTURE.md` (ownership + payload contract), `DESIGN_SYSTEM.md` (graphite glass, no glow, colour = data meaning only).
-- Daily sync: `.github/workflows/daily_sync.yml`, 08:00/08:30 SGT, produces the "data: sync" commits. The Google refresh token expires every 7 days while the OAuth app is unpublished; fix `invalid_grant` with `scripts/authorize.py`.
-- Tests: `python -m unittest discover -s tests -t . -v`, `node --check assets/app.js`.
-- When you change `theme.css`/`app.js`, bump the cache-buster in `index.html`.
-- `backups/` holds a committed snapshot zip that gets refreshed by hand.
+- Repo: https://github.com/Zurplox/fitbit-bio-dashboard (public). Live: https://zurplox.github.io/fitbit-bio-dashboard/ — encrypted vault; only the lock screen is visible without the passphrase.
+- Stack: Python pipeline (Google Health API v4; old Fitbit API gone since 2 Nov 2026) → deterministic rule engine → AES-256-GCM `data/biometrics.enc.json` → static `index.html` + `assets/app.js` + `assets/theme.css`. `assets/charts.js` was deleted; charts are inline SVG/HTML.
+- Docs: `README.md`, `ARCHITECTURE.md` (ownership and payload contract), `DESIGN_SYSTEM.md` (current visual direction).
+- Daily sync: `.github/workflows/daily_sync.yml`, 08:00/08:30 SGT. Refresh token expires after 7 days while the OAuth app is unpublished; reauthorise with `scripts/authorize.py`. Optional `ATHLETE_AGE` secret; profile currently supplies age 29.
+- Tests: `python -m unittest discover -s tests -t . -v`; `node --check assets/app.js`. Bump the cache-buster in `index.html` after CSS/JS changes.
+- Demo: `python demo_data.py` then `DASHBOARD_PASS=meridian-demo python encrypt_data.py`. Restore with `git checkout -- data/` before committing.
+- Vault passphrase is saved in OpenChamber project secrets; use `secret.run`, never print it.
 
-## State (2026-11-23)
-- Local is synced to `875103a` (data sync 2026-11-23T05:25Z).
-- Latest UI work: WHOOP-style palette + recovery breakdown, frosted glass cards on a neutral graphite canvas (`b1c2c60`).
+## Design direction
+Consumer fitness app: quiet top bar, hero with three rings (Recovery, Sleep, Training load), self-hosted Manrope (OFL licence in `assets/fonts/`), one chart moment (workout zone ribbon), no runtime font request, no gradients/glow/emoji. Details are flat rows in a few rounded cards. Phone gets a floating glass tab bar. Theme switch is a View Transitions circle sweep.
 
-## 2026-11-23 revamp (uncommitted until the owner approves)
-- Front end rewritten: light-first, flat, Linear/Stripe restraint + WHOOP/Apple/Garmin metric set. All rendering is into `[data-slot]` containers in `index.html`; lock empties them. Missing metrics are omitted, never shown as "--".
-- Strain 0–21 rescale and the strain-target card removed (fake scale); load shown as the ACWR ratio.
-- New metric: skin temperature deviation (`fetch_daily_skin_temp`, payload `today.skin_temp`, `history.skin_temp`), plus a test.
-- Not in the Google Health API: walking steadiness and gait metrics. Don't add them.
-- The demo build overwrites `data/biometrics.enc.json`; run `git checkout -- data/` before committing.
+## Metric rules
+- Missing metrics are omitted, never shown as zero or `--`.
+- No insulin/glucose prediction: WEAR-ME (Nature 2026) needed blood tests. No walking steadiness, gait, Body Battery or stress score — not available from the API.
+- VO₂ max is estimated with Uth 2004 because this account returns no `daily-vo2-max` points. Skin temperature deviation comes from `daily-sleep-temperature-derivations`.
+- Training effect is relative 0–5 from heart-rate-zone minutes; light-zone minutes count zero.
+- Every metric needs a `HELP` entry for its `i` button.
 
-- Round 2 (same day): new `markers` block in the payload (`sync.build_markers`), covering HRV status, intensity mix, social jetlag, VO₂/METs, RHR trend, steps vs plateau and BMI, plus readiness on the hero. Exercise sessions now keep `zones`, `elevation_m` and `run_vo2max`; the profile adds `age` via GET /users/me/profile. Thresholds and citations are in `bio_policy.py`. 74 tests.
-- Deliberately absent (see DESIGN_SYSTEM.md): insulin/glucose, Body Battery, fitness age, walking steadiness.
+## Real account notes
+- Fitbit Air plus Garmin Connect and Google Fit relayed by Health Connect. HRV only since ~13 Nov, so HRV status appears around 7 Dec. No height in profile, so no BMI.
+- The API once sent NaN skin temperatures; `_num` drops non-finite values and sync writes `allow_nan=False`.
 
-- Round 3: an "i" button on each metric opens a plain-English callout (`HELP` map + `info(key)` in app.js). Add a `HELP` entry whenever you add a metric.
-
-- Round 4: app-style score tiles (value inside ring), vitals as tiles; charts for every marker (HRV status band chart, sleep timing `Viz.timing`, skin temp, sparklines, steps/BMI scales); theme switch is a View Transitions circle sweep from the button. History sleep rows now carry `bed_minutes`/`wake_minutes`.
-
-- Round 5: Garmin-style training effect (relative 0–5, `analytics.training_effect`) replaces the workout list; VO₂ max estimated (Uth 2004) because the real account returns 0 `daily-vo2-max` points (confirmed in the sync log). Optional `ATHLETE_AGE` secret added to daily_sync.yml.
-- Gotcha: don't write files with PowerShell `Set-Content` when the text contains non-ASCII characters (≈ came out as "?"). Use the edit tool.
-
-- Round 6 (real-data QA): the API sent NaN skin temps, which made the vault unparseable in browsers. `_num` now drops non-finite values and sync writes with `allow_nan=False`. Training effect gives light-zone minutes zero weight (walks had scored "Hard"). Real account: Fitbit Air plus Garmin Connect and Google Fit relayed via Health Connect; HRV only since ~13 Nov (HRV status appears around 7 Dec); no height in profile, so no BMI.
-
-- Round 7: unslop + glisse pass. App shell (sidebar, sticky glass toolbar, glass tab bar on phones), one Today panel with four ring cells, vitals as an instrument strip, mono figures. Glass is native CSS (glisse is React from a CDN, which can't run beside decrypted data).
-
-- Round 8: removed every trend chart (canvas, sparklines, heatmap, day bars, scales) and deleted assets/charts.js. All history is now a short table or numeric readouts. Still visual: the four rings, one sleep-stage bar, goal progress bars and the training-effect gauge.
-
-- Round 9 (final tightening): Heart section no longer duplicates HRV/RHR/VO₂ cards; it is a two-row baseline context list plus skin temperature and 24-hour readouts. QA on real data passed.
-
-- Round 10: Latest workout panel. `fetch_exercise` now keeps pace, speed, swim lengths, local start time and mobility metrics (cadence, stride, ground contact, vertical oscillation/ratio) when the API sends them. The panel compares the workout with the last 8 same-type sessions. Real walk shows only measured fields; pace is calculated from distance and labelled as such.
-
-- Round 11: Latest workout heart-rate trace. `fetch_workout_hr` rolls the `heart-rate` type into 60s buckets (10s fallback) over the exercise interval; `fetch_heart_rate_zones` reads the device's zone boundaries. The card draws an inline SVG line coloured by zone, with no chart library.
-
-- Round 12: consumer-fitness rebuild after the user rejected the console look. Top bar instead of sidebar; one hero ring with three supporting stats; sans type with tabular numbers; fewer borders; HR trace is now a smooth, taller zone ribbon with faint zone bands and a peak marker. Cache-buster consumer-v4.
-
-- Round 13: restored three hero rings (Recovery, Sleep, Training load). HR chart text moved out of the stretched SVG into HTML, so labels stay sharp; peak shown as a caption with a marker on the line.
-
-- Round 14: richer workout panel (area fill, average/dash line, peak marker, zone-minute strip, drift) and recovery factors moved under the hero. Chart text stays in HTML. Fixed a runtime bug where the zone strip used boundary arrays instead of zone minutes.
-
-- Round 15: character pass. Self-hosted Manrope variable woff2 (24 KB, OFL) in assets/fonts; hero wash keyed to recovery tone; 36 fine ticks on the recovery ring; workout panel adds first/middle/last-third readouts. Fixed font URL relative to theme.css.
+- Final craft audit: defined `--chart` alias so the load ring is blue when optimal; fixed sync dot classes; base desktop styling for baseline rows; AA contrast for faint text; guard against NaN thirds with <3 samples; skip empty readouts; guard empty hero title; help popover is a live region with `aria-describedby`; gauge fill uses solid spans instead of a gradient; focus shows a coaching card title, not a raw key. Docs token table refreshed.
 
 ## Next steps
-- After the next real sync, check that zone data, age and skin temperature arrive (look for "not measured" in the Data sources panel).
+- After a real sync, check the Data sources panel for anything still "not measured".
+- Keep `MEMORY.md` short; condense this again if it grows.

@@ -12,14 +12,15 @@ Light theme by default; dark is a toggle.
 
 | Token | Light | Dark | Use |
 | --- | --- | --- | --- |
-| `--bg` | `#ffffff` | `#0b0b0c` | canvas |
-| `--surface` | `#f9fafb` | `#141416` | cards |
-| `--line` | `#e5e7eb` | `#27272a` | 1px borders, dividers |
-| `--text` / `--muted` / `--faint` | `#111827` / `#6b7280` / `#9ca3af` | `#f3f4f6` / `#9ca3af` / `#71717a` | three text roles |
-| `--accent` | ink `#111827` | `#f3f4f6` | primary button only |
-| `--good` / `--warn` / `--bad` | `#16a34a` / `#d97706` / `#dc2626` | brighter steps | status dots, recovery ring |
-| `--chart` / `--strain` | `#2563eb` | `#60a5fa` | every trend line, training load |
-| `--sleep*` | indigo steps | indigo steps | sleep ring and stages only |
+| `--bg` | `#f6f6f8` | `#0d0d10` | canvas |
+| `--surface` | `#ffffff` | `#17171b` | cards |
+| `--line` | `#e8e8ed` | `#28282f` | 1px borders, dividers |
+| `--text` / `--muted` / `--faint` | `#17171b` / `#6e6e78` / `#6f6f79` | `#f4f4f6` / `#a5a5af` / `#85858f` | three text roles |
+| `--accent` | `#2f62d8` | `#7ba2ff` | focus ring, demo tag |
+| `--good` / `--warn` / `--bad` | `#1f9d55` / `#cf7a12` / `#d63d4a` | brighter steps | status dots, recovery ring |
+| `--chart` | `#2f62d8` | `#7ba2ff` | training-load ring when optimal |
+| `--zone-*` | grey, blue, amber, red | lighter steps | workout HR ribbon and zone strip |
+| `--sleep*` | indigo steps | indigo steps | sleep ring only |
 
 ## Shell
 

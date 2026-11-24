@@ -83,7 +83,7 @@
     intensity: "How your workout time splits between easy effort, where you could still talk, and hard effort, where you are breathing heavily. Most endurance plans aim for about 80% easy.",
     active: "Minutes you moved briskly enough to raise your heart rate. Health guidelines suggest at least 150 a week.",
     workout: "Every measurement the API reported for your most recent session, plus how it compares with your recent sessions of the same kind. Pace and speed are only shown when measured or calculable from distance and time.",
-    workout_hr: "One-minute average heart rate during the workout. Each stretch is coloured by the heart-rate zone your device reported for that date: grey below light, blue light, amber vigorous, red peak. If the device sent no samples or no zone limits, the chart says so rather than guessing.",
+    workout_hr: "One-minute average heart rate during the workout. Each stretch is coloured by the zone your device reported: grey below light, grey-blue light, blue moderate, amber vigorous, red peak. If the device sent no samples or no zone limits, the chart says so rather than guessing.",
     te: "How hard your workout was for you, Garmin-style. Aerobic counts steady effort (moderate and vigorous heart-rate zones; easy light-zone time doesn't count, as with Fitbit's Active Zone Minutes); anaerobic counts all-out bursts (peak zone). 5.0 means as hard as your toughest recent sessions.",
     heatmap: "Each square is one day. Darker squares mean more training minutes.",
     factors: "How each signal scored against your own normal, and how much it counts toward your recovery score.",
@@ -97,10 +97,14 @@
 
   let helpPop = null;
   let helpButton = null;
+  let helpSeq = 0;
 
   function hideHelp() {
     if (helpPop) helpPop.remove();
-    if (helpButton) helpButton.setAttribute("aria-expanded", "false");
+    if (helpButton) {
+      helpButton.setAttribute("aria-expanded", "false");
+      helpButton.removeAttribute("aria-describedby");
+    }
     helpPop = helpButton = null;
   }
 
@@ -108,7 +112,9 @@
     hideHelp();
     const pop = document.createElement("div");
     pop.className = "info-pop";
-    pop.setAttribute("role", "note");
+    pop.id = `info-help-${++helpSeq}`;
+    pop.setAttribute("role", "status");
+    pop.setAttribute("aria-live", "polite");
     pop.textContent = HELP[button.dataset.help];
     document.body.appendChild(pop);
     const box = button.getBoundingClientRect();
@@ -119,6 +125,7 @@
     pop.style.left = `${left}px`;
     pop.style.top = `${(flip ? box.top - pop.offsetHeight - 8 : below) + window.scrollY}px`;
     button.setAttribute("aria-expanded", "true");
+    button.setAttribute("aria-describedby", pop.id);
     helpPop = pop;
     helpButton = button;
   }
@@ -261,11 +268,13 @@
         perf >= 100 ? "Need met" : sleep.debt_minutes ? "Short of need" : "Near need", "sleep_perf",
         `${hm(sleep.minutes)} of ${hm(sleep.need_minutes)}`) : "",
       has(load.acwr) ? ringStat("Training load", Math.min(2, load.acwr) / 2, load.acwr.toFixed(2), "",
-        tone(load.acwr_band) === "good" ? cssVar("--strain") : toneColor(load.acwr_band),
+        tone(load.acwr_band) === "good" ? cssVar("--chart") : toneColor(load.acwr_band),
         bandLabel(load.acwr_band), "load", `${num(load.acute_minutes)} min this week`) : "",
     ].filter(Boolean).join("");
 
-    const focus = (data.coaching && data.coaching.focus) || "";
+    const focusKey = (data.coaching && data.coaching.focus) || "";
+    const focusCard = ((data.coaching && data.coaching.cards) || []).find((card) => card.key === focusKey);
+    const focus = focusCard ? focusCard.title : focusKey;
     const foot = [
       has(readiness.score) ? `Readiness <b>${Math.round(readiness.score)}</b> · ${esc(bandLabel(readiness.band))}` : "",
       has(today.hrv && today.hrv.delta_pct) ? `HRV <b>${signed(today.hrv.delta_pct, 0, "%")}</b> vs your median` : "",
@@ -290,7 +299,7 @@
     slot("today").innerHTML = `<div class="hero-card" data-tone="${esc(tone(recovery.band))}">
       <div class="hero-intro">
         <p class="eyebrow">${esc(dateText)} · ${esc(device)}</p>
-        <h1>${has(recovery.score) ? esc(bandLabel(recovery.band)) : "Today"}</h1>
+        <h1>${has(recovery.score) && bandLabel(recovery.band) ? esc(bandLabel(recovery.band)) : "Today"}</h1>
         ${lede ? `<p class="hero-lede">${esc(lede)}</p>` : ""}
       </div>
       ${rings ? `<div class="hero-rings">${rings}</div>` : ""}
@@ -347,7 +356,7 @@
 
   /* --------------------------------------------------------------- sleep -- */
   function readouts(items) {
-    const rows = items.filter(([, value]) => has(value));
+    const rows = items.filter(([, value]) => has(value) && value !== "");
     return rows.length ? `<div class="readouts">${rows.map(([label, value]) =>
       `<div class="readout"><span>${esc(label)}</span><b>${esc(value)}</b></div>`).join("")}</div>` : "";
   }
@@ -400,8 +409,11 @@
     const peak = Math.max(...values);
     const third = Math.max(1, Math.floor(values.length / 3));
     const drift = Math.round(mean(values.slice(-third)) - mean(values.slice(0, third)));
-    const thirds = [0, 1, 2].map((part) =>
-      Math.round(mean(values.slice(part * third, part === 2 ? values.length : (part + 1) * third))));
+    const thirds = samples.length >= 3
+      ? [0, 1, 2].map((part) =>
+          Math.round(mean(values.slice(part * third, part === 2 ? values.length : (part + 1) * third))))
+      : [null, null, null];
+    const thirdText = (value) => has(value) ? `${value} bpm` : DASH;
 
     const bands = zones ? Object.keys(HR_ZONES).filter((key) => zones[key]).map((key) => {
       const [a, b] = zones[key];
@@ -470,9 +482,9 @@
         <div class="hr-axis"><span>${clockInZone(samples[0].t, data.timezone)}</span><span>${clockInZone(samples[samples.length - 1].t, data.timezone)}</span></div>
         <div class="zone-strip" role="img" aria-label="Time spent in each heart-rate zone">${strip}</div>
         <div class="hr-split">
-          <div><span>First third</span><b>${thirds[0]} bpm</b></div>
-          <div><span>Middle third</span><b>${thirds[1]} bpm</b></div>
-          <div><span>Last third</span><b>${thirds[2]} bpm</b></div>
+          <div><span>First third</span><b>${thirdText(thirds[0])}</b></div>
+          <div><span>Middle third</span><b>${thirdText(thirds[1])}</b></div>
+          <div><span>Last third</span><b>${thirdText(thirds[2])}</b></div>
         </div>
         <p class="hr-peak">Dashed line is your average. Drift compares the first and last third of the session.</p>
       </div>
@@ -769,7 +781,7 @@
     const teByDate = {};
     (te.sessions || []).forEach((row) => { teByDate[row.date] = row; });
     const gauge = (value, color) => `<div class="te-gauge" role="img" aria-label="${num(value, 1)} of 5">
-      ${[0, 1, 2, 3, 4].map((i) => `<i style="--fill:${Math.max(0, Math.min(1, value - i)) * 100}%;--c:${color}"></i>`).join("")}
+      ${[0, 1, 2, 3, 4].map((i) => `<i style="--c:${color}"><b style="width:${Math.max(0, Math.min(1, value - i)) * 100}%"></b></i>`).join("")}
     </div>`;
     const workoutName = (row) => esc(row.name || (row.type || "Workout").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()));
     const dated = sessions.slice().sort((a, b) => a.date.localeCompare(b.date));
@@ -963,7 +975,7 @@
       const ageH = (Date.now() - new Date(data.generated_at).getTime()) / 3600000;
       const fresh = ageH <= ((data.policy && data.policy.stale_after_hours) || 30);
       const age = ageH < 1 ? `${Math.max(1, Math.round(ageH * 60))}m ago` : ageH < 48 ? `${Math.round(ageH)}h ago` : `${Math.round(ageH / 24)}d ago`;
-      $("syncText").className = `sync mono small ${fresh ? "fresh" : "stale"}`;
+      $("syncText").className = `sync small ${fresh ? "fresh" : "stale"}`;
       $("syncText").textContent = `synced ${age}`;
       $("syncText").title = new Date(data.generated_at).toLocaleString();
     } else {
