@@ -306,6 +306,12 @@
     $("pageTitle").textContent = "Today";
     const factors = Array.isArray(recovery.factors) ? recovery.factors : [];
     const labels = (data.policy && data.policy.labels) || {};
+    const factorDetail = {
+      hrv: "Compared with your own 30-night median.",
+      rhr: "Compared with your own 30-day median.",
+      sleep: "Measured against tonight's sleep need.",
+      resp: "Compared with your own breathing-rate baseline.",
+    };
     const deckOffsets = [
       { x: -26, y: 16, r: -6 },
       { x: 24, y: -14, r: 5 },
@@ -316,15 +322,24 @@
       <div class="section-mini">What shaped today's recovery${info("factors")}</div>
       <div class="deck" id="factorDeck" role="list" aria-label="Recovery factors">
         ${factors.map((f, index) => {
-          const score = Math.max(0, Math.min(100, Number(f.contribution) || 0));
+          const weight = Number(f.weight) || 0;
+          const points = Number(f.contribution) || 0;
+          const score = weight ? Math.max(0, Math.min(100, Math.round(100 * points / weight))) : 0;
+          const foil = score >= 70;
           const offset = deckOffsets[index % deckOffsets.length];
-          return `<button class="deck-card" type="button" role="listitem" data-index="${index}"
+          return `<button class="deck-card${foil ? " foil" : ""}" type="button" role="listitem" data-index="${index}"
+            data-foil="${foil}"
             style="--bx:${offset.x}px;--by:${offset.y}px;--br:${offset.r}deg"
             aria-label="${esc(labels[f.key] || f.key)}: ${esc(f.read || "")}">
-            <span class="deck-num">${String(index + 1).padStart(2, "0")} / ${String(factors.length).padStart(2, "0")}</span>
+            <span class="deck-top">
+              <span class="deck-num">${String(index + 1).padStart(2, "0")} / ${String(factors.length).padStart(2, "0")}</span>
+              <span class="deck-score">${score}<small>%</small></span>
+            </span>
+            ${foil ? '<span class="foil-badge">Strong signal</span>' : ""}
             <span class="deck-label">${esc(labels[f.key] || f.key)}</span>
-            <span class="deck-weight">${Math.round(Number(f.weight) || 0)}% of the score</span>
+            <span class="deck-weight">${Math.round(Number(f.weight) || 0)}% of today's recovery score</span>
             <span class="deck-read">${esc(f.read || "")}</span>
+            <span class="deck-detail">${esc(factorDetail[f.key] || "")}</span>
             <span class="progress"><i style="width:${score}%"></i></span>
           </button>`;
         }).join("")}
@@ -416,23 +431,23 @@
     const rows = [
       has(hrv.ms) && {
         help: "hrv", name: "HRV", value: `${num(hrv.ms)} ms`,
-        base: has(hrv.baseline) ? `${num(hrv.baseline)} ms` : "", change: signed(hrv.delta_pct, 0, "%"), band: hrv.band,
+        base: has(hrv.baseline) ? `${num(hrv.baseline)} ms` : "", change: signed(hrv.delta_pct, 0, "%"), band: hrv.band, date: hrv.date,
       },
       has(rhr.bpm) && {
         help: "rhr", name: "Resting HR", value: `${num(rhr.bpm)} bpm`,
-        base: has(rhr.baseline) ? `${num(rhr.baseline)} bpm` : "", change: signed(rhr.delta, 0, " bpm"), band: rhr.band,
+        base: has(rhr.baseline) ? `${num(rhr.baseline)} bpm` : "", change: signed(rhr.delta, 0, " bpm"), band: rhr.band, date: rhr.date,
       },
       has(resp.brpm) && {
         help: "resp", name: "Breathing rate", value: `${num(resp.brpm, 1)} /min`,
-        base: has(resp.baseline) ? `${num(resp.baseline, 1)} /min` : "", change: signed(resp.delta, 1, ""), band: resp.band,
+        base: has(resp.baseline) ? `${num(resp.baseline, 1)} /min` : "", change: signed(resp.delta, 1, ""), band: resp.band, date: resp.date,
       },
       has(spo2.pct) && {
-        help: "spo2", name: "Blood oxygen", value: `${num(spo2.pct, 1)}%`, base: "", change: "", band: spo2.band,
+        help: "spo2", name: "Blood oxygen", value: `${num(spo2.pct, 1)}%`, base: "", change: "", band: spo2.band, date: spo2.date,
       },
       // The API gives skin temperature with its own 30-night baseline; there
       // is no published threshold for it here, so it carries no status colour.
       has(skin.delta_c) && {
-        help: "skin", name: "Skin temp", value: `${signed(skin.delta_c, 1, " °C")}`, base: "30-night median", change: "",
+        help: "skin", name: "Skin temp", value: `${signed(skin.delta_c, 1, " °C")}`, base: "30-night median", change: "", date: skin.date,
         band: null, bandText: "Not scored",
       },
     ].filter(Boolean);
@@ -440,12 +455,15 @@
     const illness = (data.clinical && data.clinical.illness) || null;
 
     slot("vitals").innerHTML = rows.length
-      ? `<div class="tiles card">${rows.map((r) => `<div class="tile">
-          <div class="tile-name">${esc(r.name)}${info(r.help)}</div>
-          <div class="tile-value">${esc(r.value)}</div>
-          <div class="tile-meta">${esc([r.base && r.base !== "30-night median" ? `Usual ${r.base}` : r.base, r.change].filter(Boolean).join(" · "))}</div>
-          <div class="tile-status">${status(r.band, r.bandText)}</div>
-        </div>`).join("")}</div>
+      ? `<div class="metric-grid">${rows.map((r) => {
+          const foil = Boolean(r.band) && tone(r.band) === "good";
+          return `<div class="card metric-card${foil ? " foil" : ""}">
+            <div class="label">${esc(r.name)}${info(r.help)}</div>
+            <div class="figure">${esc(r.value)}</div>
+            <div class="sub">${esc([r.base && r.base !== "30-night median" ? `Usual ${r.base}` : r.base, r.change, r.date ? `Measured ${shortDate(r.date)}` : ""].filter(Boolean).join(" · "))}</div>
+            <div class="tile-status">${status(r.band, r.bandText)}${foil ? '<span class="foil-badge">On track</span>' : ""}</div>
+          </div>`;
+        }).join("")}</div>
         ${illness && illness.headline ? `<p class="note">${status({ tone: illness.tone }, illness.headline)}${
           (illness.drivers || []).length ? ` · ${esc(illness.drivers.join(", "))}` : ""}</p>` : ""}`
       : `<p class="muted">No overnight vitals in this sync.</p>`;
@@ -736,13 +754,14 @@
       <div class="card">
         <div class="card-head"><h3>Recent nights</h3><span class="faint small">Last ${recent.length}</span></div>
         ${recent.length ? `<div class="data-table">
-          <div class="data-tr data-th"><span>Night</span><span>Asleep</span><span>Deep</span><span>REM</span><span>Eff.</span></div>
-          ${recent.map((r) => `<div class="data-tr">
+          <div class="data-tr data-th sleep-tr"><span>Night</span><span>Asleep</span><span>Deep</span><span>REM</span><span class="col-bed">Bed</span><span class="col-eff">Eff.</span></div>
+          ${recent.map((r) => `<div class="data-tr sleep-tr">
             <span class="muted">${shortDate(r.date)}</span>
             <b>${hm(r.minutes)}</b>
             <span>${r.deep ? hm(r.deep) : DASH}</span>
             <span>${r.rem ? hm(r.rem) : DASH}</span>
-            <span>${has(r.efficiency) ? `${num(r.efficiency)}%` : DASH}</span>
+            <span class="col-bed">${esc(r.bed || DASH)}</span>
+            <span class="col-eff">${has(r.efficiency) ? `${num(r.efficiency)}%` : DASH}</span>
           </div>`).join("")}
         </div>` : `<p class="muted">No recent nights recorded.</p>`}
         ${spanText ? `<p class="note">Across these nights, sleep ran from ${spanText}.</p>` : ""}
@@ -948,11 +967,15 @@
 
     const trainedDays = new Set(sessions.map((s) => s.date)).size;
     const totalMinutes = sessions.reduce((n, s) => n + (Number(s.minutes) || 0), 0);
+    const avgSession = sessions.length ? totalMinutes / sessions.length : null;
+    const longest = Math.max(0, ...sessions.map((s) => Number(s.minutes) || 0));
     const consistency = exerciseLive && sessions.length ? `<div class="card">
       <div class="card-head"><h3>Training record</h3><span class="faint small">History</span></div>
       ${readouts([
         ["Sessions recorded", num(sessions.length)],
         ["Days trained", num(trainedDays)],
+        ["Average session", has(avgSession) ? hm(avgSession) : DASH],
+        ["Longest session", has(longest) ? hm(longest) : DASH],
         ["Total time", hm(totalMinutes)],
         ["Last 28 days", `${num(load.sessions_28d)} sessions`],
       ])}

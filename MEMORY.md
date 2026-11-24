@@ -35,6 +35,8 @@ Consumer fitness app: quiet top bar, hero with three rings (Recovery, Sleep, Tra
 
 - Recovery factors are now an untidy stacked deck under the rings. `bindFactorDeck()` manages order, click-to-front and drag-to-back; CSS `--stack-scale` shrinks offsets on phones so the deck never overflows.
 
+- One metric per card: Vitals split into five metric cards. Good/fulfilled cards (factor score ≥70% of weight, or band tone good) get a restrained `.foil` sheen using `--foil-a/b/c`; no glow. Fixed factor score maths (contribution ÷ weight, not ÷100).
+
 ## Next steps
 - After a real sync, check the Data sources panel for anything still "not measured".
 - Keep `MEMORY.md` short; condense this again if it grows.
