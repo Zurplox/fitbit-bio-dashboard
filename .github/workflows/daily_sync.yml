@@ -2,10 +2,9 @@ name: daily sync
 
 on:
   schedule:
-    # 08:00 and 08:30 Asia/Singapore, so a single missed run does not leave the
-    # dashboard a day behind.
+    # 08:00 and 20:00 Asia/Singapore, exactly 12 hours apart.
     - cron: "0 0 * * *"
-    - cron: "30 0 * * *"
+    - cron: "0 12 * * *"
   workflow_dispatch:
 
 # Two runs must never race to push the same vault.
