@@ -47,5 +47,7 @@ then update this file at the end of the session.
 
 - Round 12: consumer-fitness rebuild after the user rejected the console look. Top bar instead of sidebar; one hero ring with three supporting stats; sans type with tabular numbers; fewer borders; HR trace is now a smooth, taller zone ribbon with faint zone bands and a peak marker. Cache-buster consumer-v4.
 
+- Round 13: restored three hero rings (Recovery, Sleep, Training load). HR chart text moved out of the stretched SVG into HTML, so labels stay sharp; peak shown as a caption with a marker on the line.
+
 ## Next steps
 - After the next real sync, check that zone data, age and skin temperature arrive (look for "not measured" in the Data sources panel).

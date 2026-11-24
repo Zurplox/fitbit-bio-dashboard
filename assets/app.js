@@ -224,7 +224,6 @@
     const load = data.load || {};
     const readiness = today.readiness || {};
 
-    const score = has(recovery.score) ? Math.round(recovery.score) : null;
     const dateText = today.date
       ? new Date(today.date + "T12:00:00").toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })
       : "";
@@ -232,32 +231,42 @@
     const lede = recovery.band && recovery.band.plain
       ? recovery.band.plain
       : (data.clinical && data.clinical.headline) || "";
-
-    const small = (label, value, note, help) => `<div class="hero-stat">
-      <div class="label">${label}${info(help)}</div>
-      <div class="hero-stat-value">${value}</div>
-      <div class="sub">${esc(note)}</div>
-    </div>`;
-
     const perf = has(sleep.minutes) && sleep.need_minutes
       ? Math.min(100, (sleep.minutes / sleep.need_minutes) * 100) : null;
-    const stats = [
-      perf !== null ? small("Sleep", `${Math.round(perf)}%`, `${hm(sleep.minutes)} of ${hm(sleep.need_minutes)} needed`, "sleep_perf") : "",
-      has(readiness.score) ? small("Readiness", String(Math.round(readiness.score)), bandLabel(readiness.band), "readiness") : "",
-      has(load.acwr) ? small("Load", load.acwr.toFixed(2), bandLabel(load.acwr_band), "load") : "",
+
+    const ringStat = (label, ratio, value, unit, color, bandText, help, sub) => `<div class="hero-ring-stat">
+      ${has(ratio) ? ring(ratio, color, `<div class="ring-value">${value}${unit ? `<small>${unit}</small>` : ""}</div>`) : ""}
+      <div class="label">${label}${info(help)}</div>
+      <div class="ring-band" style="color:${color}">${esc(bandText)}</div>
+      ${sub ? `<div class="sub">${esc(sub)}</div>` : ""}
+    </div>`;
+
+    const rings = [
+      has(recovery.score) ? ringStat("Recovery", recovery.score / 100, Math.round(recovery.score), "%",
+        toneColor(recovery.band), bandLabel(recovery.band), "recovery",
+        has(today.hrv && today.hrv.delta_pct) ? `HRV ${signed(today.hrv.delta_pct, 0, "%")} vs median` : "") : "",
+      perf !== null ? ringStat("Sleep", perf / 100, Math.round(perf), "%", cssVar("--sleep"),
+        perf >= 100 ? "Need met" : sleep.debt_minutes ? "Short of need" : "Near need", "sleep_perf",
+        `${hm(sleep.minutes)} of ${hm(sleep.need_minutes)}`) : "",
+      has(load.acwr) ? ringStat("Training load", Math.min(2, load.acwr) / 2, load.acwr.toFixed(2), "",
+        tone(load.acwr_band) === "good" ? cssVar("--strain") : toneColor(load.acwr_band),
+        bandLabel(load.acwr_band), "load", `${num(load.acute_minutes)} min this week`) : "",
     ].filter(Boolean).join("");
+
+    const foot = [
+      has(readiness.score) ? `Readiness <b>${Math.round(readiness.score)}</b> · ${esc(bandLabel(readiness.band))}` : "",
+      has(today.hrv && today.hrv.delta_pct) ? `HRV <b>${signed(today.hrv.delta_pct, 0, "%")}</b> vs your median` : "",
+    ].filter(Boolean).join('<span class="foot-sep">·</span>');
 
     $("pageTitle").textContent = "Today";
     slot("today").innerHTML = `<div class="hero-card">
-      <div class="hero-main">
-        ${score !== null ? ring(score / 100, toneColor(recovery.band), `<div class="hero-ring-value">${score}<small>%</small></div>`) : ""}
-        <div class="hero-copy">
-          <p class="eyebrow">${esc(dateText)} · ${esc(device)}</p>
-          <h1>${score !== null ? esc(bandLabel(recovery.band)) : "Today"}</h1>
-          ${lede ? `<p class="hero-lede">${esc(lede)}</p>` : ""}
-        </div>
+      <div class="hero-intro">
+        <p class="eyebrow">${esc(dateText)} · ${esc(device)}</p>
+        <h1>${has(recovery.score) ? esc(bandLabel(recovery.band)) : "Today"}</h1>
+        ${lede ? `<p class="hero-lede">${esc(lede)}</p>` : ""}
       </div>
-      ${stats ? `<div class="hero-stats">${stats}</div>` : ""}
+      ${rings ? `<div class="hero-rings">${rings}</div>` : ""}
+      ${foot ? `<div class="hero-foot">${foot}</div>` : ""}
     </div>`;
   }
 
@@ -368,9 +377,8 @@
         fill="var(${HR_ZONES[key][0]})" opacity="0.08" />`;
     }).join("") : "";
 
-    const grid = [low, Math.round((low + high) / 2), high].map((value) => `
-      <line x1="${left}" y1="${yAt(value).toFixed(1)}" x2="${w - right}" y2="${yAt(value).toFixed(1)}" stroke="var(--line)" />
-      <text x="${left - 10}" y="${yAt(value).toFixed(1)}" text-anchor="end" dominant-baseline="middle">${value}</text>`).join("");
+    const grid = [low, Math.round((low + high) / 2), high].map((value) =>
+      `<line x1="${left}" y1="${yAt(value).toFixed(1)}" x2="${w - right}" y2="${yAt(value).toFixed(1)}" stroke="var(--line)" />`).join("");
 
     const used = new Set();
     let strokes = "";
@@ -391,9 +399,8 @@
 
     const topIndex = values.indexOf(Math.max(...values));
     const topPoint = points[topIndex];
-    const marker = `<circle cx="${topPoint.x.toFixed(1)}" cy="${topPoint.y.toFixed(1)}" r="4" fill="var(--surface)" stroke="var(--text)" stroke-width="2" />
-      <text x="${Math.min(w - right - 34, topPoint.x + 10).toFixed(1)}" y="${Math.max(top + 12, topPoint.y - 12).toFixed(1)}" text-anchor="start" fill="var(--text)" font-size="12">${topPoint.bpm} bpm</text>`;
-
+    const marker = `<circle cx="${topPoint.x.toFixed(1)}" cy="${topPoint.y.toFixed(1)}" r="4" fill="var(--surface)" stroke="var(--text)" stroke-width="2" />`;
+    const ticks = [high, Math.round((low + high) / 2), low];
     const legend = zones
       ? [...used].map((key) => `<span><i style="background:var(${HR_ZONES[key][0]})"></i>${HR_ZONES[key][1]}${
           zones[key] ? ` <b>${zones[key][0]}–${zones[key][1]}</b>` : ""}</span>`).join("")
@@ -401,10 +408,14 @@
 
     return `<div class="section-mini">Heart rate during workout${info("workout_hr")}</div>
       <div class="hr-ribbon">
-        <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Heart rate during the latest workout, coloured by heart-rate zone">
-          ${bands}${grid}${strokes}${marker}
-        </svg>
+        <div class="hr-plot">
+          <div class="hr-y">${ticks.map((value) => `<span>${value}</span>`).join("")}</div>
+          <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Heart rate during the latest workout, coloured by heart-rate zone">
+            ${bands}${grid}${strokes}${marker}
+          </svg>
+        </div>
         <div class="hr-axis"><span>${clockInZone(samples[0].t, data.timezone)}</span><span>${clockInZone(samples[samples.length - 1].t, data.timezone)}</span></div>
+        <p class="hr-peak">Peak <b>${topPoint.bpm} bpm</b> at ${clockInZone(samples[topIndex].t, data.timezone)}</p>
       </div>
       <div class="legend hr-legend">${legend}</div>`;
   }

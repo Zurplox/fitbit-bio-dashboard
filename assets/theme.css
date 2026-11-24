@@ -171,17 +171,20 @@ a { color: inherit; }
 
 /* ---------------------------------------------------------------- hero -- */
 .hero-card { background: var(--surface); border: 1px solid var(--line); border-radius: 26px; padding: 36px; }
-.hero-main { display: flex; align-items: center; gap: 40px; }
-.hero-card .ring-wrap { width: 156px; height: 156px; flex: none; }
-.hero-card .ring circle { stroke-width: 13; }
-.hero-ring-value { font-size: 40px; font-weight: 600; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
-.hero-ring-value small { font-size: 18px; color: var(--muted); margin-left: 1px; }
 .eyebrow { font-size: 13px; font-weight: 500; color: var(--muted); }
-.hero-copy h1 { font-size: 44px; font-weight: 600; letter-spacing: -0.04em; line-height: 1.08; margin-top: 6px; }
+.hero-intro h1 { font-size: 44px; font-weight: 600; letter-spacing: -0.04em; line-height: 1.08; margin-top: 6px; }
 .hero-lede { margin-top: 12px; font-size: 16px; color: var(--muted); max-width: 55ch; }
-.hero-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 32px; padding-top: 28px; border-top: 1px solid var(--line); }
-.hero-stat-value { font-size: 30px; font-weight: 600; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; margin-top: 4px; }
-.hero-stats .sub { font-size: 13px; }
+.hero-rings { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 28px; padding-top: 28px; border-top: 1px solid var(--line); }
+.hero-ring-stat { display: grid; justify-items: center; text-align: center; gap: 5px; }
+.hero-ring-stat .ring-wrap { width: 112px; height: 112px; }
+.hero-ring-stat .ring circle { stroke-width: 10; }
+.hero-ring-stat .label { justify-content: center; }
+.ring-value { font-size: 24px; font-weight: 600; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.ring-value small { font-size: 13px; color: var(--muted); margin-left: 1px; }
+.ring-band { font-size: 14px; font-weight: 600; }
+.hero-foot { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px; }
+.hero-foot b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.foot-sep { color: var(--faint); }
 
 /* ------------------------------------------------------- shared figures -- */
 .figure { font-size: 34px; font-weight: 600; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; line-height: 1.15; margin-top: 6px; }
@@ -238,10 +241,13 @@ a { color: inherit; }
 
 /* --------------------------------------------------------- HR ribbon -- */
 .hr-ribbon { margin-top: 14px; }
+.hr-plot { display: grid; grid-template-columns: 42px minmax(0, 1fr); }
+.hr-y { height: 220px; padding: 16px 0 30px; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
 .hr-ribbon svg { display: block; width: 100%; height: 220px; overflow: visible; }
 .hr-ribbon path, .hr-ribbon line { vector-effect: non-scaling-stroke; }
-.hr-ribbon text { font: 12px var(--sans); fill: var(--faint); font-variant-numeric: tabular-nums; }
-.hr-axis { display: flex; justify-content: space-between; margin-top: -26px; padding: 0 18px 0 44px; font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.hr-axis { display: flex; justify-content: space-between; padding: 0 18px 0 42px; font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.hr-peak { margin: 10px 0 0 42px; font-size: 12px; color: var(--muted); }
+.hr-peak b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
 .hr-legend { margin-top: 16px; }
 
 /* --------------------------------------------------------- sleep/coach -- */
@@ -300,7 +306,6 @@ details.plain > div { margin-top: 14px; }
 @media (max-width: 900px) {
   .nav { display: none; }
   .cols-2, .cols-2-3 { grid-template-columns: 1fr; }
-  .hero-main { flex-direction: column; align-items: flex-start; gap: 24px; }
   .tabbar {
     position: fixed; z-index: 30; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom)); transform: translateX(-50%);
     display: flex; gap: 2px; padding: 6px; border-radius: 24px;
@@ -314,20 +319,22 @@ details.plain > div { margin-top: 14px; }
   .actions .sync { display: none; }
   .section { margin-top: 44px; }
   .hero-card { padding: 24px; border-radius: 22px; }
-  .hero-copy h1 { font-size: 34px; }
-  .hero-card .ring-wrap { width: 120px; height: 120px; }
-  .hero-stats { grid-template-columns: 1fr 1fr; gap: 20px; }
+  .hero-intro h1 { font-size: 34px; }
   .card { padding: 20px; border-radius: 18px; }
   .data-tr { grid-template-columns: 72px repeat(4, 1fr); gap: 6px; font-size: 12px; }
   .compare-tr { grid-template-columns: 84px repeat(3, 1fr); }
   .zone-tr { grid-template-columns: 1fr 64px 48px; }
   .te-tr { grid-template-columns: 52px 1fr 48px 56px; gap: 6px; }
   .te-grid { gap: 18px; }
-  .hr-ribbon svg { height: 190px; }
+  .hr-ribbon svg, .hr-y { height: 190px; }
   .signal-row { display: flex; flex-wrap: wrap; gap: 4px 12px; }
   .signal-name { flex: 1 1 auto; }
   .signal-row b { flex: 0 0 auto; }
   .signal-row .muted, .signal-row .status { flex: 1 1 100%; }
+  .hero-rings { grid-template-columns: 1fr; gap: 14px; }
+  .hero-ring-stat { grid-template-columns: 84px minmax(0, 1fr); column-gap: 16px; justify-items: start; text-align: left; }
+  .hero-ring-stat .ring-wrap { grid-row: 1 / 4; width: 84px; height: 84px; }
+  .hero-ring-stat .label { justify-content: flex-start; }
 }
 @media (max-width: 380px) {
   .topbar-in { gap: 8px; padding: 0 12px; }
