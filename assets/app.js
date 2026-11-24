@@ -83,6 +83,7 @@
     intensity: "How your workout time splits between easy effort, where you could still talk, and hard effort, where you are breathing heavily. Most endurance plans aim for about 80% easy.",
     active: "Minutes you moved briskly enough to raise your heart rate. Health guidelines suggest at least 150 a week.",
     workout: "Every measurement the API reported for your most recent session, plus how it compares with your recent sessions of the same kind. Pace and speed are only shown when measured or calculable from distance and time.",
+    workout_hr: "One-minute average heart rate during the workout. Each stretch is coloured by the heart-rate zone your device reported for that date: grey below light, blue light, amber vigorous, red peak. If the device sent no samples or no zone limits, the chart says so rather than guessing.",
     te: "How hard your workout was for you, Garmin-style. Aerobic counts steady effort (moderate and vigorous heart-rate zones; easy light-zone time doesn't count, as with Fitbit's Active Zone Minutes); anaerobic counts all-out bursts (peak zone). 5.0 means as hard as your toughest recent sessions.",
     heatmap: "Each square is one day. Darker squares mean more training minutes.",
     factors: "How each signal scored against your own normal, and how much it counts toward your recovery score.",
@@ -348,6 +349,75 @@
     const rows = items.filter(([, value]) => has(value));
     return rows.length ? `<div class="readouts">${rows.map(([label, value]) =>
       `<div class="readout"><span>${esc(label)}</span><b>${esc(value)}</b></div>`).join("")}</div>` : "";
+  }
+
+  /* ------------------------------------------- latest workout HR trace -- */
+  const HR_ZONES = {
+    below: ["--faint", "Below zones"],
+    light: ["--zone-light", "Light"],
+    moderate: ["--zone-moderate", "Moderate"],
+    vigorous: ["--zone-vigorous", "Vigorous"],
+    peak: ["--zone-peak", "Peak"],
+  };
+
+  function hrZone(bpm, zones) {
+    for (const key of ["peak", "vigorous", "moderate", "light"]) {
+      const range = zones && zones[key];
+      if (range && bpm >= range[0] && bpm <= range[1]) return key;
+    }
+    return "below";
+  }
+
+  function clockInZone(iso, timezone) {
+    if (!iso) return "";
+    try {
+      return new Intl.DateTimeFormat(undefined, {
+        timeZone: timezone || undefined, hour: "2-digit", minute: "2-digit", hour12: false,
+      }).format(new Date(iso));
+    } catch (error) {
+      return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    }
+  }
+
+  function workoutHrChart(data) {
+    const samples = ((data.history && data.history.workout_hr) || []).filter((row) => has(row.bpm)).slice(-180);
+    if (samples.length < 2) {
+      return `<div class="section-mini">Heart rate${info("workout_hr")}</div>
+        <p class="sub">No per-minute heart-rate samples were returned for this workout. The summary above uses the measured average; no line is drawn from an estimate.</p>`;
+    }
+
+    const zones = data.hr_zones || null;
+    const w = 720, h = 150, left = 36, right = 12, top = 12, bottom = 24;
+    const values = samples.map((row) => row.bpm);
+    const low = Math.max(30, Math.floor((Math.min(...values) - 5) / 5) * 5);
+    const high = Math.ceil((Math.max(...values) + 5) / 5) * 5;
+    const xAt = (index) => left + (index / (samples.length - 1)) * (w - left - right);
+    const yAt = (bpm) => top + ((high - bpm) / (high - low)) * (h - top - bottom);
+    const used = new Set();
+    const segments = samples.slice(0, -1).map((row, index) => {
+      const next = samples[index + 1];
+      const zone = zones ? hrZone((row.bpm + next.bpm) / 2, zones) : "moderate";
+      used.add(zone);
+      return `<line x1="${xAt(index).toFixed(1)}" y1="${yAt(row.bpm).toFixed(1)}"
+        x2="${xAt(index + 1).toFixed(1)}" y2="${yAt(next.bpm).toFixed(1)}"
+        stroke="var(${HR_ZONES[zone][0]})" stroke-width="2.5" stroke-linecap="round" />`;
+    }).join("");
+    const grid = [low, Math.round((low + high) / 2), high].map((value) => `
+      <line x1="${left}" y1="${yAt(value).toFixed(1)}" x2="${w - right}" y2="${yAt(value).toFixed(1)}" stroke="var(--line)" stroke-width="1" />
+      <text x="${left - 8}" y="${yAt(value).toFixed(1)}" text-anchor="end" dominant-baseline="middle">${value}</text>`).join("");
+    const legend = zones
+      ? [...used].map((key) => `<span><i style="background:var(${HR_ZONES[key][0]})"></i>${HR_ZONES[key][1]}${
+          zones[key] ? ` <b>${zones[key][0]}–${zones[key][1]}</b>` : ""}</span>`).join("")
+      : `<span><i style="background:var(--zone-moderate)"></i>Heart rate · zone limits not reported</span>`;
+
+    return `<div class="section-mini">Heart rate during workout${info("workout_hr")}</div>
+      <div class="hr-chart">
+        <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Heart rate during the latest workout, coloured by heart-rate zone">
+          ${grid}${segments}
+        </svg>
+        <div class="hr-axis"><span>${clockInZone(samples[0].t, data.timezone)}</span><span>${clockInZone(samples[samples.length - 1].t, data.timezone)}</span></div>
+      </div>
+      <div class="legend hr-legend">${legend}</div>`;
   }
 
   function renderSleep(data) {
@@ -742,6 +812,7 @@
       latestCard = `<div class="card">
         <div class="card-head"><h3>Latest workout${info("workout")}</h3><span class="faint small">${shortDate(latest.date)} · ${workoutName(latest)}</span></div>
         ${stats}
+        ${workoutHrChart(data)}
         ${zoneTable ? `<div class="section-mini">Time in zones</div>${zoneTable}` : ""}
         ${teBlock ? `<div class="section-mini">Training effect</div>${teBlock}` : ""}
         ${compareRows.length ? `<div class="section-mini">Against ${peerLabel}</div>

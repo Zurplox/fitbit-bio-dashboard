@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import os
 import random
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from provenance import DataQuality
 
@@ -120,6 +120,20 @@ def synthetic_fetch(days=DEMO_DAYS, seed=11):
             }
         )
 
+    # One-minute heart rate for the newest workout, with a warm-up and a
+    # harder middle block so the zone colours are visible in the demo.
+    workout_hr = []
+    if exercise:
+        last = exercise[-1]
+        start = datetime.fromisoformat(last["start"].replace("Z", "+00:00"))
+        for minute in range(last["minutes"] or 0):
+            shape = 12 if minute < 5 or minute > (last["minutes"] - 5) else 42
+            bpm = (last["avg_hr"] or 130) - 25 + shape + rng.gauss(0, 4)
+            workout_hr.append({
+                "t": (start + timedelta(minutes=minute)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "bpm": round(bpm),
+            })
+
     return {
         "today": today.isoformat(),
         "identity": {"health_user_id": "demo-user"},
@@ -136,6 +150,13 @@ def synthetic_fetch(days=DEMO_DAYS, seed=11):
         "active_minutes": active,
         "exercise": exercise,
         "hr_intraday": intraday,
+        "workout_hr": workout_hr,
+        "hr_zones": {
+            "light": [95, 125],
+            "moderate": [126, 150],
+            "vigorous": [151, 174],
+            "peak": [175, 220],
+        },
     }
 
 

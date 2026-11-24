@@ -121,6 +121,30 @@ class ExerciseDetailTests(unittest.TestCase):
         self.assertEqual(s["zones"], {"light": 5.0, "moderate": 15.0, "vigorous": 10.0, "peak": 0.0})
 
 
+class WorkoutHeartTests(unittest.TestCase):
+    def test_rolls_workout_heart_rate_into_minutes(self):
+        fake = FakeClient(rollup={"rollupDataPoints": [
+            {"startTime": "2026-11-23T03:01:00Z", "heartRate": {"beatsPerMinuteAvg": "118"}},
+            {"startTime": "2026-11-23T03:02:00Z", "heartRate": {"beatsPerMinuteAvg": "162"}},
+            {"startTime": "2026-11-23T03:03:00Z", "heartRate": {}},
+        ]})
+        rows = source.fetch_workout_hr(fake, {"start": "2026-11-23T03:01:00Z", "end": "2026-11-23T03:04:00Z"})
+        self.assertEqual(rows, [{"t": "2026-11-23T03:01:00Z", "bpm": 118}, {"t": "2026-11-23T03:02:00Z", "bpm": 162}])
+        self.assertEqual(fake.rollup_bodys[0]["window"], "60s")
+
+    def test_device_zone_boundaries_are_kept(self):
+        point = {"dailyHeartRateZones": {
+            "date": {"year": 2026, "month": 11, "day": 23},
+            "heartRateZones": [
+                {"heartRateZoneType": "LIGHT", "minBeatsPerMinute": "95", "maxBeatsPerMinute": "125"},
+                {"heartRateZoneType": "PEAK", "minBeatsPerMinute": "175", "maxBeatsPerMinute": "220"},
+                {"heartRateZoneType": "OTHER", "minBeatsPerMinute": "0", "maxBeatsPerMinute": "94"},
+            ],
+        }}
+        fake = FakeClient(points={"daily-heart-rate-zones": [point]})
+        self.assertEqual(source.fetch_heart_rate_zones(fake, "2026-11-23"), {"light": [95, 125], "peak": [175, 220]})
+
+
 class TimestampTests(unittest.TestCase):
     def test_civil_date_from_offset(self):
         # 23:30Z at +8h is the next morning, so the night belongs to the 2nd.

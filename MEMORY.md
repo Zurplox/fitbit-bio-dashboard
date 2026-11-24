@@ -43,5 +43,7 @@ then update this file at the end of the session.
 
 - Round 10: Latest workout panel. `fetch_exercise` now keeps pace, speed, swim lengths, local start time and mobility metrics (cadence, stride, ground contact, vertical oscillation/ratio) when the API sends them. The panel compares the workout with the last 8 same-type sessions. Real walk shows only measured fields; pace is calculated from distance and labelled as such.
 
+- Round 11: Latest workout heart-rate trace. `fetch_workout_hr` rolls the `heart-rate` type into 60s buckets (10s fallback) over the exercise interval; `fetch_heart_rate_zones` reads the device's zone boundaries. The card draws an inline SVG line coloured by zone, with no chart library.
+
 ## Next steps
 - After the next real sync, check that zone data, age and skin temperature arrive (look for "not measured" in the Data sources panel).

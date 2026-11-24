@@ -790,6 +790,7 @@ def fetch_exercise(client, days=90, dq=None):
                 "date": _civil(interval.get("civilStartTime"))
                 or _civil_from_iso(start, offset),
                 "start": start,
+                "end": end,
                 "start_local": _local_clock(start, offset),
                 "minutes": minutes,
                 "type": str(exercise.get("exerciseType") or "OTHER").lower(),
@@ -849,6 +850,69 @@ def fetch_intraday_hr(client, hours=24, dq=None):
             "Heart rate",
         )
     return series
+
+
+def fetch_workout_hr(client, session, dq=None, window="60s"):
+    """Per-minute heart rate for one workout, from the rollup endpoint.
+
+    The exercise summary carries only an average. The heart-rate data type
+    holds the samples; rolling them into one-minute buckets keeps a long
+    workout small while still showing effort and recovery during the session.
+    """
+    # Build the window from the exercise interval the API supplied.
+    start = session.get("start")
+    end = session.get("end")
+    if not (start and end):
+        return []
+    series = []
+    used = window
+    for candidate in (window, "10s"):
+        payload = client.rollup("heart-rate", start, end, candidate)
+        for point in payload.get("rollupDataPoints") or []:
+            stamp = point.get("startTime")
+            value = _rollup_value(point, "heart-rate")
+            if stamp and value is not None:
+                series.append({"t": stamp, "bpm": round(value)})
+        used = candidate
+        if series:
+            break
+    series.sort(key=lambda r: r["t"])
+    if dq:
+        dq.record(
+            "workout_hr",
+            bool(series),
+            f"{len(series)} samples at {used}" if series else "no workout samples",
+            "Workout heart rate",
+        )
+    return series
+
+
+def fetch_heart_rate_zones(client, day, dq=None):
+    """Zone boundaries from the device, keyed LIGHT/MODERATE/VIGOROUS/PEAK."""
+    day = day.isoformat() if hasattr(day, "isoformat") else str(day)[:10]
+    try:
+        points = client.list_points("daily-heart-rate-zones", max_pages=2)
+    except Exception as error:  # noqa: BLE001 - optional, like attribution
+        print(f"   heart rate zones unavailable: {error}")
+        return None
+    for point in points:
+        body = point.get("dailyHeartRateZones") or {}
+        if _civil(body.get("date")) != day:
+            continue
+        zones = {}
+        for zone in body.get("heartRateZones") or []:
+            key = str(zone.get("heartRateZoneType") or "").lower()
+            low = _num(zone.get("minBeatsPerMinute"))
+            high = _num(zone.get("maxBeatsPerMinute"))
+            if key in ("light", "moderate", "vigorous", "peak") and low is not None and high is not None:
+                zones[key] = [round(low), round(high)]
+        if zones:
+            if dq:
+                dq.record("hr_zones", True, f"{len(zones)} zones", "Heart rate zones")
+            return zones
+    if dq:
+        dq.record("hr_zones", False, "none returned", "Heart rate zones")
+    return None
 
 
 def authenticated_client():

@@ -69,6 +69,17 @@ def collect(client, dq):
     active = _attempt(dq, "active_minutes", "Active minutes", lambda: source.fetch_daily_active_minutes(client, days=FETCH_DAYS, dq=dq), [], "active minutes")
     exercise = _attempt(dq, "exercise", "Workouts", lambda: source.fetch_exercise(client, days=FETCH_DAYS, dq=dq), [], "workouts")
     hr_intraday = _attempt(dq, "heart_rate", "Heart rate", lambda: source.fetch_intraday_hr(client, hours=24, dq=dq), [], "heart rate")
+    latest = exercise[-1] if exercise else None
+    workout_hr = _attempt(
+        dq, "workout_hr", "Workout heart rate",
+        lambda: source.fetch_workout_hr(client, latest, dq=dq) if latest else [],
+        [], "workout samples",
+    )
+    hr_zones = _attempt(
+        dq, "hr_zones", "Heart rate zones",
+        lambda: source.fetch_heart_rate_zones(client, date.fromisoformat(latest["date"]), dq=dq) if latest else None,
+        None, "heart rate zones",
+    )
 
     # Attribution is a footnote, so it is attempted outside the data-quality
     # gate: losing it must not mark a metric missing, and the page copes with an
@@ -95,6 +106,8 @@ def collect(client, dq):
         "active_minutes": active,
         "exercise": exercise,
         "hr_intraday": hr_intraday,
+        "workout_hr": workout_hr,
+        "hr_zones": hr_zones,
         "sources": sources,
     }
 
@@ -398,6 +411,7 @@ def build_payload(fetched, dq, demo=False):
         "generated_at": utc_now_iso(),
         "demo": demo,
         "timezone": os.environ.get("DASHBOARD_TZ") or "Asia/Singapore",
+        "hr_zones": fetched.get("hr_zones"),
         "device": {
             "name": _device_name(fetched["sleep"]) or "Fitbit",
             "platform": "FITBIT",
@@ -461,6 +475,7 @@ def build_payload(fetched, dq, demo=False):
             "vo2max": [{"date": r["date"], "value": r["value"]} for r in vo2_series],
             "skin_temp": [{"date": r["date"], "delta_c": r["value"]} for r in skin_series],
             "hr_intraday": fetched["hr_intraday"],
+            "workout_hr": fetched.get("workout_hr") or [],
             "exercise": fetched["exercise"],
         },
         "load": {
