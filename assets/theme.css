@@ -1,3 +1,12 @@
+/* Manrope is self-hosted: the vault is the only network request. */
+@font-face {
+  font-family: "Manrope";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("fonts/manrope-latin.woff2") format("woff2");
+}
+
 /* ==========================================================================
    Meridian Air — consumer fitness design
    One focal moment, quiet chrome, human type. No gradients, no glow, no
@@ -38,7 +47,7 @@
   --glass-rim: rgba(255, 255, 255, .9);
   --glass-shadow: 0 6px 24px rgba(23, 23, 27, .06);
 
-  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", Inter, system-ui, sans-serif;
+  --sans: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --r-sm: 10px;
   --r: 20px;
   --ease: cubic-bezier(.2, .8, .2, 1);
@@ -160,7 +169,7 @@ a { color: inherit; }
 .section { margin-top: 56px; }
 .section:first-of-type { margin-top: 32px; }
 .section-head { margin-bottom: 16px; }
-.section-head h2 { font-size: 24px; font-weight: 600; letter-spacing: -0.025em; }
+.section-head h2 { font-size: 26px; font-weight: 600; letter-spacing: -0.03em; }
 .section-sub { margin-top: 4px; font-size: 14px; color: var(--muted); }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 26px; min-width: 0; }
 .grid { display: grid; gap: 16px; }
@@ -172,8 +181,11 @@ a { color: inherit; }
 
 /* ---------------------------------------------------------------- hero -- */
 .hero-card { background: var(--surface); border: 1px solid var(--line); border-radius: 26px; padding: 36px; }
+.hero-card[data-tone="good"] { background: color-mix(in srgb, var(--good) 5%, var(--surface)); }
+.hero-card[data-tone="warn"] { background: color-mix(in srgb, var(--warn) 6%, var(--surface)); }
+.hero-card[data-tone="bad"] { background: color-mix(in srgb, var(--bad) 5%, var(--surface)); }
 .eyebrow { font-size: 13px; font-weight: 500; color: var(--muted); }
-.hero-intro h1 { font-size: 44px; font-weight: 600; letter-spacing: -0.04em; line-height: 1.08; margin-top: 6px; }
+.hero-intro h1 { font-size: 48px; font-weight: 600; letter-spacing: -0.045em; line-height: 1.06; margin-top: 6px; }
 .hero-lede { margin-top: 12px; font-size: 16px; color: var(--muted); max-width: 55ch; }
 .hero-rings { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 28px; padding-top: 28px; border-top: 1px solid var(--line); }
 .hero-ring-stat { display: grid; justify-items: center; text-align: center; gap: 5px; }
@@ -197,6 +209,7 @@ a { color: inherit; }
 /* Ring helper used inside the hero. */
 .ring-wrap { position: relative; }
 .ring { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring-ticks line { vector-effect: non-scaling-stroke; }
 .ring circle { fill: none; stroke-width: 10; }
 .ring .trk { stroke: var(--surface-2); }
 .ring .val { stroke-linecap: round; transition: stroke-dashoffset .8s var(--ease); }
@@ -253,6 +266,10 @@ a { color: inherit; }
 .zone-strip { display: flex; height: 10px; margin: 14px 0 0 42px; border-radius: 5px; overflow: hidden; background: var(--surface-2); }
 .zone-strip span { height: 100%; display: block; border-right: 2px solid var(--surface); }
 .zone-strip span:last-child { border-right: 0; }
+.hr-split { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 14px 0 0 42px; }
+.hr-split div { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.hr-split span { font-size: 11px; color: var(--muted); }
+.hr-split b { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .hr-peak { margin: 10px 0 0 42px; font-size: 12px; color: var(--muted); }
 .hr-legend { margin-top: 16px; }
 
@@ -326,7 +343,7 @@ details.plain > div { margin-top: 14px; }
   .actions .sync { display: none; }
   .section { margin-top: 44px; }
   .hero-card { padding: 24px; border-radius: 22px; }
-  .hero-intro h1 { font-size: 34px; }
+  .hero-intro h1 { font-size: 36px; }
   .card { padding: 20px; border-radius: 18px; }
   .data-tr { grid-template-columns: 72px repeat(4, 1fr); gap: 6px; font-size: 12px; }
   .compare-tr { grid-template-columns: 84px repeat(3, 1fr); }
@@ -334,6 +351,7 @@ details.plain > div { margin-top: 14px; }
   .te-tr { grid-template-columns: 52px 1fr 48px 56px; gap: 6px; }
   .te-grid { gap: 18px; }
   .hr-ribbon svg, .hr-y { height: 210px; }
+  .hr-split { margin-left: 0; grid-template-columns: 1fr; }
   .signal-row { display: flex; flex-wrap: wrap; gap: 4px 12px; }
   .signal-name { flex: 1 1 auto; }
   .signal-row b { flex: 0 0 auto; }

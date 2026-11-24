@@ -191,10 +191,22 @@
   const RING_R = 52;
   const RING_C = 2 * Math.PI * RING_R;
 
-  function ring(ratio, color, inner) {
+  function ring(ratio, color, inner, ticks = false) {
     const bounded = has(ratio) ? Math.max(0, Math.min(1, ratio)) : 0;
+    // A quiet instrument detail: fine ticks around the recovery ring only.
+    const tickMarkup = ticks ? `<g class="ring-ticks">${Array.from({ length: 36 }, (_, i) => {
+      const angle = (i * 10 - 90) * Math.PI / 180;
+      const long = i % 3 === 0;
+      const a = long ? 57 : 59;
+      const b = 63;
+      const point = (r) => `${(60 + r * Math.cos(angle)).toFixed(1)} ${(60 + r * Math.sin(angle)).toFixed(1)}`;
+      return `<line x1="${point(a).split(" ")[0]}" y1="${point(a).split(" ")[1]}"
+        x2="${point(b).split(" ")[0]}" y2="${point(b).split(" ")[1]}"
+        stroke="var(--line-strong)" stroke-width="${long ? 1.4 : 1}" opacity="${long ? 0.8 : 0.45}" />`;
+    }).join("")}</g>` : "";
     return `<div class="ring-wrap">
       <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+        ${tickMarkup}
         <circle class="trk" cx="60" cy="60" r="${RING_R}" />
         <circle class="val" cx="60" cy="60" r="${RING_R}" stroke="${color}"
           stroke-dasharray="${RING_C}" stroke-dashoffset="${RING_C * (1 - bounded)}" />
@@ -234,8 +246,8 @@
     const perf = has(sleep.minutes) && sleep.need_minutes
       ? Math.min(100, (sleep.minutes / sleep.need_minutes) * 100) : null;
 
-    const ringStat = (label, ratio, value, unit, color, bandText, help, sub) => `<div class="hero-ring-stat">
-      ${has(ratio) ? ring(ratio, color, `<div class="ring-value">${value}${unit ? `<small>${unit}</small>` : ""}</div>`) : ""}
+    const ringStat = (label, ratio, value, unit, color, bandText, help, sub, ticks = false) => `<div class="hero-ring-stat">
+      ${has(ratio) ? ring(ratio, color, `<div class="ring-value">${value}${unit ? `<small>${unit}</small>` : ""}</div>`, ticks) : ""}
       <div class="label">${label}${info(help)}</div>
       <div class="ring-band" style="color:${color}">${esc(bandText)}</div>
       ${sub ? `<div class="sub">${esc(sub)}</div>` : ""}
@@ -244,7 +256,7 @@
     const rings = [
       has(recovery.score) ? ringStat("Recovery", recovery.score / 100, Math.round(recovery.score), "%",
         toneColor(recovery.band), bandLabel(recovery.band), "recovery",
-        has(today.hrv && today.hrv.delta_pct) ? `HRV ${signed(today.hrv.delta_pct, 0, "%")} vs median` : "") : "",
+        has(today.hrv && today.hrv.delta_pct) ? `HRV ${signed(today.hrv.delta_pct, 0, "%")} vs median` : "", true) : "",
       perf !== null ? ringStat("Sleep", perf / 100, Math.round(perf), "%", cssVar("--sleep"),
         perf >= 100 ? "Need met" : sleep.debt_minutes ? "Short of need" : "Near need", "sleep_perf",
         `${hm(sleep.minutes)} of ${hm(sleep.need_minutes)}`) : "",
@@ -253,9 +265,11 @@
         bandLabel(load.acwr_band), "load", `${num(load.acute_minutes)} min this week`) : "",
     ].filter(Boolean).join("");
 
+    const focus = (data.coaching && data.coaching.focus) || "";
     const foot = [
       has(readiness.score) ? `Readiness <b>${Math.round(readiness.score)}</b> · ${esc(bandLabel(readiness.band))}` : "",
       has(today.hrv && today.hrv.delta_pct) ? `HRV <b>${signed(today.hrv.delta_pct, 0, "%")}</b> vs your median` : "",
+      focus ? `Focus <b>${esc(focus)}</b>` : "",
     ].filter(Boolean).join('<span class="foot-sep">·</span>');
 
     $("pageTitle").textContent = "Today";
@@ -273,7 +287,7 @@
       }).join("")}
     </div>` : "";
 
-    slot("today").innerHTML = `<div class="hero-card">
+    slot("today").innerHTML = `<div class="hero-card" data-tone="${esc(tone(recovery.band))}">
       <div class="hero-intro">
         <p class="eyebrow">${esc(dateText)} · ${esc(device)}</p>
         <h1>${has(recovery.score) ? esc(bandLabel(recovery.band)) : "Today"}</h1>
@@ -386,6 +400,8 @@
     const peak = Math.max(...values);
     const third = Math.max(1, Math.floor(values.length / 3));
     const drift = Math.round(mean(values.slice(-third)) - mean(values.slice(0, third)));
+    const thirds = [0, 1, 2].map((part) =>
+      Math.round(mean(values.slice(part * third, part === 2 ? values.length : (part + 1) * third))));
 
     const bands = zones ? Object.keys(HR_ZONES).filter((key) => zones[key]).map((key) => {
       const [a, b] = zones[key];
@@ -453,6 +469,11 @@
         </div>
         <div class="hr-axis"><span>${clockInZone(samples[0].t, data.timezone)}</span><span>${clockInZone(samples[samples.length - 1].t, data.timezone)}</span></div>
         <div class="zone-strip" role="img" aria-label="Time spent in each heart-rate zone">${strip}</div>
+        <div class="hr-split">
+          <div><span>First third</span><b>${thirds[0]} bpm</b></div>
+          <div><span>Middle third</span><b>${thirds[1]} bpm</b></div>
+          <div><span>Last third</span><b>${thirds[2]} bpm</b></div>
+        </div>
         <p class="hr-peak">Dashed line is your average. Drift compares the first and last third of the session.</p>
       </div>
       <div class="legend hr-legend">${legend}</div>`;

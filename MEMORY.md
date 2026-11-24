@@ -51,5 +51,7 @@ then update this file at the end of the session.
 
 - Round 14: richer workout panel (area fill, average/dash line, peak marker, zone-minute strip, drift) and recovery factors moved under the hero. Chart text stays in HTML. Fixed a runtime bug where the zone strip used boundary arrays instead of zone minutes.
 
+- Round 15: character pass. Self-hosted Manrope variable woff2 (24 KB, OFL) in assets/fonts; hero wash keyed to recovery tone; 36 fine ticks on the recovery ring; workout panel adds first/middle/last-third readouts. Fixed font URL relative to theme.css.
+
 ## Next steps
 - After the next real sync, check that zone data, age and skin temperature arrive (look for "not measured" in the Data sources panel).

@@ -174,6 +174,7 @@ sync.py                  the run: fetch → analyse → gate → publish
 encrypt_data.py          AES-256-GCM envelope + status file
 index.html               markup
 assets/theme.css         design system
+assets/fonts/            self-hosted Manrope (OFL licence)
 assets/app.js            decrypt + render
 ```
 
