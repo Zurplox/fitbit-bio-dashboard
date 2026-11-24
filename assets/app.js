@@ -306,16 +306,30 @@
     $("pageTitle").textContent = "Today";
     const factors = Array.isArray(recovery.factors) ? recovery.factors : [];
     const labels = (data.policy && data.policy.labels) || {};
-    const factorCard = factors.length ? `<div class="card factors-card">
-      <div class="card-head"><h3>What shaped today's recovery${info("factors")}</h3><span class="faint small">Weight in score</span></div>
-      ${factors.map((f) => {
-        const score = Math.max(0, Math.min(100, Number(f.contribution) || 0));
-        return `<div class="factor">
-          <div class="factor-head"><b>${esc(labels[f.key] || f.key)}</b><span class="muted tnum">${Math.round(Number(f.weight) || 0)}%</span></div>
-          <div class="factor-read">${esc(f.read || "")}</div>
-          <div class="progress"><i style="width:${score}%"></i></div>
-        </div>`;
-      }).join("")}
+    const deckOffsets = [
+      { x: -26, y: 16, r: -6 },
+      { x: 24, y: -14, r: 5 },
+      { x: -18, y: 22, r: -3.5 },
+      { x: 20, y: 12, r: 4.5 },
+    ];
+    const deck = factors.length ? `<div class="deck-section">
+      <div class="section-mini">What shaped today's recovery${info("factors")}</div>
+      <div class="deck" id="factorDeck" role="list" aria-label="Recovery factors">
+        ${factors.map((f, index) => {
+          const score = Math.max(0, Math.min(100, Number(f.contribution) || 0));
+          const offset = deckOffsets[index % deckOffsets.length];
+          return `<button class="deck-card" type="button" role="listitem" data-index="${index}"
+            style="--bx:${offset.x}px;--by:${offset.y}px;--br:${offset.r}deg"
+            aria-label="${esc(labels[f.key] || f.key)}: ${esc(f.read || "")}">
+            <span class="deck-num">${String(index + 1).padStart(2, "0")} / ${String(factors.length).padStart(2, "0")}</span>
+            <span class="deck-label">${esc(labels[f.key] || f.key)}</span>
+            <span class="deck-weight">${Math.round(Number(f.weight) || 0)}% of the score</span>
+            <span class="deck-read">${esc(f.read || "")}</span>
+            <span class="progress"><i style="width:${score}%"></i></span>
+          </button>`;
+        }).join("")}
+      </div>
+      <p class="sub deck-hint">Tap a card to bring it forward. Flick the top card to send it to the back.</p>
     </div>` : "";
 
     slot("today").innerHTML = `<div class="hero-card" data-tone="${esc(tone(recovery.band))}">
@@ -326,7 +340,68 @@
       </div>
       ${rings ? `<div class="hero-rings">${rings}</div>` : ""}
       ${foot ? `<div class="hero-foot">${foot}</div>` : ""}
-    </div>${factorCard ? `<div style="height:16px"></div>${factorCard}` : ""}`;
+    </div>${deck ? `<div style="height:16px"></div>${deck}` : ""}`;
+  }
+
+  function bindFactorDeck() {
+    const deck = $("factorDeck");
+    if (!deck) return;
+    const cards = [...deck.querySelectorAll(".deck-card")];
+    if (cards.length < 2) return;
+    let order = cards.map((_, index) => index);
+
+    function paint() {
+      order.forEach((cardIndex, position) => {
+        const card = cards[cardIndex];
+        const depth = order.length - 1 - position;
+        const front = depth === 0;
+        const style = card.style;
+        style.setProperty("--x", front ? "0px" : `calc(var(--bx) * var(--stack-scale) * ${0.5 + depth * 0.35})`);
+        style.setProperty("--y", front ? "0px" : `calc(var(--by) * var(--stack-scale) * ${0.5 + depth * 0.35})`);
+        style.setProperty("--r", front ? "0deg" : `calc(var(--br) * var(--stack-scale) * ${0.5 + depth * 0.35})`);
+        style.setProperty("--z", String(position + 1));
+        card.dataset.front = String(front);
+      });
+    }
+
+    function toFront(index) {
+      order = order.filter((value) => value !== index).concat(index);
+      paint();
+    }
+
+    function toBack(index) {
+      order = [index].concat(order.filter((value) => value !== index));
+      paint();
+    }
+
+    cards.forEach((card) => {
+      const index = Number(card.dataset.index);
+      let startX = 0;
+      let dragged = false;
+      card.addEventListener("pointerdown", (event) => {
+        startX = event.clientX;
+        dragged = false;
+      });
+      card.addEventListener("pointermove", (event) => {
+        if (Math.abs(event.clientX - startX) > 32) dragged = true;
+      });
+      card.addEventListener("pointerup", () => {
+        if (dragged && order[order.length - 1] === index) toBack(index);
+      });
+      card.addEventListener("click", () => {
+        if (dragged) return;
+        if (order[order.length - 1] === index) toBack(index);
+        else toFront(index);
+      });
+      card.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          if (order[order.length - 1] === index) toBack(index);
+          else toFront(index);
+        }
+      });
+    });
+    paint();
   }
 
   /* -------------------------------------------------------------- vitals -- */
@@ -1122,6 +1197,7 @@
 
     renderChrome(data);
     renderToday(view);
+    bindFactorDeck();
     renderVitals(view);
     renderSleep(view);
     renderHeart(view);

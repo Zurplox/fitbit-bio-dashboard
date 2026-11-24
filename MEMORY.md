@@ -33,6 +33,8 @@ Consumer fitness app: quiet top bar, hero with three rings (Recovery, Sleep, Tra
 
 - HR ribbon is scrubbable: pointer hover/drag with capture, touch drag via pointer events, and arrow/Home/End/Escape keys. Tooltip shows minute, bpm and zone; crosshair is SVG line + dot. `bindHrScrub()` is called after Activity renders.
 
+- Recovery factors are now an untidy stacked deck under the rings. `bindFactorDeck()` manages order, click-to-front and drag-to-back; CSS `--stack-scale` shrinks offsets on phones so the deck never overflows.
+
 ## Next steps
 - After a real sync, check the Data sources panel for anything still "not measured".
 - Keep `MEMORY.md` short; condense this again if it grows.

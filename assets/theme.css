@@ -294,7 +294,26 @@ a { color: inherit; }
 
 /* --------------------------------------------------------- sleep/coach -- */
 .stagebar + .legend { margin-bottom: 8px; }
-.factors-card { margin-top: 16px; }
+.deck-section { margin-top: 16px; }
+.deck { position: relative; height: 250px; margin-top: 12px; }
+.deck-card {
+  --stack-scale: 1;
+  position: absolute; left: 50%; top: 0; width: min(100%, 380px); min-height: 176px;
+  padding: 20px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface);
+  display: grid; align-content: start; gap: 5px; text-align: left;
+  transform: translateX(-50%) translate(var(--x), var(--y)) rotate(var(--r));
+  z-index: var(--z); user-select: none; touch-action: pan-y;
+  box-shadow: 0 8px 24px rgba(23, 23, 27, .06);
+  transition: transform .45s var(--ease), box-shadow .3s var(--ease);
+}
+.deck-card[data-front="true"] { box-shadow: none; cursor: grab; }
+.deck-card[data-front="true"]:active { cursor: grabbing; }
+.deck-num { font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.deck-label { font-size: 22px; font-weight: 600; letter-spacing: -0.03em; }
+.deck-weight { font-size: 12px; color: var(--muted); }
+.deck-read { font-size: 14px; color: var(--muted); margin-top: 4px; }
+.deck-card .progress { margin-top: 12px; }
+.deck-hint { margin-top: 4px; }
 .factor { padding: 13px 0; border-top: 1px solid var(--line); }
 .factor:first-child { border-top: 0; padding-top: 0; }
 .factor-head { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
@@ -375,6 +394,9 @@ details.plain > div { margin-top: 14px; }
   .zone-tr { grid-template-columns: 1fr 64px 48px; }
   .te-tr { grid-template-columns: 52px 1fr 48px 56px; gap: 6px; }
   .te-grid { gap: 18px; }
+  .deck { height: 230px; }
+  .deck-card { --stack-scale: .4; width: calc(100% - 64px); }
+  .actions #btnRefresh, .actions #btnPrint { display: none; }
   .hr-ribbon svg, .hr-y { height: 210px; }
   .hr-split { margin-left: 0; grid-template-columns: 1fr; }
   .signal-row { display: flex; flex-wrap: wrap; gap: 4px 12px; }
@@ -389,7 +411,8 @@ details.plain > div { margin-top: 14px; }
 @media (max-width: 380px) {
   .topbar-in { gap: 8px; padding: 0 12px; }
   .brand { font-size: 14px; }
-  .actions #btnRefresh, .actions #btnPrint { display: none; }
+  .actions #btnRefresh, .actions #btnPrint, .actions #btnTheme { display: none; }
+  .deck-card { --stack-scale: .25; }
   .tabbar { left: 12px; right: 12px; transform: none; justify-content: space-around; }
   .tabbar a { min-width: 0; flex: 1; padding: 7px 2px; }
 }
