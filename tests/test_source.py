@@ -74,6 +74,53 @@ class SkinTempTests(unittest.TestCase):
         self.assertEqual(dq.as_dict()["metrics"]["skin_temp"]["source"], "live")
 
 
+class ExerciseDetailTests(unittest.TestCase):
+    def test_keeps_every_summary_metric_and_local_start(self):
+        point = {"exercise": {
+            "exerciseType": "RUNNING",
+            "displayName": "Tempo run",
+            "interval": {
+                "civilStartTime": {"year": 2026, "month": 11, "day": 23},
+                "startTime": "2026-11-23T03:01:20.400Z",
+                "endTime": "2026-11-23T03:31:20.400Z",
+                "startUtcOffset": "28800s",
+            },
+            "metricsSummary": {
+                "caloriesKcal": "300",
+                "averageHeartRateBeatsPerMinute": "150",
+                "steps": "4500",
+                "distanceMillimeters": "5000000",
+                "activeZoneMinutes": "24",
+                "elevationGainMillimeters": "12000",
+                "runVo2Max": "48.2",
+                "averagePaceSecondsPerMeter": "0.36",
+                "averageSpeedMillimetersPerSecond": "2778",
+                "totalSwimLengths": "0",
+                "mobilityMetrics": {
+                    "avgCadenceStepsPerMinute": "172",
+                    "avgStrideLengthMillimeters": "1050",
+                    "avgGroundContactTimeDuration": "242ms",
+                    "avgVerticalOscillationMillimeters": "82",
+                    "avgVerticalRatio": "6.9",
+                },
+                "heartRateZoneDurations": {
+                    "lightTime": "300s", "moderateTime": "900s", "vigorousTime": "600s", "peakTime": "0s",
+                },
+            },
+        }}
+        rows = source.fetch_exercise(FakeClient(points={"exercise": [point]}), days=30)
+        self.assertEqual(len(rows), 1)
+        s = rows[0]
+        self.assertEqual((s["date"], s["start_local"], s["minutes"]), ("2026-11-23", "11:01", 30))
+        self.assertEqual((s["calories"], s["avg_hr"], s["steps"], s["distance_m"]), (300.0, 150.0, 4500.0, 5000))
+        self.assertEqual((s["pace_s_per_m"], s["speed_kmh"], s["elevation_m"], s["run_vo2max"]), (0.36, 10.0, 12, 48.2))
+        self.assertEqual(s["mobility"], {
+            "cadence_spm": 172.0, "stride_m": 1.05, "ground_contact_ms": 242.0,
+            "vertical_cm": 8.2, "vertical_ratio": 6.9,
+        })
+        self.assertEqual(s["zones"], {"light": 5.0, "moderate": 15.0, "vigorous": 10.0, "peak": 0.0})
+
+
 class TimestampTests(unittest.TestCase):
     def test_civil_date_from_offset(self):
         # 23:30Z at +8h is the next morning, so the night belongs to the 2nd.

@@ -82,6 +82,7 @@
     bmi: "Weight relative to height. A rough screening number: it can't tell muscle from fat.",
     intensity: "How your workout time splits between easy effort, where you could still talk, and hard effort, where you are breathing heavily. Most endurance plans aim for about 80% easy.",
     active: "Minutes you moved briskly enough to raise your heart rate. Health guidelines suggest at least 150 a week.",
+    workout: "Every measurement the API reported for your most recent session, plus how it compares with your recent sessions of the same kind. Pace and speed are only shown when measured or calculable from distance and time.",
     te: "How hard your workout was for you, Garmin-style. Aerobic counts steady effort (moderate and vigorous heart-rate zones; easy light-zone time doesn't count, as with Fitbit's Active Zone Minutes); anaerobic counts all-out bursts (peak zone). 5.0 means as hard as your toughest recent sessions.",
     heatmap: "Each square is one day. Darker squares mean more training minutes.",
     factors: "How each signal scored against your own normal, and how much it counts toward your recovery score.",
@@ -609,15 +610,6 @@
     </div>` : "";
 
     const sessions = exerciseLive ? (h.exercise || []).filter((s) => s.date) : [];
-    const workouts = sessions.length ? `<div class="card">
-      <div class="card-head"><h3>Recent workouts</h3></div>
-      <div class="list">${sessions.slice(-6).reverse().map((s) => `<div class="list-row">
-        <span class="muted tnum">${shortDate(s.date)}</span>
-        <span>${esc((s.type || s.name || "Workout").replace(/^./, (c) => c.toUpperCase()))}</span>
-        <span class="meta">${[hm(s.minutes), has(s.avg_hr) ? `${num(s.avg_hr)} bpm` : "", has(s.distance_m) ? `${num(s.distance_m / 1000, 1)} km` : ""].filter(Boolean).join(" · ")}</span>
-      </div>`).join("")}</div>
-    </div>` : "";
-
     const mix = (data.markers && data.markers.intensity) || {};
     const mixCard = mix.available ? `<div class="card">
       <div class="card-head"><h3>Aerobic vs high intensity${info("intensity")}</h3>${status(mix.band)}</div>
@@ -642,50 +634,132 @@
       ])}
     </div>` : "";
 
-    // Garmin-style training effect, on a 0-5 scale relative to your own
-    // hardest sessions (see bio_policy).
+    // Latest workout: every measurement the API sent, plus a comparison with
+    // recent sessions. No chart; all of it is numbers and short tables.
     const te = (data.markers && data.markers.training_effect) || {};
+    const teByDate = {};
+    (te.sessions || []).forEach((row) => { teByDate[row.date] = row; });
     const gauge = (value, color) => `<div class="te-gauge" role="img" aria-label="${num(value, 1)} of 5">
       ${[0, 1, 2, 3, 4].map((i) => `<i style="--fill:${Math.max(0, Math.min(1, value - i)) * 100}%;--c:${color}"></i>`).join("")}
     </div>`;
-    const typeName = (s) => esc((s.type || "Workout").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()));
-    const last = te.available ? te.sessions[te.sessions.length - 1] : null;
-    const teCard = last ? `<div class="card">
-      <div class="card-head"><h3>Training effect${info("te")}</h3><span class="faint small">Last training session · ${shortDate(last.date)} · ${typeName(last)} · ${hm(last.minutes)}</span></div>
-      <div class="te-grid">
-        <div>
-          <div class="label">Aerobic</div>
-          <div class="te-value">${num(last.aerobic, 1)}<small>/ 5</small></div>
-          ${gauge(last.aerobic, "var(--chart)")}
-          <div class="te-band">${esc(bandLabel(last.aerobic_band))}</div>
-        </div>
-        <div>
-          <div class="label">Anaerobic</div>
-          <div class="te-value">${num(last.anaerobic, 1)}<small>/ 5</small></div>
-          ${gauge(last.anaerobic, "var(--warn)")}
-          <div class="te-band">${esc(bandLabel(last.anaerobic_band))}</div>
-        </div>
-      </div>
-      ${te.sessions.length > 1 ? `<div class="te-table">
-        <div class="te-tr te-th"><span>Date</span><span>Session</span><span>Aerobic</span><span>Anaerobic</span></div>
-        ${te.sessions.slice(0, -1).reverse().map((s) => `<div class="te-tr">
-          <span class="muted">${shortDate(s.date)}</span>
-          <span>${typeName(s)} <span class="faint">${hm(s.minutes)}</span></span>
-          <b class="te-a">${num(s.aerobic, 1)}</b>
-          <b class="te-n">${num(s.anaerobic, 1)}</b>
+    const workoutName = (row) => esc(row.name || (row.type || "Workout").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()));
+    const dated = sessions.slice().sort((a, b) => a.date.localeCompare(b.date));
+    const latest = dated[dated.length - 1];
+    const paceOf = (row) => has(row.pace_s_per_m)
+      ? row.pace_s_per_m * 1000 / 60
+      : has(row.distance_m) && row.distance_m && has(row.minutes) && row.minutes
+        ? row.minutes / (row.distance_m / 1000)
+        : null;
+    const meanOf = (values) => values.length >= 2 ? values.reduce((a, c) => a + c, 0) / values.length : null;
+
+    let latestCard = "";
+    if (exerciseLive && latest) {
+      const sameType = dated.slice(0, -1).filter((row) => row.type === latest.type);
+      const peers = (sameType.length >= 2 ? sameType : dated.slice(0, -1)).slice(-8);
+      const peerLabel = sameType.length >= 2
+        ? `your last ${peers.length} ${(latest.type || "session").replace(/_/g, " ")} sessions`
+        : `your last ${peers.length} sessions`;
+      const values = (key) => peers.map((row) => row[key]).filter(has);
+      const paceValues = peers.map(paceOf).filter(has);
+      const compareRows = [];
+      const addCompare = (label, current, peerValues, format, digits, suffix) => {
+        if (!has(current)) return;
+        const peer = meanOf(peerValues);
+        if (peer === null) return;
+        compareRows.push(`<div class="data-tr compare-tr">
+          <span>${label}</span><b>${format(current)}</b><span>${format(peer)}</span>
+          <span class="diff">${signed(current - peer, digits, suffix)}</span>
+        </div>`);
+      };
+      addCompare("Duration", latest.minutes, values("minutes"), (v) => hm(v), 0, " min");
+      addCompare("Average HR", latest.avg_hr, values("avg_hr"), (v) => `${num(v)} bpm`, 0, " bpm");
+      addCompare("Calories", latest.calories, values("calories"), (v) => `${num(v)} kcal`, 0, " kcal");
+      addCompare("Distance", latest.distance_m, values("distance_m"), (v) => `${num(v)} m`, 0, " m");
+      addCompare("Steps", latest.steps, values("steps"), (v) => num(v), 0, "");
+      addCompare("Pace", paceOf(latest), paceValues, (v) => `${v.toFixed(1)} min/km`, 1, " min/km");
+
+      const mob = latest.mobility || {};
+      const pace = paceOf(latest);
+      const stats = readouts([
+        ["Started", latest.start_local],
+        ["Duration", has(latest.minutes) ? hm(latest.minutes) : null],
+        ["Average HR", has(latest.avg_hr) ? `${num(latest.avg_hr)} bpm` : null],
+        ["Calories", has(latest.calories) ? `${num(latest.calories)} kcal` : null],
+        ["Distance", has(latest.distance_m) ? `${num(latest.distance_m)} m` : null],
+        ["Steps", has(latest.steps) ? num(latest.steps) : null],
+        ["Active zone min", has(latest.active_zone_minutes) ? `${num(latest.active_zone_minutes)} min` : null],
+        ["Elevation", has(latest.elevation_m) ? `${num(latest.elevation_m)} m` : null],
+        ["Run VO₂ max", has(latest.run_vo2max) ? `${num(latest.run_vo2max, 1)} ml/kg/min` : null],
+        [has(latest.pace_s_per_m) ? "Pace" : "Pace (from distance)", has(pace) ? `${pace.toFixed(1)} min/km` : null],
+        ["Speed", has(latest.speed_kmh) ? `${num(latest.speed_kmh, 1)} km/h` : null],
+        ["Swim lengths", has(latest.swim_lengths) ? num(latest.swim_lengths) : null],
+        ["Cadence", has(mob.cadence_spm) ? `${num(mob.cadence_spm)} spm` : null],
+        ["Stride", has(mob.stride_m) ? `${num(mob.stride_m, 2)} m` : null],
+        ["Ground contact", has(mob.ground_contact_ms) ? `${num(mob.ground_contact_ms)} ms` : null],
+        ["Vertical oscillation", has(mob.vertical_cm) ? `${num(mob.vertical_cm, 1)} cm` : null],
+        ["Vertical ratio", has(mob.vertical_ratio) ? num(mob.vertical_ratio, 1) : null],
+      ]);
+
+      const zones = latest.zones;
+      const zoneTotal = zones ? Object.values(zones).reduce((sum, value) => sum + (value || 0), 0) : 0;
+      const zoneTable = zones && zoneTotal ? `<div class="data-table">
+        <div class="data-tr zone-tr data-th"><span>Heart-rate zone</span><span>Time</span><span>Share</span></div>
+        ${[["light", "Light"], ["moderate", "Moderate"], ["vigorous", "Vigorous"], ["peak", "Peak"]].map(([key, label]) => `<div class="data-tr zone-tr">
+          <span>${label}</span><b>${hm(zones[key] || 0)}</b><span>${num(Math.round(100 * (zones[key] || 0) / zoneTotal))}%</span>
         </div>`).join("")}
-      </div>` : ""}
-      ${te.easy_sessions ? `<p class="sub" style="margin-top:12px">Plus ${num(te.easy_sessions)} easy ${te.easy_sessions === 1 ? "session" : "sessions"}, all in the light zone, with no training effect.</p>` : ""}
-      <p class="note">Scored against your own ${num(te.scale_sessions)} workouts from the last ${num(te.window_days)} days: 5.0 matches your hardest. This is not Garmin's Firstbeat score.</p>
-      ${study(te.evidence)}
-    </div>` : "";
+      </div>` : "";
+
+      const teNow = teByDate[latest.date];
+      const easyOnly = zones && zoneTotal && (zones.light || 0) === zoneTotal;
+      const teBlock = teNow ? `<div class="te-grid">
+        <div>
+          <div class="label">Aerobic effect</div>
+          <div class="te-value">${num(teNow.aerobic, 1)}<small>/ 5</small></div>
+          ${gauge(teNow.aerobic, "var(--chart)")}
+          <div class="te-band">${esc(bandLabel(teNow.aerobic_band))}</div>
+        </div>
+        <div>
+          <div class="label">Anaerobic effect</div>
+          <div class="te-value">${num(teNow.anaerobic, 1)}<small>/ 5</small></div>
+          ${gauge(teNow.anaerobic, "var(--warn)")}
+          <div class="te-band">${esc(bandLabel(teNow.anaerobic_band))}</div>
+        </div>
+      </div>` : easyOnly ? `<p class="sub">All ${hm(zoneTotal)} was in the light zone, so this session has no aerobic or anaerobic training effect.</p>` : "";
+
+      const history = te.sessions && te.sessions.length > 1 ? `<details class="plain">
+        <summary>Recent training effects</summary>
+        <div class="te-table">
+          <div class="te-tr te-th"><span>Date</span><span>Session</span><span>Aerobic</span><span>Anaerobic</span></div>
+          ${te.sessions.slice(0, -1).reverse().map((row) => `<div class="te-tr">
+            <span class="muted">${shortDate(row.date)}</span>
+            <span>${workoutName(row)} <span class="faint">${hm(row.minutes)}</span></span>
+            <b class="te-a">${num(row.aerobic, 1)}</b>
+            <b class="te-n">${num(row.anaerobic, 1)}</b>
+          </div>`).join("")}
+        </div>
+      </details>` : "";
+
+      latestCard = `<div class="card">
+        <div class="card-head"><h3>Latest workout${info("workout")}</h3><span class="faint small">${shortDate(latest.date)} · ${workoutName(latest)}</span></div>
+        ${stats}
+        ${zoneTable ? `<div class="section-mini">Time in zones</div>${zoneTable}` : ""}
+        ${teBlock ? `<div class="section-mini">Training effect</div>${teBlock}` : ""}
+        ${compareRows.length ? `<div class="section-mini">Against ${peerLabel}</div>
+          <div class="data-table">
+            <div class="data-tr compare-tr data-th"><span>Measure</span><span>This session</span><span>Recent average</span><span>Difference</span></div>
+            ${compareRows.join("")}
+          </div>` : ""}
+        ${teNow ? `<p class="note">Training effect is scored against your own ${num(te.scale_sessions)} workouts from the last ${num(te.window_days)} days${te.easy_sessions ? `, plus ${num(te.easy_sessions)} easy sessions with no effect` : ""}. This is not Garmin's Firstbeat score.</p>${study(te.evidence)}` : ""}
+        ${history}
+      </div>`;
+    }
 
     const pair = (a, b) => (a && b ? `<div class="grid cols-2">${a}${b}</div>` : a || b);
     slot("activity").innerHTML = [
+      latestCard,
       stats.length ? `<div class="tiles card">${stats.join("")}</div>` : "",
       pair(loadCard, mixCard),
       consistency,
-      teCard || workouts,
     ].filter(Boolean).join('<div style="height:16px"></div>') || `<p class="muted">No activity in this sync.</p>`;
   }
 

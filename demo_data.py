@@ -82,18 +82,20 @@ def synthetic_fetch(days=DEMO_DAYS, seed=11):
             vo2max.append({"date": day.isoformat(), "value": round(46.2 + 0.012 * offset, 1)})
 
         if offset % 7 in (1, 3, 5):
-            minutes = round(rng.gauss(44, 14))
+            minutes = max(15, round(rng.gauss(44, 14)))
+            distance = round(minutes * rng.uniform(120, 240)) if offset % 2 else None
             exercise.append(
                 {
                     "date": day.isoformat(),
                     "start": f"{day.isoformat()}T18:10:00Z",
-                    "minutes": max(15, minutes),
+                    "start_local": "18:10",
+                    "minutes": minutes,
                     "type": rng.choice(["running", "walking", "cycling", "strength"]),
                     "name": "Evening session",
                     "calories": round(minutes * rng.uniform(7, 11)),
                     "avg_hr": round(rng.gauss(132, 9)),
                     "steps": round(minutes * rng.uniform(90, 160)),
-                    "distance_m": round(minutes * rng.uniform(120, 240)) if offset % 2 else None,
+                    "distance_m": distance,
                     "active_zone_minutes": round(minutes * 0.6),
                     "zones": {
                         "light": round(minutes * 0.25, 1),
@@ -101,6 +103,10 @@ def synthetic_fetch(days=DEMO_DAYS, seed=11):
                         "vigorous": round(minutes * rng.uniform(0.15, 0.25), 1),
                         "peak": round(minutes * rng.uniform(0.0, 0.08), 1),
                     },
+                    "pace_s_per_m": round(minutes * 60 / distance, 2) if distance else None,
+                    "speed_kmh": round(distance / minutes * 0.06, 1) if distance else None,
+                    "swim_lengths": None,
+                    "mobility": None,
                 }
             )
 

@@ -306,7 +306,11 @@ a { color: inherit; }
 .data-tr > b { font-weight: 600; }
 .data-th { border-top: 0; padding-top: 0; color: var(--faint); font-family: var(--sans); }
 .data-th > span:not(:first-child) { text-align: right; }
-.data-tr > span:not(:first-child) { text-align: right; }
+.data-tr > span:not(:first-child), .data-tr > b:not(:first-child) { text-align: right; }
+.compare-tr { grid-template-columns: 112px repeat(3, 1fr); }
+.zone-tr { grid-template-columns: 1fr 92px 72px; }
+.compare-tr .diff { color: var(--text); }
+.section-mini { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 11px; font-weight: 600; color: var(--muted); }
 
 /* ------------------------------------------------------------ activity -- */
 .progress { height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; margin-top: 12px; }
@@ -408,6 +412,8 @@ details.plain > div { margin-top: 12px; }
   .shell { padding-left: 12px; padding-right: 12px; }
   .cols-2 { grid-template-columns: 1fr; }
   .data-tr { grid-template-columns: 52px repeat(4, 1fr); gap: 4px; font-size: 11px; }
+  .compare-tr { grid-template-columns: 84px repeat(3, 1fr); }
+  .zone-tr { grid-template-columns: 1fr 72px 52px; }
   .signal-row { grid-template-columns: 1fr auto; row-gap: 4px; }
   .signal-row .muted { grid-column: 1; }
   .signal-row .status { grid-column: 2; grid-row: 2; }

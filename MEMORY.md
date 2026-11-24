@@ -41,5 +41,7 @@ then update this file at the end of the session.
 
 - Round 9 (final tightening): Heart section no longer duplicates HRV/RHR/VO₂ cards; it is a two-row baseline context list plus skin temperature and 24-hour readouts. QA on real data passed.
 
+- Round 10: Latest workout panel. `fetch_exercise` now keeps pace, speed, swim lengths, local start time and mobility metrics (cadence, stride, ground contact, vertical oscillation/ratio) when the API sends them. The panel compares the workout with the last 8 same-type sessions. Real walk shows only measured fields; pace is calculated from distance and labelled as such.
+
 ## Next steps
 - After the next real sync, check that zone data, age and skin temperature arrive (look for "not measured" in the Data sources panel).

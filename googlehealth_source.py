@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -89,6 +90,55 @@ def _civil_from_iso(iso_timestamp, offset_seconds=0):
         moment = moment.astimezone(timezone.utc).replace(tzinfo=None)
     local = moment + timedelta(seconds=offset_seconds or 0)
     return local.date().isoformat()
+
+
+def _local_clock(iso_timestamp, offset_seconds=0):
+    """Wall-clock HH:MM of a timestamp, using the exercise's recorded offset."""
+    if not iso_timestamp:
+        return None
+    try:
+        moment = datetime.fromisoformat(iso_timestamp.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if moment.tzinfo is not None:
+        moment = moment.astimezone(timezone.utc).replace(tzinfo=None)
+    return (moment + timedelta(seconds=offset_seconds or 0)).strftime("%H:%M")
+
+
+def _amount(value):
+    """First number in a value that may carry units ('242ms', '1.2m')."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    match = re.search(r"-?\d+(?:\.\d+)?", str(value))
+    return float(match.group()) if match else None
+
+
+def _mobility(raw):
+    """Running-form metrics from MobilityMetrics, only when the API sent them."""
+    if not raw:
+        return None
+    out = {}
+    for source_key, key, scale in (
+        ("avgCadenceStepsPerMinute", "cadence_spm", 1),
+        ("avgStrideLengthMillimeters", "stride_m", 0.001),
+        ("avgVerticalOscillationMillimeters", "vertical_cm", 0.1),
+        ("avgVerticalRatio", "vertical_ratio", 1),
+    ):
+        value = _amount(raw.get(source_key))
+        if value is not None:
+            out[key] = round(value * scale, 2)
+    contact = raw.get("avgGroundContactTimeDuration")
+    contact_ms = _amount(contact)
+    if contact_ms is not None:
+        if isinstance(contact, str) and contact.strip().lower().endswith("ms"):
+            out["ground_contact_ms"] = round(contact_ms, 1)
+        elif isinstance(contact, str) and contact.strip().lower().endswith("s"):
+            out["ground_contact_ms"] = round(contact_ms * 1000, 1)
+        else:
+            out["ground_contact_ms"] = round(contact_ms, 1)
+    return out or None
 
 
 def _seconds(duration):
@@ -723,6 +773,7 @@ def fetch_exercise(client, days=90, dq=None):
         metrics = exercise.get("metricsSummary") or {}
         start = interval.get("startTime")
         end = interval.get("endTime")
+        offset = _seconds(interval.get("startUtcOffset"))
         minutes = None
         if start and end:
             try:
@@ -737,8 +788,9 @@ def fetch_exercise(client, days=90, dq=None):
         sessions.append(
             {
                 "date": _civil(interval.get("civilStartTime"))
-                or _civil_from_iso(start, _seconds(interval.get("startUtcOffset"))),
+                or _civil_from_iso(start, offset),
                 "start": start,
+                "start_local": _local_clock(start, offset),
                 "minutes": minutes,
                 "type": str(exercise.get("exerciseType") or "OTHER").lower(),
                 "name": exercise.get("displayName") or str(exercise.get("exerciseType") or "Session").title(),
@@ -754,6 +806,12 @@ def fetch_exercise(client, days=90, dq=None):
                 if metrics.get("elevationGainMillimeters") is not None
                 else None,
                 "run_vo2max": _num(metrics.get("runVo2Max")),
+                "pace_s_per_m": _num(metrics.get("averagePaceSecondsPerMeter")),
+                "speed_kmh": round(_num(metrics.get("averageSpeedMillimetersPerSecond")) * 0.0036, 1)
+                if metrics.get("averageSpeedMillimetersPerSecond") is not None
+                else None,
+                "swim_lengths": _num(metrics.get("totalSwimLengths")),
+                "mobility": _mobility(metrics.get("mobilityMetrics")),
             }
         )
 
