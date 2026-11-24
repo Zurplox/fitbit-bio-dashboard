@@ -461,7 +461,7 @@ class SourceViewTests(unittest.TestCase):
         filtered = sync.filter_fetched(fetched)
         self.assertTrue(all(source.is_fitbit(row) for row in filtered["sleep"]))
         self.assertEqual(filtered["steps"], [])
-        self.assertEqual(len(filtered["workout_hr"]), len(fetched["fitbit_workout_hr"]))
+        self.assertEqual(len(filtered["workout_hr"]), len((fetched["source_workout_hr"] or {}).get("fitbit") or []))
         self.assertEqual([d["label"] for d in filtered["sources"]["devices"]], ["Fitbit Air"])
 
     def test_both_views_are_built(self):

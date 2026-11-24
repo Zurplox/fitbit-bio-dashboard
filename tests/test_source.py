@@ -149,6 +149,13 @@ class WorkoutHeartTests(unittest.TestCase):
         self.assertEqual(zones["source_platform"], "UNKNOWN")
 
 
+class SourceGroupTests(unittest.TestCase):
+    def test_groups_known_device_families(self):
+        self.assertEqual(source.source_group({"source_label": "Fitbit Air", "source_platform": "FITBIT"}), "fitbit")
+        self.assertEqual(source.source_group({"source_label": "Garmin Connect", "source_platform": "HEALTH_CONNECT"}), "garmin")
+        self.assertEqual(source.source_group({"source_label": "Google Fit", "source_platform": "HEALTH_CONNECT"}), "other")
+
+
 class TimestampTests(unittest.TestCase):
     def test_civil_date_from_offset(self):
         # 23:30Z at +8h is the next morning, so the night belongs to the 2nd.

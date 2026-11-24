@@ -8,7 +8,7 @@
   "use strict";
 
   const $ = (id) => document.getElementById(id);
-  const state = { payload: null, passphrase: null, theme: null, source: "fitbit" };
+  const state = { payload: null, passphrase: null, theme: null, source: "fitbit", stackMode: true, stackIndex: 0, celebrated: new Set() };
 
   /* ------------------------------------------------------------- helpers -- */
   const DASH = "–";
@@ -194,25 +194,74 @@
     applyTheme(stored || "light");
   }
 
+  const SOURCE_ICONS = {
+    fitbit: '<svg viewBox="0 0 24 24"><circle cx="7" cy="15" r="2.2"/><circle cx="11" cy="12" r="2.8"/><circle cx="16" cy="9" r="3.4"/></svg>',
+    garmin: '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="3"/><path d="M9 6V4M15 6V4M9 20v-2M15 20v-2M6 10H4M6 14H4M20 10h-2M20 14h-2"/></svg>',
+    other: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 16.5 7.8 12.4a2.6 2.6 0 0 1 3.7-3.7l.5.5.5-.5a2.6 2.6 0 0 1 3.7 3.7Z"/></svg>',
+    all: '<svg viewBox="0 0 24 24"><circle cx="8" cy="12" r="3"/><circle cx="15" cy="8" r="2.4"/><circle cx="16" cy="16" r="2.4"/></svg>',
+  };
+  const SOURCE_LABELS = {
+    fitbit: "Fitbit Air", garmin: "Garmin Fenix", other: "Google / other", all: "All sources",
+  };
+  const SOURCE_ORDER = ["fitbit", "garmin", "other", "all"];
+  const SOURCE_DESCRIPTIONS = {
+    fitbit: "Your Fitbit Air only", garmin: "Garmin watch sessions", other: "Google Fit and phone", all: "Everything combined",
+  };
+
+  function closeSourceMenu() {
+    const menu = $("sourceMenu");
+    const button = $("sourceButton");
+    if (menu) menu.hidden = true;
+    if (button) button.setAttribute("aria-expanded", "false");
+  }
+
+  function updateSourceUI(data) {
+    const picker = $("sourcePicker");
+    if (!picker) return;
+    const views = data.views || null;
+    picker.hidden = !views;
+    if (!views) return;
+    if (!views[state.source]) state.source = data.default_view || "fitbit";
+
+    const button = $("sourceButton");
+    if (button) {
+      button.innerHTML = `<span class="source-icon" aria-hidden="true">${SOURCE_ICONS[state.source]}</span>
+        <span>${esc(SOURCE_LABELS[state.source])}</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>`;
+      button.setAttribute("aria-label", `Data source: ${SOURCE_LABELS[state.source]}`);
+    }
+    const menu = $("sourceMenu");
+    if (!menu) return;
+    menu.innerHTML = SOURCE_ORDER.map((key) => {
+      const view = views[key];
+      const count = view && view.history ? (view.history.exercise || []).length : 0;
+      return `<button class="source-option${key === state.source ? " selected" : ""}" type="button"
+        role="option" aria-selected="${key === state.source}" data-source="${key}"${view ? "" : " disabled"}>
+        <span class="source-icon" aria-hidden="true">${SOURCE_ICONS[key]}</span>
+        <span class="source-text"><b>${esc(SOURCE_LABELS[key])}</b><small>${esc(SOURCE_DESCRIPTIONS[key])}</small></span>
+        <span class="source-count">${view ? `${count} workouts` : "no data"}</span>
+      </button>`;
+    }).join("");
+  }
+
   function initSource() {
     try {
       const stored = localStorage.getItem("ma-source");
-      if (stored === "fitbit" || stored === "all") state.source = stored;
+      if (SOURCE_ORDER.includes(stored)) state.source = stored;
     } catch (error) {
       /* private mode: use the default */
     }
-    const select = $("sourceSelect");
-    if (select) select.value = state.source;
   }
 
   function setSource(next) {
-    if (next !== "fitbit" && next !== "all") return;
+    if (!SOURCE_ORDER.includes(next)) return;
     state.source = next;
     try {
       localStorage.setItem("ma-source", next);
     } catch (error) {
       /* preference is not essential */
     }
+    closeSourceMenu();
     if (state.payload) render(state.payload);
   }
 
@@ -306,6 +355,7 @@
     $("pageTitle").textContent = "Today";
     const factors = Array.isArray(recovery.factors) ? recovery.factors : [];
     const labels = (data.policy && data.policy.labels) || {};
+    const markers = data.markers || {};
     const factorDetail = {
       hrv: "Compared with your own 30-night median.",
       rhr: "Compared with your own 30-day median.",
@@ -318,28 +368,72 @@
       { x: -18, y: 22, r: -3.5 },
       { x: 20, y: 12, r: 4.5 },
     ];
-    const deck = factors.length ? `<div class="deck-section">
-      <div class="section-mini">What shaped today's recovery${info("factors")}</div>
-      <div class="deck" id="factorDeck" role="list" aria-label="Recovery factors">
-        ${factors.map((f, index) => {
-          const weight = Number(f.weight) || 0;
-          const points = Number(f.contribution) || 0;
-          const score = weight ? Math.max(0, Math.min(100, Math.round(100 * points / weight))) : 0;
+
+    const deckItems = factors.map((f) => {
+      const weight = Number(f.weight) || 0;
+      const points = Number(f.contribution) || 0;
+      const score = weight ? Math.max(0, Math.min(100, Math.round(100 * points / weight))) : 0;
+      return {
+        key: `factor-${f.key}`, label: labels[f.key] || f.key, help: "factors",
+        score, read: f.read || "", detail: factorDetail[f.key] || "",
+        note: `${Math.round(weight)}% of today's recovery score`,
+      };
+    });
+
+    if (perf !== null) deckItems.push({
+      key: "sleep-performance", label: "Sleep performance", help: "sleep_perf",
+      score: Math.round(perf), read: `${hm(sleep.minutes)} of ${hm(sleep.need_minutes)} needed`,
+      detail: "Hours asleep against tonight's need.", note: "Sleep need",
+    });
+    if (has(readiness.score)) deckItems.push({
+      key: "readiness", label: "Training readiness", help: "readiness",
+      score: Math.round(readiness.score), read: bandLabel(readiness.band),
+      detail: "Recovery tempered by the load trend.", note: "Today's readiness",
+    });
+    if (has(load.acwr)) deckItems.push({
+      key: "load", label: "Training load", help: "load",
+      score: tone(load.acwr_band) === "good" ? 100 : 60,
+      read: `${load.acwr.toFixed(2)} · ${bandLabel(load.acwr_band)}`,
+      detail: "This week's minutes against your usual week.", note: "Acute : chronic",
+    });
+    if (has(today.spo2 && today.spo2.pct)) deckItems.push({
+      key: "spo2", label: "Blood oxygen", help: "spo2",
+      score: today.spo2.pct >= 97 ? 100 : today.spo2.pct >= 95 ? 82 : 60,
+      read: `${num(today.spo2.pct, 1)}% overnight`,
+      detail: "Nightly average oxygen saturation.", note: "Measured overnight",
+    });
+    if (has(sleep.debt_minutes) && sleep.debt_minutes === 0) deckItems.push({
+      key: "sleep-debt", label: "Sleep debt", help: "debt",
+      score: 100, read: "None", detail: "No accumulated need across 14 nights.", note: "Sleep need",
+    });
+    const illness = data.clinical && data.clinical.illness;
+    if (illness && illness.level === "none") deckItems.push({
+      key: "illness", label: "Illness watch", help: "recovery",
+      score: 100, read: illness.headline, detail: "No early-illness pattern in the measured signals.", note: "Measured signals",
+    });
+
+    const deck = deckItems.length ? `<div class="deck-section">
+      <div class="section-mini">Today's cards${info("factors")}</div>
+      <div class="deck" id="factorDeck" role="list" aria-label="Today's measurements">
+        ${deckItems.map((item, index) => {
+          const score = Math.max(0, Math.min(100, Number(item.score) || 0));
           const foil = score >= 70;
+          const gold = score >= 92;
           const offset = deckOffsets[index % deckOffsets.length];
-          return `<button class="deck-card${foil ? " foil" : ""}" type="button" role="listitem" data-index="${index}"
-            data-foil="${foil}"
+          return `<button class="deck-card${foil ? " foil" : ""}${gold ? " gold" : ""}" type="button" role="listitem" data-index="${index}"
+            data-foil="${foil}" data-good="${foil}" data-gold="${gold}" data-score="${score}"
+            data-result-key="${esc(item.key)}" data-label="${esc(item.label)}"
             style="--bx:${offset.x}px;--by:${offset.y}px;--br:${offset.r}deg"
-            aria-label="${esc(labels[f.key] || f.key)}: ${esc(f.read || "")}">
+            aria-label="${esc(item.label)}: ${esc(item.read)}">
             <span class="deck-top">
-              <span class="deck-num">${String(index + 1).padStart(2, "0")} / ${String(factors.length).padStart(2, "0")}</span>
+              <span class="deck-num">${String(index + 1).padStart(2, "0")} / ${String(deckItems.length).padStart(2, "0")}</span>
               <span class="deck-score">${score}<small>%</small></span>
             </span>
-            ${foil ? '<span class="foil-badge">Strong signal</span>' : ""}
-            <span class="deck-label">${esc(labels[f.key] || f.key)}</span>
-            <span class="deck-weight">${Math.round(Number(f.weight) || 0)}% of today's recovery score</span>
-            <span class="deck-read">${esc(f.read || "")}</span>
-            <span class="deck-detail">${esc(factorDetail[f.key] || "")}</span>
+            ${foil ? `<span class="foil-badge">${gold ? "Near perfect" : "Strong signal"}</span>` : ""}
+            <span class="deck-label">${esc(item.label)}</span>
+            <span class="deck-weight">${esc(item.note)}</span>
+            <span class="deck-read">${esc(item.read)}</span>
+            <span class="deck-detail">${esc(item.detail)}</span>
             <span class="progress"><i style="width:${score}%"></i></span>
           </button>`;
         }).join("")}
@@ -347,7 +441,9 @@
       <p class="sub deck-hint">Tap a card to bring it forward. Flick the top card to send it to the back.</p>
     </div>` : "";
 
-    slot("today").innerHTML = `<div class="hero-card" data-tone="${esc(tone(recovery.band))}">
+    slot("today").innerHTML = `<div class="hero-card" data-tone="${esc(tone(recovery.band))}"
+      data-good="${has(recovery.score) && recovery.score >= 80}" data-gold="${has(recovery.score) && recovery.score >= 92}"
+      data-result-key="recovery" data-label="Recovery">
       <div class="hero-intro">
         <p class="eyebrow">${esc(dateText)} · ${esc(device)}</p>
         <h1>${has(recovery.score) && bandLabel(recovery.band) ? esc(bandLabel(recovery.band)) : "Today"}</h1>
@@ -457,7 +553,10 @@
     slot("vitals").innerHTML = rows.length
       ? `<div class="metric-grid">${rows.map((r) => {
           const foil = Boolean(r.band) && tone(r.band) === "good";
-          return `<div class="card metric-card${foil ? " foil" : ""}">
+          const gold = foil && ["primed", "optimal", "normal"].includes(r.band.key);
+          return `<div class="card metric-card${foil ? " foil" : ""}${gold ? " gold" : ""}"
+            data-good="${foil}" data-gold="${gold}" data-score="${gold ? 100 : foil ? 80 : 0}"
+            data-result-key="vital-${esc(r.name)}" data-label="${esc(r.name)}">
             <div class="label">${esc(r.name)}${info(r.help)}</div>
             <div class="figure">${esc(r.value)}</div>
             <div class="sub">${esc([r.base && r.base !== "30-night median" ? `Usual ${r.base}` : r.base, r.change, r.date ? `Measured ${shortDate(r.date)}` : ""].filter(Boolean).join(" · "))}</div>
@@ -692,6 +791,145 @@
     });
   }
 
+  function stackSections() {
+    return [...document.querySelectorAll("#stackViewport .section")].filter((section) => !section.hidden);
+  }
+
+  function initMode() {
+    try {
+      const stored = localStorage.getItem("ma-mode");
+      state.stackMode = stored !== "page";
+    } catch (error) {
+      state.stackMode = true;
+    }
+    document.body.classList.toggle("stack-mode", state.stackMode);
+    const button = $("btnCards");
+    if (button) {
+      button.setAttribute("aria-pressed", String(state.stackMode));
+      button.textContent = state.stackMode ? "Cards" : "Page";
+    }
+    const controls = $("stackControls");
+    if (controls) controls.hidden = !state.stackMode;
+  }
+
+  function setMode(next) {
+    state.stackMode = next;
+    try { localStorage.setItem("ma-mode", next ? "stack" : "page"); } catch (error) { /* optional */ }
+    document.body.classList.toggle("stack-mode", next);
+    const button = $("btnCards");
+    if (button) {
+      button.setAttribute("aria-pressed", String(next));
+      button.textContent = next ? "Cards" : "Page";
+    }
+    const controls = $("stackControls");
+    if (controls) controls.hidden = !next || !stackSections().length;
+    if (!next) {
+      stackSections().forEach((section) => {
+        section.classList.remove("active");
+        ["--stack-x", "--stack-y", "--stack-r", "--stack-s", "--stack-o", "--stack-z"].forEach((prop) => section.style.removeProperty(prop));
+      });
+    } else {
+      stackTo(state.stackIndex);
+    }
+  }
+
+  function celebrate(card) {
+    const key = card.dataset.resultKey;
+    if (!key || state.celebrated.has(key)) return;
+    state.celebrated.add(key);
+    card.dataset.celebrated = "true";
+
+    const layer = $("celebration");
+    if (!layer) return;
+    const label = card.dataset.label || "Achievement";
+    const gold = card.dataset.gold === "true";
+    const coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+    if (coarse && navigator.vibrate) navigator.vibrate(gold ? [35, 45, 35, 45, 70] : [25, 50, 25]);
+    const toast = document.createElement("div");
+    toast.className = "achievement";
+    toast.textContent = `${gold ? "Near perfect" : "Achievement"} · ${label}`;
+    layer.appendChild(toast);
+    setTimeout(() => toast.remove(), 2400);
+
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) return;
+    const cardBox = card.getBoundingClientRect();
+    const layerBox = layer.getBoundingClientRect();
+    const centerX = cardBox.left + cardBox.width / 2 - layerBox.left;
+    const centerY = cardBox.top + cardBox.height / 2 - layerBox.top;
+    const colors = gold ? ["#d4af37", "#f6e27a", "#fff4c2"] : ["var(--foil-a)", "var(--foil-b)", "var(--foil-c)"];
+
+    if (gold) {
+      for (let i = 0; i < 3; i += 1) {
+        const burst = document.createElement("span");
+        burst.className = "firework";
+        burst.style.setProperty("--x", `${centerX + (i - 1) * 70}px`);
+        burst.style.setProperty("--y", `${centerY - 20}px`);
+        burst.style.setProperty("--color", colors[i]);
+        layer.appendChild(burst);
+        setTimeout(() => burst.remove(), 1800);
+      }
+    }
+
+    for (let i = 0; i < (gold ? 30 : 16); i += 1) {
+      const piece = document.createElement("span");
+      piece.className = "confetti";
+      piece.style.setProperty("--x", `${centerX + (Math.random() - 0.5) * cardBox.width * 0.6}px`);
+      piece.style.setProperty("--y", `${centerY + (Math.random() - 0.5) * cardBox.height * 0.4}px`);
+      piece.style.setProperty("--dx", `${Math.round((Math.random() - 0.5) * 260)}px`);
+      piece.style.setProperty("--dy", `${Math.round(-60 - Math.random() * 150)}px`);
+      piece.style.setProperty("--rot", `${Math.round(Math.random() * 540 - 270)}deg`);
+      piece.style.setProperty("--size", `${4 + Math.round(Math.random() * 5)}px`);
+      piece.style.setProperty("--color", colors[i % colors.length]);
+      layer.appendChild(piece);
+      setTimeout(() => piece.remove(), 2200);
+    }
+  }
+
+  function stackTo(index) {
+    const sections = stackSections();
+    if (!sections.length) return;
+    state.stackIndex = Math.max(0, Math.min(sections.length - 1, (index + sections.length) % sections.length));
+    sections.forEach((section, position) => {
+      const distance = (position - state.stackIndex + sections.length) % sections.length;
+      const depth = Math.min(distance, 2);
+      section.classList.toggle("active", distance === 0);
+      section.style.setProperty("--stack-x", `${depth * 14}px`);
+      section.style.setProperty("--stack-y", `${depth * 8}px`);
+      section.style.setProperty("--stack-r", `${depth * 1.4}deg`);
+      section.style.setProperty("--stack-s", String(1 - depth * 0.018));
+      section.style.setProperty("--stack-o", distance <= 2 ? String(1 - depth * 0.36) : "0");
+      section.style.setProperty("--stack-z", String(sections.length - depth));
+    });
+    const active = sections[state.stackIndex];
+    active.scrollTop = 0;
+    const celebrationTarget = [...active.querySelectorAll("[data-result-key]")]
+      .find((card) => card.dataset.good === "true" && !state.celebrated.has(card.dataset.resultKey));
+    if (celebrationTarget) celebrate(celebrationTarget);
+    const fallbackTitles = { today: "Today", markers: "Health markers", sources: "Data sources" };
+    const title = active.querySelector("h2")?.textContent || fallbackTitles[active.id] || active.id;
+    $("pageTitle").textContent = title;
+    const live = $("stackLive");
+    if (live) live.textContent = `Card ${state.stackIndex + 1} of ${sections.length}: ${title}`;
+    const count = $("stackCount");
+    if (count) count.textContent = `${state.stackIndex + 1} / ${sections.length}`;
+    document.querySelectorAll(".nav a, .tabbar a").forEach((link) =>
+      link.setAttribute("aria-current", String(link.getAttribute("href") === `#${active.id}`))
+    );
+    const controls = $("stackControls");
+    if (controls) controls.hidden = false;
+  }
+
+  function cycleStack(delta) {
+    stackTo(state.stackIndex + delta);
+  }
+
+  function goToSection(id) {
+    const sections = stackSections();
+    const index = sections.findIndex((section) => section.id === id);
+    if (index >= 0) stackTo(index);
+  }
+
   function bindFoilTilt() {
     document.querySelectorAll(".foil").forEach((card) => {
       if (card.dataset.tiltBound) return;
@@ -744,6 +982,8 @@
     const history = (data.history && data.history.sleep) || [];
     if (!has(sleep.minutes) && !history.length) {
       slot("sleep").innerHTML = `<p class="muted">No sleep recorded in this sync.</p>`;
+      slot("sleepNights").innerHTML = `<p class="muted">No recent nights recorded.</p>`;
+      slot("sleepTiming").innerHTML = `<p class="muted">No timing recorded.</p>`;
       return;
     }
 
@@ -785,36 +1025,39 @@
       </div>`;
     }
 
-    slot("sleep").innerHTML = `<div class="grid cols-2-3">
-      <div class="card">
-        <div class="label">Last night${info("stages")}</div>
-        <div class="figure">${hm(sleep.minutes)}</div>
-        ${has(sleep.score) ? `<div class="sub">Score ${num(sleep.score)} of 100 · ${esc(bandLabel(sleep.band))}</div>` : ""}
-        ${total ? `<div class="stagebar" role="img" aria-label="Sleep stages">${stageDefs
-          .map(([, key, color]) => `<i style="width:${(stages[key] / total) * 100}%;background:var(${color})"></i>`).join("")}</div>
-          <div class="legend">${stageDefs
-            .map(([label, key, color]) => `<span><i style="background:var(${color})"></i>${label} <b>${hm(stages[key])}</b></span>`).join("")}</div>` : ""}
-        ${kv.length ? `<dl class="kv">${kv.map(([k, v]) => `<div><dt>${k}${info({ "Efficiency": "efficiency", "Sleep debt, 14 nights": "debt", "Consistency": "consistency" }[k])}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>` : ""}
-      </div>
-      <div class="card">
-        <div class="card-head"><h3>Recent nights</h3><span class="faint small">Last ${recent.length}</span></div>
-        ${recent.length ? `<div class="night-grid">${recent.map((r) => {
-          const foil = has(r.efficiency) && r.efficiency >= 90;
-          return `<div class="night-card${foil ? " foil" : ""}">
-            <div class="night-top"><span class="faint">${shortDate(r.date)}</span>${foil ? '<span class="foil-badge">Restful</span>' : ""}</div>
-            <div class="figure">${hm(r.minutes)}</div>
-            <div class="night-detail">
-              <span>Deep <b>${r.deep ? hm(r.deep) : DASH}</b></span>
-              <span>REM <b>${r.rem ? hm(r.rem) : DASH}</b></span>
-              <span>Bed <b>${esc(r.bed || DASH)}</b></span>
-              <span>Efficiency <b>${has(r.efficiency) ? `${num(r.efficiency)}%` : DASH}</b></span>
-            </div>
-          </div>`;
-        }).join("")}</div>` : `<p class="muted">No recent nights recorded.</p>`}
-        ${spanText ? `<p class="note">Across these nights, sleep ran from ${spanText}.</p>` : ""}
-      </div>
-    </div>
-    ${timing ? `<div style="height:16px"></div>${timing}` : ""}`;
+    slot("sleep").innerHTML = `<div class="card">
+      <div class="label">Last night${info("stages")}</div>
+      <div class="figure">${hm(sleep.minutes)}</div>
+      ${has(sleep.score) ? `<div class="sub">Score ${num(sleep.score)} of 100 · ${esc(bandLabel(sleep.band))}</div>` : ""}
+      ${total ? `<div class="stagebar" role="img" aria-label="Sleep stages">${stageDefs
+        .map(([, key, color]) => `<i style="width:${(stages[key] / total) * 100}%;background:var(${color})"></i>`).join("")}</div>
+        <div class="legend">${stageDefs
+          .map(([label, key, color]) => `<span><i style="background:var(${color})"></i>${label} <b>${hm(stages[key])}</b></span>`).join("")}</div>` : ""}
+      ${kv.length ? `<dl class="kv">${kv.map(([k, v]) => `<div><dt>${k}${info({ "Efficiency": "efficiency", "Sleep debt, 14 nights": "debt", "Consistency": "consistency" }[k])}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>` : ""}
+    </div>`;
+
+    slot("sleepNights").innerHTML = `<div class="card">
+      <div class="card-head"><h3>Recent nights</h3><span class="faint small">Last ${recent.length}</span></div>
+      ${recent.length ? `<div class="night-grid">${recent.map((r) => {
+        const foil = has(r.efficiency) && r.efficiency >= 90;
+        const gold = has(r.efficiency) && r.efficiency >= 95;
+        return `<div class="night-card${foil ? " foil" : ""}${gold ? " gold" : ""}"
+          data-good="${foil}" data-gold="${gold}" data-score="${has(r.efficiency) ? r.efficiency : 0}"
+          data-result-key="night-${esc(r.date)}" data-label="Night ${shortDate(r.date)}">
+          <div class="night-top"><span class="faint">${shortDate(r.date)}</span>${foil ? `<span class="foil-badge">${gold ? "Near perfect" : "Restful"}</span>` : ""}</div>
+          <div class="figure">${hm(r.minutes)}</div>
+          <div class="night-detail">
+            <span>Deep <b>${r.deep ? hm(r.deep) : DASH}</b></span>
+            <span>REM <b>${r.rem ? hm(r.rem) : DASH}</b></span>
+            <span>Bed <b>${esc(r.bed || DASH)}</b></span>
+            <span>Efficiency <b>${has(r.efficiency) ? `${num(r.efficiency)}%` : DASH}</b></span>
+          </div>
+        </div>`;
+      }).join("")}</div>` : `<p class="muted">No recent nights recorded.</p>`}
+      ${spanText ? `<p class="note">Across these nights, sleep ran from ${spanText}.</p>` : ""}
+    </div>`;
+
+    slot("sleepTiming").innerHTML = timing || `<p class="muted">No timing recorded.</p>`;
   }
 
   /* --------------------------------------------------------------- heart -- */
@@ -875,9 +1118,21 @@
       ])}
     </div>`);
 
-    slot("heart").innerHTML = cards.length
-      ? `<div class="grid cols-2">${cards.join("")}</div>`
+    slot("heart").innerHTML = signals.length
+      ? `<div class="card span-2">
+          <div class="card-head"><h3>Baseline context</h3><span class="faint small">Overnight against your own median</span></div>
+          <div class="signal-list">${signals.map((s) => `<div class="signal-row">
+            <span class="signal-name">${s.name}${info(s.help)}</span>
+            <b>${s.value}</b>
+            <span class="muted">${esc(s.read)}</span>
+            ${status(s.band)}
+          </div>`).join("")}</div>
+        </div>`
       : `<p class="muted">No heart data in this sync.</p>`;
+    const detail = cards.slice(1);
+    slot("heartDetail").innerHTML = detail.length
+      ? `<div class="grid cols-2">${detail.join("")}</div>`
+      : `<p class="muted">No extra heart detail in this sync.</p>`;
   }
 
   /* ------------------------------------------------------------- markers -- */
@@ -1156,9 +1411,9 @@
     slot("activity").innerHTML = [
       latestCard,
       stats.length ? `<div class="tiles card">${stats.join("")}</div>` : "",
-      pair(loadCard, mixCard),
-      consistency,
     ].filter(Boolean).join('<div style="height:16px"></div>') || `<p class="muted">No activity in this sync.</p>`;
+    slot("activityLoad").innerHTML = pair(loadCard, mixCard) || `<p class="muted">No load data in this sync.</p>`;
+    slot("activityRecord").innerHTML = consistency || `<p class="muted">No workout history in this sync.</p>`;
 
     const hrSamples = ((data.history && data.history.workout_hr) || []).filter((row) => has(row.bpm)).slice(-180);
     if (latestCard && hrSamples.length > 1) bindHrScrub(hrSamples, data.hr_zones || null, data.timezone);
@@ -1262,11 +1517,7 @@
     if (!views) source = "all";
     state.source = source;
     const view = views ? views[source] : data;
-    const select = $("sourceSelect");
-    if (select) {
-      select.hidden = !views;
-      select.value = source;
-    }
+    updateSourceUI(data);
 
     renderChrome(data);
     renderToday(view);
@@ -1279,6 +1530,7 @@
     renderInsights(view);
     renderSources(view);
     bindFoilTilt();
+    if (state.stackMode) stackTo(state.stackIndex);
   }
 
   /* ------------------------------------------------------- remembered vault -- */
@@ -1407,7 +1659,8 @@
     // the data from the DOM rather than merely hiding it.
     document.querySelectorAll("[data-slot]").forEach((node) => { node.innerHTML = ""; });
     $("syncText").textContent = "";
-    $("sourceSelect").hidden = true;
+    closeSourceMenu();
+    $("sourcePicker").hidden = true;
     $("staleBanner").hidden = true;
     $("app").hidden = true;
     $("lock").hidden = false;
@@ -1451,7 +1704,22 @@
       }).catch(() => {});
     });
     $("btnPrint").addEventListener("click", () => window.print());
-    $("sourceSelect").addEventListener("change", (event) => setSource(event.target.value));
+    $("btnCards").addEventListener("click", () => setMode(!state.stackMode));
+    $("stackPrev").addEventListener("click", () => cycleStack(-1));
+    $("stackNext").addEventListener("click", () => cycleStack(1));
+    $("sourceButton").addEventListener("click", () => {
+      const menu = $("sourceMenu");
+      const open = menu && menu.hidden;
+      if (menu) menu.hidden = !open;
+      $("sourceButton").setAttribute("aria-expanded", String(Boolean(open)));
+    });
+    $("sourceMenu").addEventListener("click", (event) => {
+      const option = event.target.closest(".source-option");
+      if (option && !option.disabled) setSource(option.dataset.source);
+    });
+    document.addEventListener("click", (event) => {
+      if (!event.target.closest("#sourcePicker")) closeSourceMenu();
+    });
     $("btnLock").addEventListener("click", lock);
     $("btnRefresh").addEventListener("click", refresh);
 
@@ -1473,10 +1741,17 @@
     });
 
     const links = Array.from(document.querySelectorAll(".nav a, .tabbar a"));
+    links.forEach((link) => link.addEventListener("click", (event) => {
+      if (!state.stackMode) return;
+      const id = (link.getAttribute("href") || "").replace("#", "");
+      if (!id) return;
+      event.preventDefault();
+      goToSection(id);
+    }));
     if ("IntersectionObserver" in window) {
       const observer = new IntersectionObserver(
         (entries) => entries.forEach((entry) => {
-          if (!entry.isIntersecting) return;
+          if (!entry.isIntersecting || state.stackMode) return;
           links.forEach((link) =>
             link.setAttribute("aria-current", String(link.getAttribute("href") === "#" + entry.target.id))
           );
@@ -1496,11 +1771,42 @@
     });
     window.addEventListener("resize", hideHelp);
 
+    const viewport = $("stackViewport");
+    let lastWheel = 0;
+    viewport.addEventListener("wheel", (event) => {
+      if (!state.stackMode) return;
+      if (event.shiftKey) return; // deliberate inner scroll on a long card
+      if (Date.now() - lastWheel < 260) return;
+      event.preventDefault();
+      const down = event.deltaY > 0;
+      lastWheel = Date.now();
+      cycleStack(down ? 1 : -1);
+    }, { passive: false });
+
+    let swipeStart = null;
+    viewport.addEventListener("pointerdown", (event) => {
+      if (!state.stackMode) return;
+      if (event.pointerType !== "touch" || event.target.closest(".hr-ribbon svg, .deck")) return;
+      swipeStart = { x: event.clientX, y: event.clientY };
+    });
+    viewport.addEventListener("pointerup", (event) => {
+      if (!state.stackMode || !swipeStart) return;
+      const dx = event.clientX - swipeStart.x;
+      const dy = event.clientY - swipeStart.y;
+      swipeStart = null;
+      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.3) cycleStack(dx < 0 ? 1 : -1);
+    });
+
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") hideHelp();
+      if (event.key === "Escape") { hideHelp(); closeSourceMenu(); }
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const tag = (event.target.tagName || "").toLowerCase();
-      if (tag === "input" || tag === "textarea") return;
+      if (tag === "input" || tag === "textarea" || tag === "select" || tag === "button" || event.target.isContentEditable) return;
+      if (state.stackMode && (event.key === "ArrowRight" || event.key === "ArrowLeft") && !event.target.closest(".hr-ribbon svg")) {
+        cycleStack(event.key === "ArrowRight" ? 1 : -1);
+        event.preventDefault();
+        return;
+      }
       if (event.key === "l") lock();
       if (event.key === "r") refresh();
     });
@@ -1509,6 +1815,7 @@
   async function boot() {
     initTheme();
     initSource();
+    initMode();
     initControls();
     $("lock").hidden = false;
     $("app").hidden = true;

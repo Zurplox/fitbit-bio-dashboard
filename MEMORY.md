@@ -39,6 +39,12 @@ Consumer fitness app: quiet top bar, hero with three rings (Recovery, Sleep, Tra
 
 - Foil cards respond to pointer: `bindFoilTilt()` sets `--tilt-x/y`, `--shine-x/y`, `--hue`; hover is ±5°, drag ±9°. Reduced motion resets tilt. Recent nights and workout stats became cards; `fetch_exercise` now keeps manual `notes` when present.
 
+- Card-stack mode is the default: each section in `#stackViewport` is a card; `stackTo/cycleStack/goToSection` manage order. Wheel, arrows, nav links and touch swipe flip cards; Shift+wheel scrolls a long card. Cards/Page toggle persists in `ma-mode`. Inactive cards hide their contents so only blank edges show.
+
+- Expanded stack to 13 section cards (split Sleep, Heart and Activity) and the Today deck to 9 measured achievement cards. Added one-shot celebrations: `state.celebrated` Set, `#celebration` layer, gold foil and confetti/firework CSS. Review cycle 2 found two remaining issues (tablet control overlap, stale banner height); both fixed.
+
+- Source picker is now an icon-led menu: Fitbit Air (Fitbit dots), Garmin Fenix (watch), Google/other (app tile), All sources (group). Vault holds four complete views; `filter_fetched(fetched, group)` and `source.source_group()` map records. Alternate views skip the publish gate so a source with no core metrics can still render honestly. Demo now seeds mixed sources.
+
 ## Next steps
 - After a real sync, check the Data sources panel for anything still "not measured".
 - Keep `MEMORY.md` short; condense this again if it grows.

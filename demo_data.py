@@ -134,21 +134,33 @@ def synthetic_fetch(days=DEMO_DAYS, seed=11):
                 "bpm": round(bpm),
             })
 
-    # Attribute every record so the Fitbit-only view can recalculate from the
-    # same rules as the all-sources view.
-    for row in sleep + rhr + hrv + spo2 + resp + skin_temp + vo2max + exercise:
-        row.update({"source_label": "Fitbit Air", "source_platform": "FITBIT"})
-    for row in steps + calories + active + intraday + workout_hr:
-        row.update({"source_label": "Google Health rollup", "source_platform": "ROLLUP"})
+    # Attribute every record so each source view recalculates from the same
+    # rules as the all-sources view. The demo deliberately includes relayed
+    # Garmin and Google Fit records so the picker has something to show.
+    def tag(rows, label, platform):
+        for row in rows:
+            row.update({"source_label": label, "source_platform": platform})
 
-    hr_zones = {
-        "source_label": "Fitbit Air",
-        "source_platform": "FITBIT",
-        "light": [95, 125],
-        "moderate": [126, 150],
-        "vigorous": [151, 174],
-        "peak": [175, 220],
-    }
+    tag(rhr + hrv + spo2 + resp + skin_temp + vo2max, "Fitbit Air", "FITBIT")
+    tag(steps + calories + active + intraday + workout_hr, "Google Health rollup", "ROLLUP")
+    for index, row in enumerate(sleep):
+        label, platform = ("Garmin Connect", "HEALTH_CONNECT") if index % 5 == 0 else (
+            ("Google Fit", "HEALTH_CONNECT") if index % 7 == 0 else ("Fitbit Air", "FITBIT")
+        )
+        tag([row], label, platform)
+    for index, row in enumerate(exercise):
+        label, platform = ("Garmin Connect", "HEALTH_CONNECT") if index % 4 == 0 else (
+            ("Google Fit", "HEALTH_CONNECT") if index % 9 == 0 else ("Fitbit Air", "FITBIT")
+        )
+        tag([row], label, platform)
+
+    def zones_for(label, platform):
+        return {"source_label": label, "source_platform": platform,
+                "light": [95, 125], "moderate": [126, 150], "vigorous": [151, 174], "peak": [175, 220]}
+
+    hr_zones = zones_for("Fitbit Air", "FITBIT")
+    has_garmin = any(row["source_label"] == "Garmin Connect" for row in exercise)
+    has_other = any(row["source_label"] == "Google Fit" for row in exercise)
 
     return {
         "today": today.isoformat(),
@@ -167,9 +179,17 @@ def synthetic_fetch(days=DEMO_DAYS, seed=11):
         "exercise": exercise,
         "hr_intraday": intraday,
         "workout_hr": workout_hr,
-        "fitbit_workout_hr": workout_hr,
         "hr_zones": hr_zones,
-        "fitbit_hr_zones": hr_zones,
+        "source_workout_hr": {
+            "fitbit": workout_hr,
+            "garmin": workout_hr if has_garmin else [],
+            "other": workout_hr if has_other else [],
+        },
+        "source_hr_zones": {
+            "fitbit": hr_zones,
+            "garmin": zones_for("Garmin Connect", "HEALTH_CONNECT") if has_garmin else None,
+            "other": zones_for("Google Fit", "HEALTH_CONNECT") if has_other else None,
+        },
     }
 
 
@@ -199,17 +219,19 @@ def main():
         dq.record(key, True, note, label)
 
     all_view = sync.build_payload(fetched, dq, demo=True, view="all")
-    fitbit_fetched = sync.filter_fetched(fetched)
-    fitbit_view = sync.build_payload(
-        fitbit_fetched, sync.quality_for(fitbit_fetched, dq), demo=True, view="fitbit"
-    )
+    views = {"all": all_view}
+    for group in ("fitbit", "garmin", "other"):
+        grouped = sync.filter_fetched(fetched, group)
+        views[group] = sync.build_payload(
+            grouped, sync.quality_for(grouped, dq, group), demo=True, view=group, gate=False
+        )
     payload = {
         "schema": 2,
         "generated_at": all_view["generated_at"],
         "demo": True,
         "timezone": all_view["timezone"],
         "default_view": "fitbit",
-        "views": {"fitbit": fitbit_view, "all": all_view},
+        "views": views,
     }
     os.makedirs("data", exist_ok=True)
     with open("data/biometrics.json", "w", encoding="utf-8") as handle:

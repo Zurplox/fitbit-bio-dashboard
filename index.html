@@ -6,7 +6,7 @@
   <title>Meridian Air</title>
   <meta name="description" content="A private, end-to-end encrypted dashboard for Fitbit data via the Google Health API." />
   <meta name="color-scheme" content="light dark" />
-  <link rel="stylesheet" href="assets/theme.css?v=foil-v3" />
+  <link rel="stylesheet" href="assets/theme.css?v=sourceicons-v4" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23161820'/%3E%3Cpath d='M6 20h5l3-8 4 12 3-7h5' stroke='%23fff' stroke-width='2.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
 </head>
 <body>
@@ -44,13 +44,19 @@
           <a href="#heart">Heart</a>
           <a href="#activity">Activity</a>
           <a href="#insights">Insights</a>
+          <a href="#markers">Markers</a>
+          <a href="#sources">Sources</a>
         </nav>
         <div class="actions">
-          <label class="sr-only" for="sourceSelect">Data source</label>
-          <select id="sourceSelect" class="source-select" aria-label="Data source" hidden>
-            <option value="fitbit">Fitbit Air only</option>
-            <option value="all">All sources</option>
-          </select>
+          <button id="btnCards" class="mode-btn" type="button" aria-pressed="true" title="Switch between card stack and page">Cards</button>
+          <div id="sourcePicker" class="source-picker" hidden>
+            <button id="sourceButton" class="source-button" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Choose data source">
+              <span id="sourceIcon" class="source-icon" aria-hidden="true"></span>
+              <span id="sourceLabel">Fitbit Air</span>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+            </button>
+            <div id="sourceMenu" class="source-menu" role="listbox" aria-label="Data sources" hidden></div>
+          </div>
           <span id="demoChip" class="tag" hidden>Demo</span>
           <span id="syncText" class="sync small"></span>
           <button id="btnRefresh" class="icon-btn" type="button" aria-label="Re-read the published vault" title="Refresh">
@@ -72,6 +78,8 @@
     <main class="shell">
       <div id="staleBanner" class="banner" hidden></div>
 
+      <div id="stackViewport" class="stack-viewport">
+        <div id="celebration" class="celebration" aria-hidden="true"></div>
       <section id="today" class="section">
         <div data-slot="today"></div>
       </section>
@@ -82,23 +90,48 @@
       </section>
 
       <section id="sleep" class="section">
-        <div class="section-head"><h2>Sleep</h2><p class="section-sub">Stages, timing and bedtime consistency</p></div>
+        <div class="section-head"><h2>Last night</h2></div>
         <div data-slot="sleep"></div>
       </section>
 
+      <section id="sleepNights" class="section">
+        <div class="section-head"><h2>Recent nights</h2></div>
+        <div data-slot="sleepNights"></div>
+      </section>
+
+      <section id="sleepTiming" class="section">
+        <div class="section-head"><h2>Sleep timing</h2></div>
+        <div data-slot="sleepTiming"></div>
+      </section>
+
       <section id="heart" class="section">
-        <div class="section-head"><h2>Heart</h2><p class="section-sub">Overnight signals and resting trends</p></div>
+        <div class="section-head"><h2>Baseline context</h2></div>
         <div data-slot="heart"></div>
       </section>
 
+      <section id="heartDetail" class="section">
+        <div class="section-head"><h2>Heart detail</h2></div>
+        <div data-slot="heartDetail"></div>
+      </section>
+
       <section id="markers" class="section">
-        <div class="section-head"><h2>Health markers</h2><p class="section-sub">Long-term context with the studies behind each</p></div>
+        <div class="section-head"><h2>Health markers</h2></div>
         <div data-slot="markers"></div>
       </section>
 
       <section id="activity" class="section">
-        <div class="section-head"><h2>Activity</h2><p class="section-sub">Workouts, load and movement</p></div>
+        <div class="section-head"><h2>Latest workout</h2></div>
         <div data-slot="activity"></div>
+      </section>
+
+      <section id="activityLoad" class="section">
+        <div class="section-head"><h2>Training load</h2></div>
+        <div data-slot="activityLoad"></div>
+      </section>
+
+      <section id="activityRecord" class="section">
+        <div class="section-head"><h2>Training record</h2></div>
+        <div data-slot="activityRecord"></div>
       </section>
 
       <section id="insights" class="section">
@@ -110,7 +143,16 @@
         <div data-slot="sources"></div>
       </section>
 
+      </div>
+
       <footer class="footer faint" data-slot="footer"></footer>
+      <div class="stack-controls" id="stackControls" title="Wheel, arrows or swipe to flip cards. Hold Shift while scrolling to read a long card." hidden>
+        <button id="stackPrev" class="stack-arrow" type="button" aria-label="Previous card">←</button>
+        <span id="stackCount" class="stack-count">1 / 8</span>
+        <button id="stackNext" class="stack-arrow" type="button" aria-label="Next card">→</button>
+        <span class="stack-hint">Wheel / arrows · Shift+wheel scrolls</span>
+        <span id="stackLive" class="sr-only" aria-live="polite"></span>
+      </div>
     </main>
 
     <nav class="tabbar glass" aria-label="Sections">
@@ -122,6 +164,6 @@
     </nav>
   </div>
 
-  <script src="assets/app.js?v=foil-v3"></script>
+  <script src="assets/app.js?v=sourceicons-v4"></script>
 </body>
 </html>

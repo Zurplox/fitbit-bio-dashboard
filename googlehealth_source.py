@@ -1000,6 +1000,17 @@ def is_fitbit(record):
     return platform == "FITBIT" or label.startswith("fitbit")
 
 
+def source_group(record):
+    """Coarse source family for the source picker: fitbit / garmin / other."""
+    if is_fitbit(record):
+        return "fitbit"
+    label = str(record.get("source_label") or record.get("label") or "").lower()
+    platform = str(record.get("source_platform") or record.get("platform") or "").upper()
+    if "garmin" in label or platform == "GARMIN":
+        return "garmin"
+    return "other"
+
+
 def steps_sources(entries):
     """Step attribution after removing foreign pedometers.
 
