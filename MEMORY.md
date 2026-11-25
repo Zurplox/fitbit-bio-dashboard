@@ -46,6 +46,8 @@ Consumer fitness app: quiet top bar, hero with three rings (Recovery, Sleep, Tra
 
 - Source picker is now an icon-led menu: Fitbit Air (Fitbit dots), Garmin Fenix (watch), Google/other (app tile), All sources (group). Vault holds four complete views; `filter_fetched(fetched, group)` and `source.source_group()` map records. Alternate views skip the publish gate so a source with no core metrics can still render honestly. Demo now seeds mixed sources.
 
+- Static review fixes: `lock()` restores lifted cards before clearing slots; `sectionHidden` Map restores the original section visibility (no empty markers section); arrow keys work after button focus while inputs still swallow them; celebrations dedupe by `${navSeq}:${resultKey}` so theme/source switches do not replay them but revisits do; nav links to non-deck sections switch to Page mode; print lets the shell scroll.
+
 ## Next steps
 - After a real sync, check the Data sources panel for anything still "not measured".
 - Keep `MEMORY.md` short; condense this again if it grows.

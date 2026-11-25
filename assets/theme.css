@@ -788,7 +788,9 @@ body.stack-mode .footer { display: none; }
   .shortcut-help { left: 12px; right: 12px; bottom: calc(150px + env(safe-area-inset-bottom)); width: auto; }
 }
 @media print {
+  body.stack-mode .shell, body.stack-mode .stack-viewport { overflow: visible !important; height: auto !important; max-height: none !important; }
   body.stack-mode .section { position: static !important; max-height: none !important; overflow: visible !important; opacity: 1 !important; transform: none !important; }
+  body.stack-mode .section.stack-proxy { width: auto !important; aspect-ratio: auto !important; margin: 0 0 16px !important; }
   body.stack-mode .section:not(.active) > * { visibility: visible !important; }
   .stack-controls, .mode-btn, .source-picker { display: none !important; }
 }

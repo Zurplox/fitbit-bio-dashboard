@@ -11,6 +11,7 @@
   const state = {
     payload: null, passphrase: null, theme: null, source: "fitbit", stackMode: true,
     stackIndex: 0, badSeen: new Set(), sound: true, gyro: false, audio: null,
+    navSeq: 0, lastCelebration: "",
   };
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const coarsePointer = () => Boolean(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
@@ -71,6 +72,7 @@
   // Cards mode lifts every measured card into one deck; remember the slot
   // it came from so switching back to Page mode restores the layout.
   const cardOrigins = new Map();
+  const sectionHidden = new Map();
 
   /* ------------------------------------------------------------- helpers -- */
   const DASH = "–";
@@ -876,6 +878,7 @@
       viewport.appendChild(proxy);
     });
     document.querySelectorAll("#stackViewport > .section:not(.stack-proxy)").forEach((section) => {
+      sectionHidden.set(section, section.hidden);
       section.hidden = true;
     });
   }
@@ -889,9 +892,8 @@
       origin.proxy.remove();
     });
     cardOrigins.clear();
-    document.querySelectorAll("#stackViewport > .section").forEach((section) => {
-      section.hidden = false;
-    });
+    sectionHidden.forEach((wasHidden, section) => { section.hidden = wasHidden; });
+    sectionHidden.clear();
   }
 
   function initMode() {
@@ -1047,7 +1049,13 @@
     active.scrollTop = 0;
     const celebrationTarget = [...active.querySelectorAll("[data-result-key]")]
       .find((card) => card.dataset.good === "true");
-    if (celebrationTarget) celebrate(celebrationTarget);
+    if (celebrationTarget) {
+      const signature = `${state.navSeq}:${celebrationTarget.dataset.resultKey}`;
+      if (signature !== state.lastCelebration) {
+        state.lastCelebration = signature;
+        celebrate(celebrationTarget);
+      }
+    }
     const fallbackTitles = { today: "Today", markers: "Health markers", sources: "Data sources" };
     const title = active.dataset.label || active.querySelector("h2")?.textContent || fallbackTitles[active.id] || active.id;
     $("pageTitle").textContent = title;
@@ -1077,6 +1085,7 @@
   }
 
   function cycleStack(delta) {
+    state.navSeq += 1;
     playMove(delta > 0);
     haptic(12);
     stackTo(state.stackIndex + delta);
@@ -1085,7 +1094,19 @@
   function goToSection(id) {
     const sections = stackSections();
     const index = sections.findIndex((section) => section.id === id);
-    if (index >= 0) { playMove(index > state.stackIndex); haptic(12); stackTo(index); }
+    if (index >= 0) {
+      state.navSeq += 1;
+      playMove(index > state.stackIndex);
+      haptic(12);
+      stackTo(index);
+      return;
+    }
+    // Text-only sections are not deck cards: show them in the scrolling view.
+    const section = $(id);
+    if (section && !section.hidden) {
+      setMode(false);
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }
 
   function applyTilt(card, x, y) {
@@ -1941,6 +1962,7 @@
   }
 
   function lock() {
+    restoreResultCards();
     state.passphrase = null;
     state.payload = null;
     // A manual lock means locked: leaving the remembered record behind would
@@ -2076,15 +2098,16 @@
 
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") { hideHelp(); closeSourceMenu(); toggleShortcutHelp(false); }
+      const tag = (event.target.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select" || event.target.isContentEditable) return;
       if (event.key === "?") { toggleShortcutHelp(); event.preventDefault(); return; }
       if (event.metaKey || event.ctrlKey || event.altKey) return;
-      const tag = (event.target.tagName || "").toLowerCase();
-      if (tag === "input" || tag === "textarea" || tag === "select" || tag === "button" || event.target.isContentEditable) return;
       if (state.stackMode && (event.key === "ArrowRight" || event.key === "ArrowLeft") && !event.target.closest(".hr-ribbon svg")) {
         cycleStack(event.key === "ArrowRight" ? 1 : -1);
         event.preventDefault();
         return;
       }
+      if (tag === "button") return;
       if (event.key === "l") lock();
       if (event.key === "r") refresh();
     });
