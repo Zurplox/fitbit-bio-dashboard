@@ -53,7 +53,7 @@
   /* ------------------------------------------------------------- helpers -- */
   const DASH = "–";
   const has = (value) => value !== null && value !== undefined && !Number.isNaN(value);
-  const tierOf = (score) => !has(score) ? "" : score >= 92 ? "gold" : score >= 80 ? "silver" : score >= 70 ? "standard" : "";
+  const tierOf = (score) => !has(score) ? "" : score >= 92 ? "gold" : score >= 80 ? "silver" : "";
 
   function num(value, digits = 0) {
     if (!has(value)) return DASH;
@@ -458,10 +458,10 @@
       <div class="deck" id="factorDeck" role="list" aria-label="Today's measurements">
         ${deckItems.map((item, index) => {
           const score = Math.max(0, Math.min(100, Number(item.score) || 0));
-          const foil = score >= 70;
+          const foil = score >= 80;
           const gold = score >= 92;
-          const silver = foil && !gold && score >= 80;
-          const tier = gold ? "gold" : silver ? "silver" : foil ? "standard" : "none";
+          const silver = foil && !gold;
+          const tier = gold ? "gold" : silver ? "silver" : "none";
           const offset = deckOffsets[index % deckOffsets.length];
           return `<button class="deck-card${foil ? " foil" : ""}${gold ? " gold" : ""}${silver ? " silver" : ""}" type="button" role="listitem" data-index="${index}"
             data-foil="${foil}" data-good="${foil}" data-gold="${gold}" data-tier="${tier}" data-score="${score}"
@@ -472,7 +472,7 @@
               <span class="deck-num">${String(index + 1).padStart(2, "0")} / ${String(deckItems.length).padStart(2, "0")}</span>
               <span class="deck-score">${score}<small>%</small></span>
             </span>
-            ${foil ? `<span class="foil-badge">${gold ? "Near perfect" : silver ? "Silver tier" : "Strong signal"}</span>` : ""}
+            ${foil ? `<span class="foil-badge">${gold ? "Near perfect" : "Silver tier"}</span>` : ""}
             <span class="deck-label">${esc(item.label)}</span>
             <span class="deck-weight">${esc(item.note)}</span>
             <span class="deck-read">${esc(item.read)}</span>
@@ -842,6 +842,13 @@
       proxy.dataset.label = card.dataset.label || "";
       proxy.dataset.tier = card.dataset.tier
         || (card.dataset.gold === "true" ? "gold" : card.dataset.good === "true" ? "silver" : "");
+      const tier = proxy.dataset.tier;
+      const score = Number(card.dataset.score);
+      const bad = card.dataset.tone === "bad" || Boolean(card.querySelector(".status.bad"))
+        || (has(score) && score < 50);
+      proxy.dataset.state = tier === "gold" ? "gold" : tier === "silver" ? "silver"
+        : bad ? "bad" : "plain";
+      card.dataset.state = proxy.dataset.state;
       cardOrigins.set(card, { parent: card.parentElement, next: card.nextSibling, proxy });
       proxy.appendChild(card);
       viewport.appendChild(proxy);
@@ -1062,7 +1069,7 @@
       if (event.target.closest("button, a, details, input, select, .info, .stack-controls")) return;
       const card = stackSections()[state.stackIndex];
       if (!card || !card.classList.contains("stack-proxy")) return;
-      drag = { id: event.pointerId, x: event.clientX, y: event.clientY, card };
+      drag = { id: event.pointerId, x: event.clientX, y: event.clientY, card, at: performance.now() };
       // Pointerdown on text would otherwise start a desktop text selection.
       event.preventDefault();
       const selection = window.getSelection && window.getSelection();
@@ -1076,9 +1083,16 @@
       event.preventDefault();
       applyTilt(drag.card, (event.clientX - drag.x) / 9, (drag.y - event.clientY) / 9);
     });
-    const end = () => {
+    const end = (event) => {
       document.body.classList.remove("deck-dragging");
-      if (drag) resetTilt(drag.card);
+      if (drag) {
+        resetTilt(drag.card);
+        const dx = event.clientX - drag.x;
+        const dt = Math.max(1, performance.now() - drag.at);
+        if (coarsePointer() && Math.abs(dx) > 100 && Math.abs(dx) / dt > 0.45) {
+          cycleStack(dx < 0 ? 1 : -1);
+        }
+      }
       drag = null;
     };
     viewport.addEventListener("pointerup", end);

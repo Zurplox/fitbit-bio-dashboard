@@ -605,6 +605,7 @@ body.stack-mode .section.stack-proxy {
   transform: translate(var(--stack-x, 0px), var(--stack-y, 0px)) rotate(var(--stack-r, 0deg))
     scale(var(--stack-s, 1)) perspective(800px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y));
   touch-action: pan-y;
+  transition: transform .38s var(--ease), opacity .28s var(--ease), box-shadow .2s var(--ease);
 }
 body.stack-mode .section.stack-proxy::before {
   content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 0;
@@ -615,8 +616,32 @@ body.stack-mode .section.stack-proxy::before {
   background-size: 200% 200%; filter: hue-rotate(var(--hue)) saturate(1.8);
   opacity: 0; transition: opacity .18s var(--ease);
 }
-body.stack-mode .section.stack-proxy.charged::before { opacity: 1; }
+body.stack-mode .section.stack-proxy[data-state="gold"].charged::before,
+body.stack-mode .section.stack-proxy[data-state="silver"].charged::before { opacity: 1; }
 body.stack-mode .section.stack-proxy > * { position: relative; z-index: 1; }
+body.stack-mode .section.stack-proxy,
+body.stack-mode .section.stack-proxy * { user-select: none; -webkit-user-select: none; }
+body.stack-mode .section.stack-proxy[data-state="plain"].active { background: var(--surface); }
+body.stack-mode .section.stack-proxy[data-state="plain"].charged,
+body.stack-mode .section.stack-proxy[data-state="bad"].charged {
+  box-shadow: 0 26px 54px rgba(23, 23, 27, .24);
+}
+body.stack-mode .section.stack-proxy[data-state="bad"],
+body.stack-mode .section.stack-proxy[data-state="bad"] > [data-result-key] {
+  border-color: color-mix(in srgb, var(--bad) 50%, var(--line));
+  background:
+    radial-gradient(circle at 14% 22%, color-mix(in srgb, var(--bad) 16%, transparent), transparent 24%),
+    radial-gradient(circle at 82% 76%, color-mix(in srgb, var(--bad) 12%, transparent), transparent 20%),
+    repeating-linear-gradient(116deg, transparent 0 11px, color-mix(in srgb, var(--bad) 7%, transparent) 11px 12px),
+    var(--surface);
+}
+body.stack-mode .section.stack-proxy[data-state="bad"]::after {
+  content: ""; position: absolute; inset: 0; z-index: 0; border-radius: inherit; pointer-events: none;
+  background:
+    linear-gradient(122deg, transparent 46%, color-mix(in srgb, var(--bad) 42%, transparent) 46.5%, transparent 47.2%),
+    linear-gradient(122deg, transparent 62%, color-mix(in srgb, var(--bad) 24%, transparent) 62.4%, transparent 63%);
+  opacity: .75;
+}
 body.stack-mode .section.stack-proxy:not(.active) {
   background: var(--surface);
   border-color: var(--foil-a, color-mix(in srgb, var(--accent) 35%, var(--line)));
