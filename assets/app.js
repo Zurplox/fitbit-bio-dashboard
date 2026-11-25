@@ -8,7 +8,44 @@
   "use strict";
 
   const $ = (id) => document.getElementById(id);
-  const state = { payload: null, passphrase: null, theme: null, source: "fitbit", stackMode: true, stackIndex: 0, celebrated: new Set() };
+  const state = {
+    payload: null, passphrase: null, theme: null, source: "fitbit", stackMode: true,
+    stackIndex: 0, celebrated: new Set(), sound: true, gyro: false, audio: null,
+  };
+  const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+  const coarsePointer = () => Boolean(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+  const haptic = (pattern) => { if (coarsePointer() && navigator.vibrate) navigator.vibrate(pattern); };
+
+  // Sound is synthesised locally: no asset request on a page holding health data.
+  function ensureAudio() {
+    if (!state.sound) return null;
+    try {
+      if (!state.audio) state.audio = new (window.AudioContext || window.webkitAudioContext)();
+      if (state.audio.state === "suspended") state.audio.resume();
+      return state.audio;
+    } catch (error) { return null; }
+  }
+  function playTone(freq, delay, duration, gain, type = "sine") {
+    const ctx = state.audio;
+    if (!ctx || !state.sound) return;
+    const at = ctx.currentTime + delay;
+    const osc = ctx.createOscillator();
+    const amp = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, at);
+    amp.gain.setValueAtTime(0.0001, at);
+    amp.gain.exponentialRampToValueAtTime(gain, at + 0.012);
+    amp.gain.exponentialRampToValueAtTime(0.0001, at + duration);
+    osc.connect(amp).connect(ctx.destination);
+    osc.start(at);
+    osc.stop(at + duration + 0.02);
+  }
+  function playMove() { if (ensureAudio()) playTone(540, 0, 0.05, 0.018, "triangle"); }
+  function playCelebrate(gold) {
+    if (!state.audio || !state.sound) return; // no gesture yet: stay silent
+    const notes = gold ? [523, 659, 784, 1047] : [523, 784];
+    notes.forEach((freq, index) => playTone(freq, index * 0.085, gold ? 0.28 : 0.2, gold ? 0.05 : 0.032, "triangle"));
+  }
   // Cards mode lifts every measured card into one deck; remember the slot
   // it came from so switching back to Page mode restores the layout.
   const cardOrigins = new Map();
@@ -878,13 +915,14 @@
     if (!layer) return;
     const label = card.dataset.label || "Achievement";
     const gold = card.dataset.gold === "true";
-    const coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
-    if (coarse && navigator.vibrate) navigator.vibrate(gold ? [35, 45, 35, 45, 70] : [25, 50, 25]);
+    const silver = card.dataset.tier === "silver";
+    haptic(gold ? [45, 55, 45, 70, 110] : silver ? [35, 50, 35] : [25, 40, 25]);
+    playCelebrate(gold);
     const toast = document.createElement("div");
     toast.className = "achievement";
-    toast.textContent = `${gold ? "Near perfect" : "Achievement"} · ${label}`;
+    toast.textContent = `${gold ? "Near perfect" : silver ? "Strong result" : "Achievement"} · ${label}`;
     layer.appendChild(toast);
-    setTimeout(() => toast.remove(), 2400);
+    setTimeout(() => toast.remove(), 3200);
 
     const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduce) return;
@@ -892,32 +930,44 @@
     const layerBox = layer.getBoundingClientRect();
     const centerX = cardBox.left + cardBox.width / 2 - layerBox.left;
     const centerY = cardBox.top + cardBox.height / 2 - layerBox.top;
-    const colors = gold ? ["#d4af37", "#f6e27a", "#fff4c2"] : ["var(--foil-a)", "var(--foil-b)", "var(--foil-c)"];
+    const colors = gold ? ["#d4af37", "#f6e27a", "#fff4c2", "#ffdf6e"]
+      : ["var(--foil-a)", "var(--foil-b)", "var(--foil-c)", "#ffffff"];
 
     if (gold) {
-      for (let i = 0; i < 3; i += 1) {
+      const flash = document.createElement("span");
+      flash.className = "flash";
+      flash.style.setProperty("--x", `${centerX}px`);
+      flash.style.setProperty("--y", `${centerY}px`);
+      flash.style.setProperty("--color", colors[1]);
+      layer.appendChild(flash);
+      setTimeout(() => flash.remove(), 1000);
+      for (let i = 0; i < 5; i += 1) {
         const burst = document.createElement("span");
         burst.className = "firework";
-        burst.style.setProperty("--x", `${centerX + (i - 1) * 70}px`);
-        burst.style.setProperty("--y", `${centerY - 20}px`);
-        burst.style.setProperty("--color", colors[i]);
+        burst.style.setProperty("--x", `${centerX + (i - 2) * 90}px`);
+        burst.style.setProperty("--y", `${centerY - 30 + (i % 2) * 70}px`);
+        burst.style.setProperty("--color", colors[i % colors.length]);
+        burst.style.setProperty("--ring", `${170 + Math.round(Math.random() * 110)}px`);
         layer.appendChild(burst);
-        setTimeout(() => burst.remove(), 1800);
+        setTimeout(() => burst.remove(), 1600);
       }
     }
 
-    for (let i = 0; i < (gold ? 30 : 16); i += 1) {
+    const pieces = gold ? 76 : 38;
+    for (let i = 0; i < pieces; i += 1) {
       const piece = document.createElement("span");
       piece.className = "confetti";
-      piece.style.setProperty("--x", `${centerX + (Math.random() - 0.5) * cardBox.width * 0.6}px`);
-      piece.style.setProperty("--y", `${centerY + (Math.random() - 0.5) * cardBox.height * 0.4}px`);
-      piece.style.setProperty("--dx", `${Math.round((Math.random() - 0.5) * 260)}px`);
-      piece.style.setProperty("--dy", `${Math.round(-60 - Math.random() * 150)}px`);
-      piece.style.setProperty("--rot", `${Math.round(Math.random() * 540 - 270)}deg`);
-      piece.style.setProperty("--size", `${4 + Math.round(Math.random() * 5)}px`);
+      piece.style.setProperty("--x", `${centerX + (Math.random() - 0.5) * cardBox.width * 0.75}px`);
+      piece.style.setProperty("--y", `${centerY + (Math.random() - 0.5) * cardBox.height * 0.5}px`);
+      piece.style.setProperty("--dx", `${Math.round((Math.random() - 0.5) * 420)}px`);
+      piece.style.setProperty("--dy", `${Math.round(-80 - Math.random() * 220)}px`);
+      piece.style.setProperty("--rot", `${Math.round(Math.random() * 720 - 360)}deg`);
+      piece.style.setProperty("--size", `${5 + Math.round(Math.random() * 8)}px`);
       piece.style.setProperty("--color", colors[i % colors.length]);
+      piece.style.setProperty("--delay", `${Math.round(Math.random() * 260)}ms`);
+      piece.style.setProperty("--life", `${2 + Math.random() * 0.8}s`);
       layer.appendChild(piece);
-      setTimeout(() => piece.remove(), 2200);
+      setTimeout(() => piece.remove(), 3000);
     }
   }
 
@@ -956,13 +1006,120 @@
   }
 
   function cycleStack(delta) {
+    playMove();
+    haptic(12);
     stackTo(state.stackIndex + delta);
   }
 
   function goToSection(id) {
     const sections = stackSections();
     const index = sections.findIndex((section) => section.id === id);
-    if (index >= 0) stackTo(index);
+    if (index >= 0) { playMove(); haptic(12); stackTo(index); }
+  }
+
+  function applyTilt(card, x, y) {
+    const tx = clamp(y, -14, 14);
+    const ty = clamp(x, -14, 14);
+    card.style.setProperty("--tilt-x", `${tx.toFixed(1)}deg`);
+    card.style.setProperty("--tilt-y", `${ty.toFixed(1)}deg`);
+    card.style.setProperty("--shine-x", `${Math.round(50 + ty * 2.6)}%`);
+    card.style.setProperty("--shine-y", `${Math.round(50 - tx * 2.6)}%`);
+    card.style.setProperty("--hue", `${Math.round(ty * 5)}deg`);
+    card.classList.add("charged");
+    card.querySelectorAll(".foil").forEach((foil) => {
+      foil.style.setProperty("--tilt-x", `${tx.toFixed(1)}deg`);
+      foil.style.setProperty("--tilt-y", `${ty.toFixed(1)}deg`);
+      foil.style.setProperty("--shine-x", `${Math.round(50 + ty * 2.6)}%`);
+      foil.style.setProperty("--shine-y", `${Math.round(50 - tx * 2.6)}%`);
+      foil.style.setProperty("--hue", `${Math.round(ty * 5)}deg`);
+      foil.classList.add("charged", "dragging");
+    });
+  }
+
+  function resetTilt(card) {
+    if (!card) return;
+    card.classList.remove("charged");
+    card.style.setProperty("--tilt-x", "0deg");
+    card.style.setProperty("--tilt-y", "0deg");
+    card.style.setProperty("--shine-x", "50%");
+    card.style.setProperty("--shine-y", "50%");
+    card.style.setProperty("--hue", "0deg");
+    card.querySelectorAll(".foil").forEach((foil) => {
+      foil.classList.remove("charged", "dragging");
+      foil.style.setProperty("--tilt-x", "0deg");
+      foil.style.setProperty("--tilt-y", "0deg");
+      foil.style.setProperty("--shine-x", "50%");
+      foil.style.setProperty("--shine-y", "50%");
+      foil.style.setProperty("--hue", "0deg");
+    });
+  }
+
+  function bindDeckDrag() {
+    const viewport = $("stackViewport");
+    let drag = null;
+    viewport.addEventListener("pointerdown", (event) => {
+      if (!state.stackMode || event.button !== 0) return;
+      if (event.target.closest("button, a, details, input, select, .info, .stack-controls")) return;
+      const card = stackSections()[state.stackIndex];
+      if (!card || !card.classList.contains("stack-proxy")) return;
+      drag = { id: event.pointerId, x: event.clientX, y: event.clientY, card };
+      if (!state.gyro) { haptic(8); ensureAudio(); playTone(760, 0, 0.04, 0.012); }
+      try { viewport.setPointerCapture(event.pointerId); } catch (error) { /* optional */ }
+    });
+    viewport.addEventListener("pointermove", (event) => {
+      if (!drag || drag.id !== event.pointerId || state.gyro) return;
+      applyTilt(drag.card, (event.clientX - drag.x) / 9, (drag.y - event.clientY) / 9);
+    });
+    const end = () => {
+      if (drag) resetTilt(drag.card);
+      drag = null;
+    };
+    viewport.addEventListener("pointerup", end);
+    viewport.addEventListener("pointercancel", end);
+  }
+
+  function onDeviceOrientation(event) {
+    if (!state.gyro || !state.stackMode || event.beta == null || event.gamma == null) return;
+    const card = stackSections()[state.stackIndex];
+    if (card) applyTilt(card, event.gamma / 2.6, (event.beta - 45) / 3.2);
+  }
+
+  async function toggleGyro() {
+    const button = $("btnGyro");
+    if (state.gyro) {
+      state.gyro = false;
+      window.removeEventListener("deviceorientation", onDeviceOrientation);
+      resetTilt(stackSections()[state.stackIndex]);
+      if (button) button.setAttribute("aria-pressed", "false");
+      return;
+    }
+    const request = window.DeviceOrientationEvent && window.DeviceOrientationEvent.requestPermission;
+    try {
+      if (typeof request === "function" && await request() !== "granted") return;
+      state.gyro = true;
+      window.addEventListener("deviceorientation", onDeviceOrientation);
+      if (button) button.setAttribute("aria-pressed", "true");
+    } catch (error) { /* permission declined or sensor unavailable */ }
+  }
+
+  function toggleSound() {
+    state.sound = !state.sound;
+    try { localStorage.setItem("ma-sound", state.sound ? "on" : "off"); } catch (error) { /* optional */ }
+    const button = $("btnSound");
+    if (button) {
+      button.setAttribute("aria-pressed", String(state.sound));
+      button.title = state.sound ? "Mute sound" : "Unmute sound";
+    }
+    if (state.sound && ensureAudio()) playMove();
+  }
+
+  function initSound() {
+    try { state.sound = localStorage.getItem("ma-sound") !== "off"; } catch (error) { /* optional */ }
+    const button = $("btnSound");
+    if (button) {
+      button.setAttribute("aria-pressed", String(state.sound));
+      button.title = state.sound ? "Mute sound" : "Unmute sound";
+    }
   }
 
   function bindFoilTilt() {
@@ -1743,6 +1900,8 @@
     });
     $("btnPrint").addEventListener("click", () => window.print());
     $("btnCards").addEventListener("click", () => setMode(!state.stackMode));
+    $("btnSound").addEventListener("click", toggleSound);
+    $("btnGyro").addEventListener("click", toggleGyro);
     $("stackPrev").addEventListener("click", () => cycleStack(-1));
     $("stackNext").addEventListener("click", () => cycleStack(1));
     $("sourceButton").addEventListener("click", () => {
@@ -1809,17 +1968,9 @@
     });
     window.addEventListener("resize", hideHelp);
 
-    const viewport = $("stackViewport");
-    // Press the top card to send it to the back. Swipe and wheel do not flip.
-    viewport.addEventListener("click", (event) => {
-      if (!state.stackMode) return;
-      const active = stackSections()[state.stackIndex];
-      if (!active || !active.contains(event.target)) return;
-      if (active.classList.contains("stack-proxy")) {
-        if (event.target.closest(".info, .stack-controls, .source-picker")) return;
-      } else if (event.target.closest("button, a, select, input, summary, details, [contenteditable], .info, .source-picker, .stack-controls, .deck, .hr-ribbon svg")) return;
-      cycleStack(1);
-    });
+    // Navigation is buttons/arrows only. Dragging the card reveals its
+    // hologram instead of flipping the deck.
+    bindDeckDrag();
 
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") { hideHelp(); closeSourceMenu(); }
@@ -1840,6 +1991,7 @@
     initTheme();
     initSource();
     initMode();
+    initSound();
     initControls();
     $("lock").hidden = false;
     $("app").hidden = true;
