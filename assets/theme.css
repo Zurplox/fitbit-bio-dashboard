@@ -190,7 +190,7 @@ a { color: inherit; }
 .lock-error { color: var(--bad); font-size: 14px; min-height: 1em; }
 
 /* -------------------------------------------------------------- topbar -- */
-.topbar { position: sticky; top: 0; z-index: 20; border-width: 0 0 1px; }
+.topbar { position: sticky; top: 0; z-index: 80; border-width: 0 0 1px; }
 .topbar-in { max-width: 1080px; margin: 0 auto; height: 64px; padding: 0 24px; display: flex; align-items: center; gap: 20px; }
 .brand { font-size: 16px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; }
 .page-title { display: none; }
@@ -525,6 +525,12 @@ details.plain > div { margin-top: 14px; }
 .footer { margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 12px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
 
 /* ---------------------------------------------------------- responsive -- */
+@media (min-width: 901px) and (max-width: 1180px) {
+  .topbar-in { gap: 10px; padding: 0 14px; }
+  .nav a { padding: 6px 7px; font-size: 12px; }
+  .actions { gap: 2px; }
+  .actions .sync, .actions #btnRefresh, .actions #btnPrint { display: none; }
+}
 @media (max-width: 900px) {
   .nav { display: none; }
   .cols-2, .cols-2-3 { grid-template-columns: 1fr; }

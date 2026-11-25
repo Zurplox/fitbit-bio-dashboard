@@ -1160,6 +1160,9 @@
 
       card.addEventListener("pointermove", update);
       card.addEventListener("pointerdown", (event) => {
+        // Capturing on an interactive child would retarget its click to the
+        // card, so the ⓘ buttons would never open their help popover.
+        if (event.target.closest("button, a, input, select, details, .info")) return;
         down = true;
         card.classList.add("dragging");
         try { card.setPointerCapture(event.pointerId); } catch (error) { /* not available */ }
