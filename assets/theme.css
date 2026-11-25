@@ -640,7 +640,7 @@ body.stack-mode .section.stack-proxy.active { cursor: grab; }
 body.deck-dragging, body.deck-dragging * { user-select: none !important; -webkit-user-select: none !important; cursor: grabbing !important; }
 body.stack-mode .section.stack-proxy {
   display: block; top: 50%; left: 50%; width: min(92%, 480px); aspect-ratio: 1.586;
-  height: auto; max-height: none; min-height: 0; margin: 0; padding: 16px 20px;
+  height: auto; max-height: none; min-height: 0; margin: 0; padding: 0;
   border-radius: 18px; overflow: hidden;
   --tilt-x: 0deg; --tilt-y: 0deg; --shine-x: 50%; --shine-y: 50%; --hue: 0deg;
   transform: translate(calc(-50% + var(--stack-x, 0px)), calc(-50% + var(--stack-y, 0px)))
@@ -662,12 +662,12 @@ body.stack-mode .section.stack-proxy[data-state="gold"].charged::before,
 body.stack-mode .section.stack-proxy[data-state="silver"].charged::before { opacity: 1; }
 body.stack-mode .section.stack-proxy > * { position: relative; z-index: 1; }
 body.stack-mode .section.stack-proxy > [data-result-key] {
-  width: 100%; height: 100%; border: 0; border-radius: inherit; padding: 0; margin: 0;
+  width: 100%; height: 100%; border: 0; border-radius: inherit; padding: 16px 20px; margin: 0;
   overflow-x: hidden; overflow-y: auto; scrollbar-width: thin;
 }
 body.stack-mode .section.stack-proxy > .deck-card {
   position: static; display: flex; flex-direction: column; gap: 3px; min-height: 0;
-  width: 100%; transform: none !important; background: transparent; box-shadow: none; padding: 0;
+  width: 100%; transform: none !important; background: transparent; box-shadow: none;
 }
 body.stack-mode .section.stack-proxy .deck-num { font-size: 10px; }
 body.stack-mode .section.stack-proxy .deck-score { font-size: 28px; }
@@ -677,7 +677,7 @@ body.stack-mode .section.stack-proxy .deck-weight { font-size: 11px; }
 body.stack-mode .section.stack-proxy .deck-read { font-size: 12px; margin-top: 1px; }
 body.stack-mode .section.stack-proxy .deck-detail { font-size: 11px; }
 body.stack-mode .section.stack-proxy .deck-card .progress { margin-top: auto; height: 5px; }
-body.stack-mode .section.stack-proxy > .hero-card { display: flex; flex-direction: column; justify-content: center; padding: 0; }
+body.stack-mode .section.stack-proxy > .hero-card { display: flex; flex-direction: column; justify-content: center; }
 body.stack-mode .section.stack-proxy .hero-intro h1 { font-size: 26px; margin-top: 2px; }
 body.stack-mode .section.stack-proxy .hero-intro .eyebrow { font-size: 10px; }
 body.stack-mode .section.stack-proxy .hero-lede, body.stack-mode .section.stack-proxy .hero-foot { display: none; }
@@ -698,7 +698,7 @@ body.stack-mode .section.stack-proxy .ring-value { font-size: 13px; }
 body.stack-mode .section.stack-proxy .hero-ring-stat .label,
 body.stack-mode .section.stack-proxy .hero-ring-stat .ring-band,
 body.stack-mode .section.stack-proxy .hero-ring-stat .sub { font-size: 10px; }
-body.stack-mode .section.stack-proxy .metric-card { padding: 0; min-height: 0; }
+body.stack-mode .section.stack-proxy .metric-card { min-height: 0; }
 body.stack-mode .section.stack-proxy,
 body.stack-mode .section.stack-proxy * { user-select: none; -webkit-user-select: none; }
 body.stack-mode .section.stack-proxy[data-state="plain"].active { background: var(--surface); }
@@ -777,7 +777,8 @@ body.stack-mode .footer { display: none; }
 @media (max-width: 640px) {
   body.stack-mode .shell { padding-top: 12px; }
   body.stack-mode .section { top: 10px; left: 10px; width: calc(100% - 20px); max-height: calc(100% - 84px); padding: 18px; }
-  body.stack-mode .section.stack-proxy { width: min(94%, 360px); padding: 12px; max-height: none; }
+  body.stack-mode .section.stack-proxy { width: min(94%, 360px); max-height: none; }
+  body.stack-mode .section.stack-proxy > [data-result-key] { padding: 12px; }
   body.stack-mode .hero-card .hero-rings { transform: scale(.85); transform-origin: top center; }
   body.stack-mode .metric-card { min-height: 110px; padding: 18px; }
   body.stack-mode .metric-card .figure { font-size: 28px; }
