@@ -574,6 +574,31 @@
   }
 
   /* -------------------------------------------------------------- vitals -- */
+  // A compact comparison of the readings the API actually reported, with the
+  // user's own baseline drawn as a dashed reference. No estimated points.
+  function miniTrend(history, field, baseline, name = "Reading") {
+    const values = (history || []).map((row) => Number(row[field])).filter(has).slice(-10);
+    if (values.length < 2) return "";
+    const ref = has(baseline) ? Number(baseline) : null;
+    const lo0 = Math.min(...values, ref === null ? Infinity : ref);
+    const hi0 = Math.max(...values, ref === null ? -Infinity : ref);
+    const pad = (hi0 - lo0) * 0.15 || 1;
+    const lo = lo0 - pad;
+    const hi = hi0 + pad;
+    const x = (i) => 6 + i * (188 / (values.length - 1));
+    const y = (v) => 48 - ((v - lo) / (hi - lo)) * 38;
+    const points = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+    const last = values.length - 1;
+    return `<svg class="mini-trend" viewBox="0 0 200 56" preserveAspectRatio="none"
+      role="img" aria-label="${esc(name)}: recent daily readings${ref === null ? "" : " against your baseline"}">
+      ${ref === null ? "" : `<line class="base" x1="6" x2="194" y1="${y(ref).toFixed(1)}" y2="${y(ref).toFixed(1)}" />`}
+      <polyline points="${points}" fill="none" stroke="var(--chart-1, var(--accent))"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+      <circle cx="${x(last).toFixed(1)}" cy="${y(values[last]).toFixed(1)}" r="3"
+        fill="var(--chart-1, var(--accent))" />
+    </svg>`;
+  }
+
   function renderVitals(data) {
     const t = data.today || {};
     const hrv = t.hrv || {};
@@ -581,27 +606,33 @@
     const resp = t.resp || {};
     const spo2 = t.spo2 || {};
     const skin = t.skin_temp || {};
+    const history = data.history || {};
 
     const rows = [
       has(hrv.ms) && {
         help: "hrv", name: "HRV", value: `${num(hrv.ms)} ms`,
         base: has(hrv.baseline) ? `${num(hrv.baseline)} ms` : "", change: signed(hrv.delta_pct, 0, "%"), band: hrv.band, date: hrv.date,
+        trend: miniTrend(history.hrv, "ms", hrv.baseline, "HRV"),
       },
       has(rhr.bpm) && {
         help: "rhr", name: "Resting HR", value: `${num(rhr.bpm)} bpm`,
         base: has(rhr.baseline) ? `${num(rhr.baseline)} bpm` : "", change: signed(rhr.delta, 0, " bpm"), band: rhr.band, date: rhr.date,
+        trend: miniTrend(history.rhr, "bpm", rhr.baseline, "Resting HR"),
       },
       has(resp.brpm) && {
         help: "resp", name: "Breathing rate", value: `${num(resp.brpm, 1)} /min`,
         base: has(resp.baseline) ? `${num(resp.baseline, 1)} /min` : "", change: signed(resp.delta, 1, ""), band: resp.band, date: resp.date,
+        trend: miniTrend(history.resp, "brpm", resp.baseline, "Breathing rate"),
       },
       has(spo2.pct) && {
         help: "spo2", name: "Blood oxygen", value: `${num(spo2.pct, 1)}%`, base: "", change: "", band: spo2.band, date: spo2.date,
+        trend: miniTrend(history.spo2, "pct", null, "Blood oxygen"),
       },
       // The API gives skin temperature with its own 30-night baseline; there
       // is no published threshold for it here, so it carries no status colour.
       has(skin.delta_c) && {
         help: "skin", name: "Skin temp", value: `${signed(skin.delta_c, 1, " °C")}`, base: "30-night median", change: "", date: skin.date,
+        trend: miniTrend(history.skin_temp, "delta_c", null, "Skin temperature"),
         band: null, bandText: "Not scored",
       },
     ].filter(Boolean);
@@ -620,6 +651,7 @@
             <div class="figure">${esc(r.value)}</div>
             <div class="sub">${esc([r.base && r.base !== "30-night median" ? `Usual ${r.base}` : r.base, r.change, r.date ? `Measured ${shortDate(r.date)}` : ""].filter(Boolean).join(" · "))}</div>
             <div class="tile-status">${status(r.band, r.bandText)}${foil ? '<span class="foil-badge">On track</span>' : ""}</div>
+            ${r.trend}
           </div>`;
         }).join("")}</div>
         ${illness && illness.headline ? `<p class="note">${status({ tone: illness.tone }, illness.headline)}${
@@ -864,6 +896,7 @@
       const proxy = document.createElement("section");
       proxy.className = "section stack-proxy";
       proxy.dataset.label = card.dataset.label || "";
+      proxy.dataset.sectionId = (card.parentElement.closest(".section") || {}).id || "";
       proxy.dataset.tier = card.dataset.tier
         || (card.dataset.gold === "true" ? "gold" : card.dataset.good === "true" ? "silver" : "");
       const tier = proxy.dataset.tier;
@@ -1064,7 +1097,7 @@
     const count = $("stackCount");
     if (count) count.textContent = `${state.stackIndex + 1} / ${sections.length}`;
     document.querySelectorAll(".nav a, .tabbar a").forEach((link) =>
-      link.setAttribute("aria-current", String(link.getAttribute("href") === `#${active.id}`))
+      link.setAttribute("aria-current", String(link.getAttribute("href") === `#${active.dataset.sectionId || active.id}`))
     );
     const next = sections[(state.stackIndex + 1) % sections.length];
     const nextLabel = $("stackNextLabel");
@@ -1093,7 +1126,7 @@
 
   function goToSection(id) {
     const sections = stackSections();
-    const index = sections.findIndex((section) => section.id === id);
+    const index = sections.findIndex((section) => section.id === id || section.dataset.sectionId === id);
     if (index >= 0) {
       state.navSeq += 1;
       playMove(index > state.stackIndex);
@@ -1103,7 +1136,7 @@
     }
     // Text-only sections are not deck cards: show them in the scrolling view.
     const section = $(id);
-    if (section && !section.hidden) {
+    if (section) {
       setMode(false);
       section.scrollIntoView({ behavior: "smooth", block: "start" });
     }
@@ -1973,6 +2006,12 @@
     // the data from the DOM rather than merely hiding it.
     document.querySelectorAll("[data-slot]").forEach((node) => { node.innerHTML = ""; });
     $("celebration").innerHTML = "";
+    $("sourceMenu").innerHTML = "";
+    $("stackCount").textContent = "";
+    $("stackNextLabel").textContent = "";
+    $("stackLive").textContent = "";
+    $("pageTitle").textContent = "";
+    $("stackRail").style.width = "0";
     $("syncText").textContent = "";
     closeSourceMenu();
     $("sourcePicker").hidden = true;

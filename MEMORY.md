@@ -48,6 +48,8 @@ Consumer fitness app: quiet top bar, hero with three rings (Recovery, Sleep, Tra
 
 - Static review fixes: `lock()` restores lifted cards before clearing slots; `sectionHidden` Map restores the original section visibility (no empty markers section); arrow keys work after button focus while inputs still swallow them; celebrations dedupe by `${navSeq}:${resultKey}` so theme/source switches do not replay them but revisits do; nav links to non-deck sections switch to Page mode; print lets the shell scroll.
 
+- Metric cards now carry a compact SVG comparison line (`miniTrend()`) built only from reported daily history (last 10 points), with the user's baseline dashed when measured and a named accessible label. `.metric-card` is a flex column so the chart fills spare space; status keeps the bottom margin when no chart exists. Lock purges source-menu and chrome labels too. Proxies carry `dataset.sectionId` so nav links and `aria-current` still point at their original section.
+
 ## Next steps
 - After a real sync, check the Data sources panel for anything still "not measured".
 - Keep `MEMORY.md` short; condense this again if it grows.
