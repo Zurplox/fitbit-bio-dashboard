@@ -10,7 +10,7 @@
   const $ = (id) => document.getElementById(id);
   const state = {
     payload: null, passphrase: null, theme: null, source: "fitbit", stackMode: true,
-    stackIndex: 0, celebrated: new Set(), badSeen: new Set(), sound: true, gyro: false, audio: null,
+    stackIndex: 0, badSeen: new Set(), sound: true, gyro: false, audio: null,
   };
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const coarsePointer = () => Boolean(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
@@ -40,11 +40,33 @@
     osc.start(at);
     osc.stop(at + duration + 0.02);
   }
+  function sweep(from, to, delay, duration, gain) {
+    const ctx = state.audio;
+    if (!ctx || !state.sound) return;
+    const at = ctx.currentTime + delay;
+    const osc = ctx.createOscillator();
+    const amp = ctx.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(from, at);
+    osc.frequency.exponentialRampToValueAtTime(to, at + duration);
+    amp.gain.setValueAtTime(0.0001, at);
+    amp.gain.exponentialRampToValueAtTime(gain, at + 0.02);
+    amp.gain.exponentialRampToValueAtTime(0.0001, at + duration);
+    osc.connect(amp).connect(ctx.destination);
+    osc.start(at);
+    osc.stop(at + duration + 0.02);
+  }
   function playMove(forward = true) { if (ensureAudio()) playTone(forward ? 540 : 420, 0, 0.05, 0.018, "triangle"); }
   function playCelebrate(gold) {
     if (!state.audio || !state.sound) return; // no gesture yet: stay silent
-    const notes = gold ? [523, 659, 784, 1047] : [523, 784];
-    notes.forEach((freq, index) => playTone(freq, index * 0.085, gold ? 0.28 : 0.2, gold ? 0.05 : 0.032, "triangle"));
+    if (gold) {
+      sweep(180, 880, 0, 0.55, 0.03);
+      playTone(110, 0, 0.32, 0.045, "sine");
+      [523, 659, 784, 1047, 1319].forEach((freq, i) =>
+        playTone(freq, 0.06 + i * 0.09, 0.42, 0.05, "triangle"));
+    } else {
+      [523, 784].forEach((freq, i) => playTone(freq, i * 0.085, 0.2, 0.032, "triangle"));
+    }
   }
   // Cards mode lifts every measured card into one deck; remember the slot
   // it came from so switching back to Page mode restores the layout.
@@ -914,11 +936,6 @@
   }
 
   function celebrate(card) {
-    const key = card.dataset.resultKey;
-    if (!key || state.celebrated.has(key)) return;
-    state.celebrated.add(key);
-    card.dataset.celebrated = "true";
-
     const layer = $("celebration");
     if (!layer) return;
     const label = card.dataset.label || "Achievement";
@@ -949,33 +966,65 @@
       flash.style.setProperty("--color", colors[1]);
       layer.appendChild(flash);
       setTimeout(() => flash.remove(), 1000);
-      for (let i = 0; i < 5; i += 1) {
+
+      const rays = document.createElement("span");
+      rays.className = "rays";
+      rays.style.setProperty("--x", `${centerX}px`);
+      rays.style.setProperty("--y", `${centerY}px`);
+      rays.style.setProperty("--color", colors[1]);
+      layer.appendChild(rays);
+      setTimeout(() => rays.remove(), 1600);
+
+      const badge = document.createElement("span");
+      badge.className = "hype-badge";
+      badge.textContent = "NEAR PERFECT";
+      layer.appendChild(badge);
+      setTimeout(() => badge.remove(), 2600);
+
+      for (let i = 0; i < 7; i += 1) {
         const burst = document.createElement("span");
         burst.className = "firework";
-        burst.style.setProperty("--x", `${centerX + (i - 2) * 90}px`);
-        burst.style.setProperty("--y", `${centerY - 30 + (i % 2) * 70}px`);
+        burst.style.setProperty("--x", `${centerX + (Math.random() - 0.5) * layerBox.width * 0.7}px`);
+        burst.style.setProperty("--y", `${centerY - 40 + (Math.random() - 0.5) * layerBox.height * 0.45}px`);
         burst.style.setProperty("--color", colors[i % colors.length]);
-        burst.style.setProperty("--ring", `${170 + Math.round(Math.random() * 110)}px`);
+        burst.style.setProperty("--ring", `${170 + Math.round(Math.random() * 150)}px`);
+        burst.style.setProperty("--delay", `${Math.round(Math.random() * 420)}ms`);
         layer.appendChild(burst);
-        setTimeout(() => burst.remove(), 1600);
+        setTimeout(() => burst.remove(), 2200);
+      }
+
+      for (let i = 0; i < 11; i += 1) {
+        const balloon = document.createElement("span");
+        balloon.className = "balloon";
+        balloon.style.setProperty("--x", `${Math.round(Math.random() * layerBox.width)}px`);
+        balloon.style.setProperty("--w", `${26 + Math.round(Math.random() * 20)}px`);
+        balloon.style.setProperty("--color", colors[i % colors.length]);
+        balloon.style.setProperty("--rise", `${Math.round(layerBox.height + 160)}px`);
+        balloon.style.setProperty("--delay", `${Math.round(Math.random() * 700)}ms`);
+        balloon.style.setProperty("--life", `${3 + Math.random() * 1.4}s`);
+        layer.appendChild(balloon);
+        setTimeout(() => balloon.remove(), 4600);
       }
     }
 
-    const pieces = gold ? 76 : 38;
+    const pieces = gold ? 110 : 46;
     for (let i = 0; i < pieces; i += 1) {
       const piece = document.createElement("span");
       piece.className = "confetti";
-      piece.style.setProperty("--x", `${centerX + (Math.random() - 0.5) * cardBox.width * 0.75}px`);
-      piece.style.setProperty("--y", `${centerY + (Math.random() - 0.5) * cardBox.height * 0.5}px`);
-      piece.style.setProperty("--dx", `${Math.round((Math.random() - 0.5) * 420)}px`);
-      piece.style.setProperty("--dy", `${Math.round(-80 - Math.random() * 220)}px`);
+      const fromCorner = gold && i % 3 === 0;
+      piece.style.setProperty("--x", `${fromCorner
+        ? (i % 2 ? 30 : layerBox.width - 30)
+        : centerX + (Math.random() - 0.5) * layerBox.width * 0.8}px`);
+      piece.style.setProperty("--y", `${fromCorner ? layerBox.height - 20 : centerY + (Math.random() - 0.5) * layerBox.height * 0.5}px`);
+      piece.style.setProperty("--dx", `${Math.round((fromCorner ? (centerX - (i % 2 ? 30 : layerBox.width - 30)) * 0.7 : (Math.random() - 0.5) * 620))}px`);
+      piece.style.setProperty("--dy", `${Math.round(-120 - Math.random() * (fromCorner ? 520 : 300))}px`);
       piece.style.setProperty("--rot", `${Math.round(Math.random() * 720 - 360)}deg`);
-      piece.style.setProperty("--size", `${5 + Math.round(Math.random() * 8)}px`);
+      piece.style.setProperty("--size", `${5 + Math.round(Math.random() * 9)}px`);
       piece.style.setProperty("--color", colors[i % colors.length]);
-      piece.style.setProperty("--delay", `${Math.round(Math.random() * 260)}ms`);
-      piece.style.setProperty("--life", `${2 + Math.random() * 0.8}s`);
+      piece.style.setProperty("--delay", `${Math.round(Math.random() * (gold ? 480 : 260))}ms`);
+      piece.style.setProperty("--life", `${2.2 + Math.random() * 0.9}s`);
       layer.appendChild(piece);
-      setTimeout(() => piece.remove(), 3000);
+      setTimeout(() => piece.remove(), 3400);
     }
   }
 
@@ -997,7 +1046,7 @@
     const active = sections[state.stackIndex];
     active.scrollTop = 0;
     const celebrationTarget = [...active.querySelectorAll("[data-result-key]")]
-      .find((card) => card.dataset.good === "true" && !state.celebrated.has(card.dataset.resultKey));
+      .find((card) => card.dataset.good === "true");
     if (celebrationTarget) celebrate(celebrationTarget);
     const fallbackTitles = { today: "Today", markers: "Health markers", sources: "Data sources" };
     const title = active.dataset.label || active.querySelector("h2")?.textContent || fallbackTitles[active.id] || active.id;
@@ -1901,6 +1950,7 @@
     // Every rendered value lives inside a slot, so emptying the slots purges
     // the data from the DOM rather than merely hiding it.
     document.querySelectorAll("[data-slot]").forEach((node) => { node.innerHTML = ""; });
+    $("celebration").innerHTML = "";
     $("syncText").textContent = "";
     closeSourceMenu();
     $("sourcePicker").hidden = true;
