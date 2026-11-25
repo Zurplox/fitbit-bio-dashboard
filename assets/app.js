@@ -1063,14 +1063,21 @@
       const card = stackSections()[state.stackIndex];
       if (!card || !card.classList.contains("stack-proxy")) return;
       drag = { id: event.pointerId, x: event.clientX, y: event.clientY, card };
+      // Pointerdown on text would otherwise start a desktop text selection.
+      event.preventDefault();
+      const selection = window.getSelection && window.getSelection();
+      if (selection) selection.removeAllRanges();
+      document.body.classList.add("deck-dragging");
       if (!state.gyro) { haptic(8); ensureAudio(); playTone(760, 0, 0.04, 0.012); }
       try { viewport.setPointerCapture(event.pointerId); } catch (error) { /* optional */ }
     });
     viewport.addEventListener("pointermove", (event) => {
       if (!drag || drag.id !== event.pointerId || state.gyro) return;
+      event.preventDefault();
       applyTilt(drag.card, (event.clientX - drag.x) / 9, (drag.y - event.clientY) / 9);
     });
     const end = () => {
+      document.body.classList.remove("deck-dragging");
       if (drag) resetTilt(drag.card);
       drag = null;
     };
