@@ -674,6 +674,10 @@ body.stack-mode .footer { display: none; }
 .stack-tool[aria-pressed="false"]#btnSound svg path + path { opacity: .3; }
 .stack-count { font-size: 12px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 52px; text-align: center; }
 .stack-hint { font-size: 11px; color: var(--faint); margin-left: 6px; white-space: nowrap; }
+.stack-meta { display: grid; gap: 4px; min-width: 92px; max-width: 130px; }
+.stack-next { font-size: 10px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stack-rail { height: 3px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.stack-rail i { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--accent); transition: width .25s var(--ease); }
 
 @media (max-width: 640px) {
   body.stack-mode .shell { padding-top: 12px; }
@@ -684,7 +688,7 @@ body.stack-mode .footer { display: none; }
   body.stack-mode .metric-card .figure { font-size: 28px; }
   body.stack-mode .hero-card { padding: 20px; }
   .stack-controls { bottom: calc(92px + env(safe-area-inset-bottom)); gap: 6px; padding: 5px 7px; }
-  .stack-hint { display: none; }
+  .stack-hint, .stack-meta { display: none; }
 }
 @media print {
   body.stack-mode .section { position: static !important; max-height: none !important; overflow: visible !important; opacity: 1 !important; transform: none !important; }

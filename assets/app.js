@@ -10,7 +10,7 @@
   const $ = (id) => document.getElementById(id);
   const state = {
     payload: null, passphrase: null, theme: null, source: "fitbit", stackMode: true,
-    stackIndex: 0, celebrated: new Set(), sound: true, gyro: false, audio: null,
+    stackIndex: 0, celebrated: new Set(), badSeen: new Set(), sound: true, gyro: false, audio: null,
   };
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const coarsePointer = () => Boolean(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
@@ -40,7 +40,7 @@
     osc.start(at);
     osc.stop(at + duration + 0.02);
   }
-  function playMove() { if (ensureAudio()) playTone(540, 0, 0.05, 0.018, "triangle"); }
+  function playMove(forward = true) { if (ensureAudio()) playTone(forward ? 540 : 420, 0, 0.05, 0.018, "triangle"); }
   function playCelebrate(gold) {
     if (!state.audio || !state.sound) return; // no gesture yet: stay silent
     const notes = gold ? [523, 659, 784, 1047] : [523, 784];
@@ -1008,12 +1008,26 @@
     document.querySelectorAll(".nav a, .tabbar a").forEach((link) =>
       link.setAttribute("aria-current", String(link.getAttribute("href") === `#${active.id}`))
     );
+    const next = sections[(state.stackIndex + 1) % sections.length];
+    const nextLabel = $("stackNextLabel");
+    if (nextLabel) {
+      const nextTitle = next.dataset.label || next.querySelector("h2")?.textContent || next.id;
+      nextLabel.textContent = `Next: ${nextTitle}`;
+    }
+    const rail = $("stackRail");
+    if (rail) rail.style.width = `${((state.stackIndex + 1) / sections.length) * 100}%`;
+
+    if (active.dataset.state === "bad" && !state.badSeen.has(active.dataset.label)) {
+      state.badSeen.add(active.dataset.label);
+      if (state.audio && state.sound) playTone(150, 0, 0.16, 0.035, "sine");
+      haptic([40, 60, 40]);
+    }
     const controls = $("stackControls");
     if (controls) controls.hidden = false;
   }
 
   function cycleStack(delta) {
-    playMove();
+    playMove(delta > 0);
     haptic(12);
     stackTo(state.stackIndex + delta);
   }
@@ -1021,7 +1035,7 @@
   function goToSection(id) {
     const sections = stackSections();
     const index = sections.findIndex((section) => section.id === id);
-    if (index >= 0) { playMove(); haptic(12); stackTo(index); }
+    if (index >= 0) { playMove(index > state.stackIndex); haptic(12); stackTo(index); }
   }
 
   function applyTilt(card, x, y) {
