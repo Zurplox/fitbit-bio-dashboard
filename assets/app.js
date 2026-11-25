@@ -910,6 +910,7 @@
     }
     const controls = $("stackControls");
     if (controls) controls.hidden = !next || !stackSections().length;
+    toggleShortcutHelp(false);
   }
 
   function celebrate(card) {
@@ -1135,6 +1136,15 @@
       window.addEventListener("deviceorientation", onDeviceOrientation);
       if (button) button.setAttribute("aria-pressed", "true");
     } catch (error) { /* permission declined or sensor unavailable */ }
+  }
+
+  function toggleShortcutHelp(force) {
+    const panel = $("shortcutHelp");
+    if (!panel) return;
+    const open = typeof force === "boolean" ? force : panel.hidden;
+    panel.hidden = !open;
+    const button = $("btnHelp");
+    if (button) button.setAttribute("aria-expanded", String(open));
   }
 
   function toggleSound() {
@@ -1940,6 +1950,10 @@
     $("btnCards").addEventListener("click", () => setMode(!state.stackMode));
     $("btnSound").addEventListener("click", toggleSound);
     $("btnGyro").addEventListener("click", toggleGyro);
+    $("btnHelp").addEventListener("click", () => toggleShortcutHelp());
+    document.addEventListener("click", (event) => {
+      if (!event.target.closest("#shortcutHelp, #btnHelp")) toggleShortcutHelp(false);
+    });
     $("stackPrev").addEventListener("click", () => cycleStack(-1));
     $("stackNext").addEventListener("click", () => cycleStack(1));
     $("sourceButton").addEventListener("click", () => {
@@ -2011,7 +2025,8 @@
     bindDeckDrag();
 
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") { hideHelp(); closeSourceMenu(); }
+      if (event.key === "Escape") { hideHelp(); closeSourceMenu(); toggleShortcutHelp(false); }
+      if (event.key === "?") { toggleShortcutHelp(); event.preventDefault(); return; }
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const tag = (event.target.tagName || "").toLowerCase();
       if (tag === "input" || tag === "textarea" || tag === "select" || tag === "button" || event.target.isContentEditable) return;
