@@ -577,8 +577,9 @@
   // A compact comparison of the readings the API actually reported, with the
   // user's own baseline drawn as a dashed reference. No estimated points.
   function miniTrend(history, field, baseline, name = "Reading") {
-    const values = (history || []).map((row) => Number(row[field])).filter(has).slice(-10);
-    if (values.length < 2) return "";
+    const rows = (history || []).filter((row) => has(Number(row[field])) && row.date).slice(-10);
+    if (rows.length < 2) return `<p class="trend-empty">Not enough readings to compare.</p>`;
+    const values = rows.map((row) => Number(row[field]));
     const ref = has(baseline) ? Number(baseline) : null;
     const lo0 = Math.min(...values, ref === null ? Infinity : ref);
     const hi0 = Math.max(...values, ref === null ? -Infinity : ref);
@@ -589,14 +590,17 @@
     const y = (v) => 48 - ((v - lo) / (hi - lo)) * 38;
     const points = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
     const last = values.length - 1;
-    return `<svg class="mini-trend" viewBox="0 0 200 56" preserveAspectRatio="none"
-      role="img" aria-label="${esc(name)}: recent daily readings${ref === null ? "" : " against your baseline"}">
-      ${ref === null ? "" : `<line class="base" x1="6" x2="194" y1="${y(ref).toFixed(1)}" y2="${y(ref).toFixed(1)}" />`}
-      <polyline points="${points}" fill="none" stroke="var(--chart-1, var(--accent))"
-        stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-      <circle cx="${x(last).toFixed(1)}" cy="${y(values[last]).toFixed(1)}" r="3"
-        fill="var(--chart-1, var(--accent))" />
-    </svg>`;
+    return `<div class="trend-block">
+      <svg class="mini-trend" viewBox="0 0 200 56" preserveAspectRatio="none"
+        role="img" aria-label="${esc(name)}: ${rows.length} daily readings${ref === null ? "" : " against your baseline"}">
+        ${ref === null ? "" : `<line class="base" x1="6" x2="194" y1="${y(ref).toFixed(1)}" y2="${y(ref).toFixed(1)}" />`}
+        <polyline points="${points}" fill="none" stroke="var(--trend, var(--accent))"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        <rect class="latest" x="${(x(last) - 3).toFixed(1)}" y="${(y(values[last]) - 3).toFixed(1)}"
+          width="6" height="6" rx="1.5" fill="var(--trend, var(--accent))" />
+      </svg>
+      <div class="trend-caption"><span>${esc(shortDate(rows[0].date))}</span><span>${esc(shortDate(rows[last].date))}</span></div>
+    </div>`;
   }
 
   function renderVitals(data) {
