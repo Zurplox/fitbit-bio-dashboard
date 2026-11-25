@@ -1081,7 +1081,7 @@
     let drag = null;
     viewport.addEventListener("pointerdown", (event) => {
       if (!state.stackMode || event.button !== 0) return;
-      if (event.target.closest("button, a, details, input, select, .info, .stack-controls")) return;
+      if (event.target.closest(".info, a, details, input, select, .stack-controls, .source-picker")) return;
       const card = stackSections()[state.stackIndex];
       if (!card || !card.classList.contains("stack-proxy")) return;
       drag = { id: event.pointerId, x: event.clientX, y: event.clientY, card, at: performance.now() };

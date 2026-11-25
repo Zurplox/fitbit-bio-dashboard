@@ -600,7 +600,8 @@ body.stack-mode .section.active { pointer-events: auto; cursor: pointer; }
 body.stack-mode .section.stack-proxy.active { cursor: grab; }
 body.deck-dragging, body.deck-dragging * { user-select: none !important; -webkit-user-select: none !important; cursor: grabbing !important; }
 body.stack-mode .section.stack-proxy {
-  display: flex; align-items: center; min-height: 280px; max-height: calc(100% - 48px);
+  display: block; width: max-content; max-width: calc(100% - 48px);
+  min-height: 0; height: auto; padding: 0; border-radius: 20px; max-height: calc(100% - 48px);
   --tilt-x: 0deg; --tilt-y: 0deg; --shine-x: 50%; --shine-y: 50%; --hue: 0deg;
   transform: translate(var(--stack-x, 0px), var(--stack-y, 0px)) rotate(var(--stack-r, 0deg))
     scale(var(--stack-s, 1)) perspective(800px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y));
@@ -619,6 +620,7 @@ body.stack-mode .section.stack-proxy::before {
 body.stack-mode .section.stack-proxy[data-state="gold"].charged::before,
 body.stack-mode .section.stack-proxy[data-state="silver"].charged::before { opacity: 1; }
 body.stack-mode .section.stack-proxy > * { position: relative; z-index: 1; }
+body.stack-mode .section.stack-proxy > [data-result-key] { width: 100%; border: 0; border-radius: inherit; }
 body.stack-mode .section.stack-proxy,
 body.stack-mode .section.stack-proxy * { user-select: none; -webkit-user-select: none; }
 body.stack-mode .section.stack-proxy[data-state="plain"].active { background: var(--surface); }
@@ -628,19 +630,24 @@ body.stack-mode .section.stack-proxy[data-state="bad"].charged {
 }
 body.stack-mode .section.stack-proxy[data-state="bad"],
 body.stack-mode .section.stack-proxy[data-state="bad"] > [data-result-key] {
-  border-color: color-mix(in srgb, var(--bad) 50%, var(--line));
+  border-color: color-mix(in srgb, var(--bad) 65%, #6b5a4a);
   background:
-    radial-gradient(circle at 14% 22%, color-mix(in srgb, var(--bad) 16%, transparent), transparent 24%),
-    radial-gradient(circle at 82% 76%, color-mix(in srgb, var(--bad) 12%, transparent), transparent 20%),
-    repeating-linear-gradient(116deg, transparent 0 11px, color-mix(in srgb, var(--bad) 7%, transparent) 11px 12px),
+    radial-gradient(ellipse at 12% 18%, color-mix(in srgb, var(--bad) 30%, transparent), transparent 27%),
+    radial-gradient(ellipse at 88% 82%, color-mix(in srgb, #6b5a4a 26%, transparent), transparent 31%),
+    radial-gradient(circle at 70% 22%, color-mix(in srgb, #3f3a35 18%, transparent), transparent 13%),
+    repeating-linear-gradient(116deg, transparent 0 9px, color-mix(in srgb, #4a4038 11%, transparent) 9px 10px),
+    repeating-linear-gradient(28deg, transparent 0 23px, color-mix(in srgb, var(--bad) 9%, transparent) 23px 24px),
     var(--surface);
 }
+body.stack-mode .section.stack-proxy[data-state="bad"] > [data-result-key] { filter: saturate(.5) sepia(.14); }
 body.stack-mode .section.stack-proxy[data-state="bad"]::after {
   content: ""; position: absolute; inset: 0; z-index: 0; border-radius: inherit; pointer-events: none;
   background:
-    linear-gradient(122deg, transparent 46%, color-mix(in srgb, var(--bad) 42%, transparent) 46.5%, transparent 47.2%),
-    linear-gradient(122deg, transparent 62%, color-mix(in srgb, var(--bad) 24%, transparent) 62.4%, transparent 63%);
-  opacity: .75;
+    linear-gradient(122deg, transparent 45%, color-mix(in srgb, var(--bad) 58%, transparent) 45.5%, transparent 46.4%),
+    linear-gradient(122deg, transparent 61%, color-mix(in srgb, #4a4038 46%, transparent) 61.5%, transparent 62.3%),
+    linear-gradient(38deg, transparent 28%, color-mix(in srgb, #4a4038 34%, transparent) 28.4%, transparent 29%),
+    conic-gradient(from 300deg at 100% 0, color-mix(in srgb, #4a4038 34%, transparent) 0deg 9deg, transparent 9deg 360deg);
+  opacity: 1;
 }
 body.stack-mode .section.stack-proxy:not(.active) {
   background: var(--surface);
@@ -692,7 +699,7 @@ body.stack-mode .footer { display: none; }
 @media (max-width: 640px) {
   body.stack-mode .shell { padding-top: 12px; }
   body.stack-mode .section { top: 10px; left: 10px; width: calc(100% - 20px); max-height: calc(100% - 84px); padding: 18px; }
-  body.stack-mode .section.stack-proxy { min-height: 200px; max-height: calc(100% - 120px); }
+  body.stack-mode .section.stack-proxy { min-height: 0; max-width: calc(100% - 20px); max-height: calc(100% - 120px); }
   body.stack-mode .hero-card .hero-rings { transform: scale(.85); transform-origin: top center; }
   body.stack-mode .metric-card { min-height: 110px; padding: 18px; }
   body.stack-mode .metric-card .figure { font-size: 28px; }
