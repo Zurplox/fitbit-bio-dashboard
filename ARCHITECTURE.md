@@ -48,10 +48,12 @@ owner; if you are about to write a threshold somewhere else, you are in the wron
 ## Payload contract
 
 The published vault is a thin envelope (`schema`, `generated_at`, `demo`, `timezone`,
-`default_view`, `views`) holding two complete payloads from `sync.build_payload()`: `views.fitbit`
-(default) and `views.all`. `filter_fetched()` keeps only records whose API `dataSource` is a Fitbit
-device; daily rollups that merge devices are withheld from the Fitbit view instead of being
-mislabelled. Each view has its own `data_quality`.
+`default_view`, `views`) holding four complete payloads from `sync.build_payload()`:
+`views.fitbit` (default), `views.garmin`, `views.other` and `views.all`.
+`filter_fetched(fetched, group)` keeps only records whose API source belongs to that device family;
+daily rollups that merge devices are withheld from the single-source views instead of being
+mislabelled. Each view has its own `data_quality`, and the single-source views skip the publish gate
+so a quiet source can still render honestly.
 
 `sync.build_payload()` emits:
 
