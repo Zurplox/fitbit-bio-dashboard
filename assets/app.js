@@ -1708,8 +1708,11 @@
     // Latest workout: every measurement the API sent, plus a comparison with
     // recent sessions. No chart; all of it is numbers and short tables.
     const te = (data.markers && data.markers.training_effect) || {};
+    // Some views report only a count when training effect is unavailable;
+    // never treat that number as a list of sessions.
+    const teSessions = Array.isArray(te.sessions) ? te.sessions : [];
     const teByDate = {};
-    (te.sessions || []).forEach((row) => { teByDate[row.date] = row; });
+    teSessions.forEach((row) => { teByDate[row.date] = row; });
     const gauge = (value, color) => `<div class="te-gauge" role="img" aria-label="${num(value, 1)} of 5">
       ${[0, 1, 2, 3, 4].map((i) => `<i style="--c:${color}"><b style="width:${Math.max(0, Math.min(1, value - i)) * 100}%"></b></i>`).join("")}
     </div>`;
@@ -1799,11 +1802,11 @@
         </div>
       </div>` : easyOnly ? `<p class="sub">All ${hm(zoneTotal)} was in the light zone, so this session has no aerobic or anaerobic training effect.</p>` : "";
 
-      const history = te.sessions && te.sessions.length > 1 ? `<details class="plain">
+      const history = teSessions.length > 1 ? `<details class="plain">
         <summary>Recent training effects</summary>
         <div class="te-table">
           <div class="te-tr te-th"><span>Date</span><span>Session</span><span>Aerobic</span><span>Anaerobic</span></div>
-          ${te.sessions.slice(0, -1).reverse().map((row) => `<div class="te-tr">
+          ${teSessions.slice(0, -1).reverse().map((row) => `<div class="te-tr">
             <span class="muted">${shortDate(row.date)}</span>
             <span>${workoutName(row)} <span class="faint">${hm(row.minutes)}</span></span>
             <b class="te-a">${num(row.aerobic, 1)}</b>

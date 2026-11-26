@@ -60,6 +60,8 @@ Consumer fitness app: quiet top bar, hero with three rings (Recovery, Sleep, Tra
 
 - Sleep numbers reconciled: the hero ring and Today card now use the pipeline's `sleep.score`, not minutes ÷ need. The need ratio is only a supporting readout and cold-start fallback; band label comes from `sleep.band`. Help text and design doc updated.
 
+- QA fix: `renderActivity()` assumed `training_effect.sessions` was an array; the "other" view ships an integer count when unavailable, so source switching threw and left stale deck DOM. Now normalised with `Array.isArray()`. All four views rebuild their decks correctly.
+
 ## Next steps
 - After a real sync, check the Data sources panel for anything still "not measured".
 - Keep `MEMORY.md` short; condense this again if it grows.
