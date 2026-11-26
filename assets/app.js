@@ -130,7 +130,7 @@
     scores: "All four scores are calculated here from your own Fitbit measurements by fixed, published rules. They borrow ideas from WHOOP, Apple and Garmin but are not their scores.",
     recovery: "A 0-100 readiness score from last night's HRV, resting heart rate, breathing, sleep and skin temperature. Each reading is turned into a z-score against your own baseline, weighted (HRV 55%, resting HR 20%, sleep 15%, breathing 5%, skin temperature 5%), then mapped through a logistic curve. Missing readings drop their weight instead of being guessed. It is a transparent approximation, not a device's proprietary score.",
     readiness: "Your recovery, adjusted for how quickly your training has been ramping up. A quick answer to: is today a good day to go hard?",
-    sleep_perf: "The hours you slept divided by the hours your body needed. 100% means you got all the sleep you needed.",
+    sleep_perf: "A 0-100 score from time asleep against your own need (55%), sleep efficiency (30%) and deep/REM balance (15%). The ring, the Today card and the Last night card all show this same number.",
     load: "Training minutes in the last 7 days compared with your usual week. About 0.8 to 1.3 is a healthy build. Above 1.5 is a sudden jump that raises injury risk.",
     hrv: "Heart rate variability: tiny differences in time between heartbeats, measured while you sleep. Above your normal usually means rested. Below can mean fatigue, stress, illness or alcohol.",
     rhr: "Your heart rate at complete rest. A few beats above your normal can signal fatigue or illness. Lower over months usually means fitter.",
@@ -389,8 +389,12 @@
     const lede = recovery.band && recovery.band.plain
       ? recovery.band.plain
       : (data.clinical && data.clinical.headline) || "";
-    const perf = has(sleep.minutes) && sleep.need_minutes
+    // One sleep number everywhere: the pipeline's sleep score (duration,
+    // efficiency and stage balance). The need ratio is only its fallback and
+    // the supporting readout, never a second competing score.
+    const needRatio = has(sleep.minutes) && sleep.need_minutes
       ? Math.min(100, (sleep.minutes / sleep.need_minutes) * 100) : null;
+    const perf = has(sleep.score) ? Number(sleep.score) : needRatio;
 
     const ringStat = (label, ratio, value, unit, color, bandText, help, sub, ticks = false) => `<div class="hero-ring-stat">
       ${has(ratio) ? ring(ratio, color, `<div class="ring-value">${value}${unit ? `<small>${unit}</small>` : ""}</div>`, ticks) : ""}
@@ -404,7 +408,7 @@
         toneColor(recovery.band), bandLabel(recovery.band), "recovery",
         has(today.hrv && today.hrv.delta_pct) ? `HRV ${signed(today.hrv.delta_pct, 0, "%")} vs median` : "", true) : "",
       perf !== null ? ringStat("Sleep", perf / 100, Math.round(perf), "%", cssVar("--sleep"),
-        perf >= 100 ? "Need met" : sleep.debt_minutes ? "Short of need" : "Near need", "sleep_perf",
+        sleep.band ? bandLabel(sleep.band) : perf >= 100 ? "Need met" : "Short of need", "sleep_perf",
         `${hm(sleep.minutes)} of ${hm(sleep.need_minutes)}`) : "",
       has(load.acwr) ? ringStat("Training load", Math.min(2, load.acwr) / 2, load.acwr.toFixed(2), "",
         tone(load.acwr_band) === "good" ? cssVar("--chart") : toneColor(load.acwr_band),
@@ -453,9 +457,9 @@
     });
 
     if (perf !== null) deckItems.push({
-      key: "sleep-performance", label: "Sleep performance", help: "sleep_perf",
+      key: "sleep-performance", label: "Sleep score", help: "sleep_perf",
       score: Math.round(perf), read: `${hm(sleep.minutes)} of ${hm(sleep.need_minutes)} needed`,
-      detail: "Hours asleep against tonight's need.", note: "Sleep need",
+      detail: "Duration against need, efficiency and stage balance.", note: "Sleep score",
     });
     if (has(readiness.score)) deckItems.push({
       key: "readiness", label: "Training readiness", help: "readiness",

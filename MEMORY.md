@@ -58,6 +58,8 @@ Consumer fitness app: quiet top bar, hero with three rings (Recovery, Sleep, Tra
 
 - Research source: `ryanbr/noop` (StrandAnalytics). We implement its published, transparent method independently: robust z-scores (mean + 1.253×MAD spread) weighted HRV .55 / RHR .20 / sleep .15 / resp .05 / skin .05, logistic `100/(1+exp(-1.6(z+0.2)))`; and workout Effort = Edwards-style %HRR zone weights × minutes, log-mapped by ln(7201). No proprietary score or NOOP code is copied. `bio_analytics.recovery()` keeps the legacy linear path when personal spreads are absent; cold-start is honest.
 
+- Sleep numbers reconciled: the hero ring and Today card now use the pipeline's `sleep.score`, not minutes ÷ need. The need ratio is only a supporting readout and cold-start fallback; band label comes from `sleep.band`. Help text and design doc updated.
+
 ## Next steps
 - After a real sync, check the Data sources panel for anything still "not measured".
 - Keep `MEMORY.md` short; condense this again if it grows.

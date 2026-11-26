@@ -48,7 +48,7 @@ A consumer fitness app, not a console or a landing page. Default view is a Pokem
 ## Metric vocabulary
 
 - **Recovery** (transparent NOOP-inspired %): robust z-scores of HRV (55%), resting HR (20%), sleep (15%), breathing (5%) and skin-temperature drift (5%) against personal baselines, squashed through a logistic curve. Missing terms drop their weight. Its five drivers stay one card each in Today.
-- **Sleep performance** (WHOOP-style %): hours asleep ÷ tonight's need.
+- **Sleep score** (0–100): 55% time asleep against your own need, 30% efficiency and 15% deep/REM balance. The ring, Today card and Last night card show the same number and band; the need ratio stays as supporting readout only.
 - **Effort** (transparent NOOP-inspired /100, shown inside the workout card): one-minute HR samples become %HRR zone weights 1–5, TRIMP is summed, then log-mapped against the 7201 ceiling. No proprietary device score is claimed.
 - **Training load** (Garmin-style): acute:chronic minutes ratio, shown as the ratio itself. The old 0-21 "strain" rescale was dropped because it implied a WHOOP strain score the data cannot produce.
 - **Overnight vitals** (Apple Vitals-style table): HRV, resting HR, breathing, SpO₂, skin temperature deviation. Skin temperature has no published threshold here, so it is "Not scored".
