@@ -54,6 +54,8 @@ Consumer fitness app: quiet top bar, hero with three rings (Recovery, Sleep, Tra
 
 - Gesture review fixes: viewport no longer steals capture from `.foil` children (avoids stuck 9° hover tilt); fly-out timer is cancelled on restore/new press and guarded against detached cards; `pointercancel` never commits a swipe; cue text tracks direction and is `aria-hidden`, with a CSS specificity fix so it stays absolute; tilt vars are reset on card change/restore and skipped under reduced motion, which also strips drag transforms from proxies.
 
+- Recent nights are one `nights-card` in the deck (`data-result-key="recent-nights"`), with all nights as compact rows inside; the old per-night result cards are gone. Tier is taken from the best efficiency. Mobile rows are compacted so all seven fit without scrolling. Deck is now 16 cards instead of 22.
+
 ## Next steps
 - After a real sync, check the Data sources panel for anything still "not measured".
 - Keep `MEMORY.md` short; condense this again if it grows.

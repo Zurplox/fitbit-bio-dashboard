@@ -1448,24 +1448,23 @@
       ${kv.length ? `<dl class="kv">${kv.map(([k, v]) => `<div><dt>${k}${info({ "Efficiency": "efficiency", "Sleep debt, 14 nights": "debt", "Consistency": "consistency" }[k])}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>` : ""}
     </div>`;
 
-    slot("sleepNights").innerHTML = `<div class="card">
+    // Several nights belong to one card, not one card per night.
+    const bestEfficiency = recent.reduce((best, r) =>
+      Math.max(best, has(r.efficiency) ? Number(r.efficiency) : 0), 0);
+    const nightsGold = bestEfficiency >= 95;
+    const nightsGood = bestEfficiency >= 90;
+    const nightsTier = nightsGold ? "gold" : nightsGood ? "silver" : "";
+    slot("sleepNights").innerHTML = `<div class="card nights-card${nightsGood ? " foil" : ""}${nightsGold ? " gold" : ""}${nightsTier === "silver" ? " silver" : ""}"
+      data-good="${nightsGood}" data-gold="${nightsGold}" data-tier="${nightsTier}"
+      data-score="${bestEfficiency}" data-result-key="recent-nights" data-label="Recent nights">
       <div class="card-head"><h3>Recent nights</h3><span class="faint small">Last ${recent.length}</span></div>
-      ${recent.length ? `<div class="night-grid">${recent.map((r) => {
-        const foil = has(r.efficiency) && r.efficiency >= 90;
-        const gold = has(r.efficiency) && r.efficiency >= 95;
-        const silver = foil && !gold;
-        return `<div class="night-card${foil ? " foil" : ""}${gold ? " gold" : ""}${silver ? " silver" : ""}"
-          data-good="${foil}" data-gold="${gold}" data-tier="${gold ? "gold" : silver ? "silver" : "standard"}"
-          data-score="${has(r.efficiency) ? r.efficiency : 0}"
-          data-result-key="night-${esc(r.date)}" data-label="Night ${shortDate(r.date)}">
-          <div class="night-top"><span class="faint">${shortDate(r.date)}</span>${foil ? `<span class="foil-badge">${gold ? "Near perfect" : silver ? "Silver tier" : "Restful"}</span>` : ""}</div>
-          <div class="figure">${hm(r.minutes)}</div>
-          <div class="night-detail">
-            <span>Deep <b>${r.deep ? hm(r.deep) : DASH}</b></span>
-            <span>REM <b>${r.rem ? hm(r.rem) : DASH}</b></span>
-            <span>Bed <b>${esc(r.bed || DASH)}</b></span>
-            <span>Efficiency <b>${has(r.efficiency) ? `${num(r.efficiency)}%` : DASH}</b></span>
-          </div>
+      ${recent.length ? `<div class="nights-list">${recent.map((r) => {
+        const efficiency = has(r.efficiency) ? Number(r.efficiency) : null;
+        return `<div class="night-row">
+          <span class="night-date">${esc(shortDate(r.date))}</span>
+          <span class="night-time">${hm(r.minutes)}</span>
+          <span class="night-eff">${efficiency === null ? DASH : `${num(efficiency)}%`}</span>
+          <span class="night-bar"><i style="width:${efficiency === null ? 0 : clamp(efficiency, 0, 100)}%"></i></span>
         </div>`;
       }).join("")}</div>` : `<p class="muted">No recent nights recorded.</p>`}
       ${spanText ? `<p class="note">Across these nights, sleep ran from ${spanText}.</p>` : ""}

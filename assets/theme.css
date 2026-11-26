@@ -478,14 +478,14 @@ a { color: inherit; }
 
 /* --------------------------------------------------------- sleep/coach -- */
 .stagebar + .legend { margin-bottom: 8px; }
-.night-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 12px; }
-.night-card { border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: grid; gap: 7px; align-content: start; min-width: 0; }
-.night-card.foil { transform: perspective(800px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y)); }
-.night-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.night-card .figure { font-size: 24px; }
-.night-detail { display: grid; gap: 5px; font-size: 12px; color: var(--muted); }
-.night-detail span { display: flex; justify-content: space-between; gap: 8px; }
-.night-detail b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.nights-card .card-head { margin-bottom: 8px; }
+.nights-list { display: grid; gap: 4px; }
+.night-row { display: grid; grid-template-columns: 58px 72px 48px 1fr; gap: 8px; align-items: center; font-size: 12px; }
+.night-date { color: var(--muted); }
+.night-time, .night-eff { font-variant-numeric: tabular-nums; }
+.night-eff { text-align: right; }
+.night-bar { height: 5px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.night-bar i { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
 .deck-section { margin-top: 16px; }
 .deck { position: relative; height: 300px; margin-top: 16px; }
 .deck-card {
@@ -796,6 +796,9 @@ body.stack-mode .footer { display: none; }
   body.stack-mode .section { top: 10px; left: 10px; width: calc(100% - 20px); max-height: calc(100% - 84px); padding: 18px; }
   body.stack-mode .section.stack-proxy { width: min(94%, 360px); max-height: none; }
   body.stack-mode .section.stack-proxy > [data-result-key] { padding: 12px; }
+  body.stack-mode .section.stack-proxy .nights-card .card-head h3 { font-size: 14px; }
+  body.stack-mode .section.stack-proxy .nights-card .night-row { grid-template-columns: 44px 54px 38px 1fr; gap: 5px; font-size: 10px; }
+  body.stack-mode .section.stack-proxy .nights-card .note { display: none; }
   body.stack-mode .hero-card .hero-rings { transform: scale(.85); transform-origin: top center; }
   body.stack-mode .metric-card { min-height: 110px; padding: 18px; }
   body.stack-mode .metric-card .figure { font-size: 28px; }
@@ -814,7 +817,7 @@ body.stack-mode .footer { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; }
-  .metric-card.foil, .night-card.foil { transform: none !important; }
+  .metric-card.foil, .nights-card.foil { transform: none !important; }
   .deck-card.foil { transform: translateX(-50%) translate(var(--x), var(--y)) rotate(var(--r)) !important; }
   .confetti, .firework, .flash, .rays, .balloon, .hype-badge { display: none !important; }
   .foil::before, .foil::after { animation: none !important; }
