@@ -50,6 +50,10 @@ Consumer fitness app: quiet top bar, hero with three rings (Recovery, Sleep, Tra
 
 - Metric cards now carry a compact SVG comparison line (`miniTrend()`) built only from reported daily history (last 10 points), with the user's baseline dashed when measured and a named accessible label. `.metric-card` is a flex column so the chart fills spare space; status keeps the bottom margin when no chart exists. Lock purges source-menu and chrome labels too. Proxies carry `dataset.sectionId` so nav links and `aria-current` still point at their original section.
 
+- Mobile drag now follows the finger: `setDrag()` writes `--drag-x/y/r` and a `following` class (transitions off), `clearDrag()` either springs back or flies the card offscreen before `cycleStack()` 170ms later. Passing 72px on a coarse pointer arms a `swipe-cue` badge and haptic; release commits, short drags reset. `stack-proxy` transform composes stack vars with drag vars.
+
+- Gesture review fixes: viewport no longer steals capture from `.foil` children (avoids stuck 9° hover tilt); fly-out timer is cancelled on restore/new press and guarded against detached cards; `pointercancel` never commits a swipe; cue text tracks direction and is `aria-hidden`, with a CSS specificity fix so it stays absolute; tilt vars are reset on card change/restore and skipped under reduced motion, which also strips drag transforms from proxies.
+
 ## Next steps
 - After a real sync, check the Data sources panel for anything still "not measured".
 - Keep `MEMORY.md` short; condense this again if it grows.

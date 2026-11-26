@@ -15,6 +15,7 @@
   };
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const coarsePointer = () => Boolean(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+  const reduceMotion = () => Boolean(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   const haptic = (pattern) => { if (coarsePointer() && navigator.vibrate) navigator.vibrate(pattern); };
 
   // Sound is synthesised locally: no asset request on a page holding health data.
@@ -73,6 +74,7 @@
   // it came from so switching back to Page mode restores the layout.
   const cardOrigins = new Map();
   const sectionHidden = new Map();
+  let flyTimer = null;
 
   /* ------------------------------------------------------------- helpers -- */
   const DASH = "–";
@@ -925,6 +927,9 @@
     // has not been put back yet, and insertBefore would yank it from its proxy.
     [...cardOrigins.entries()].reverse().forEach(([card, origin]) => {
       card.classList.remove("stack-card");
+      if (flyTimer) { clearTimeout(flyTimer); flyTimer = null; }
+      resetTilt(card);
+      clearDrag(card);
       origin.parent.insertBefore(card, origin.next);
       origin.proxy.remove();
     });
@@ -1070,7 +1075,9 @@
   function stackTo(index) {
     const sections = stackSections();
     if (!sections.length) return;
+    const previous = sections[state.stackIndex];
     state.stackIndex = Math.max(0, Math.min(sections.length - 1, (index + sections.length) % sections.length));
+    if (previous && previous !== sections[state.stackIndex]) resetTilt(previous);
     sections.forEach((section, position) => {
       const distance = (position - state.stackIndex + sections.length) % sections.length;
       const depth = Math.min(distance, 3);
@@ -1147,6 +1154,7 @@
   }
 
   function applyTilt(card, x, y) {
+    if (reduceMotion()) return;
     const tx = clamp(y, -14, 14);
     const ty = clamp(x, -14, 14);
     card.style.setProperty("--tilt-x", `${tx.toFixed(1)}deg`);
@@ -1183,6 +1191,37 @@
     });
   }
 
+  function setDrag(card, dx, dy, armed) {
+    card.style.setProperty("--drag-x", `${clamp(dx * 0.75, -150, 150).toFixed(1)}px`);
+    card.style.setProperty("--drag-y", `${clamp(dy * 0.22, -55, 55).toFixed(1)}px`);
+    card.style.setProperty("--drag-r", `${clamp(dx * 0.07, -16, 16).toFixed(1)}deg`);
+    card.classList.add("following");
+    if (armed) {
+      if (!card.querySelector(".swipe-cue")) {
+        const cue = document.createElement("span");
+        cue.className = "swipe-cue";
+        cue.setAttribute("aria-hidden", "true");
+        card.appendChild(cue);
+      }
+      card.querySelector(".swipe-cue").textContent = dx < 0 ? "Release to move →" : "← Release to move";
+      card.classList.add("swipe-ready");
+    } else {
+      card.classList.remove("swipe-ready");
+      const cue = card.querySelector(".swipe-cue");
+      if (cue) cue.remove();
+    }
+  }
+
+  function clearDrag(card, fly) {
+    if (!card) return;
+    card.classList.remove("following", "swipe-ready");
+    const cue = card.querySelector(".swipe-cue");
+    if (cue) cue.remove();
+    card.style.setProperty("--drag-x", `${fly || 0}px`);
+    card.style.setProperty("--drag-y", "0px");
+    card.style.setProperty("--drag-r", fly ? `${fly < 0 ? -28 : 28}deg` : "0deg");
+  }
+
   function bindDeckDrag() {
     const viewport = $("stackViewport");
     let drag = null;
@@ -1191,28 +1230,54 @@
       if (event.target.closest(".info, a, details, input, select, .stack-controls, .source-picker")) return;
       const card = stackSections()[state.stackIndex];
       if (!card || !card.classList.contains("stack-proxy")) return;
-      drag = { id: event.pointerId, x: event.clientX, y: event.clientY, card, at: performance.now() };
+      if (flyTimer) { clearTimeout(flyTimer); flyTimer = null; }
+      drag = { id: event.pointerId, x: event.clientX, y: event.clientY, card, at: performance.now(), armed: false };
       // Pointerdown on text would otherwise start a desktop text selection.
       event.preventDefault();
       const selection = window.getSelection && window.getSelection();
       if (selection) selection.removeAllRanges();
       document.body.classList.add("deck-dragging");
       if (!state.gyro) { haptic(8); ensureAudio(); playTone(760, 0, 0.04, 0.012); }
-      try { viewport.setPointerCapture(event.pointerId); } catch (error) { /* optional */ }
+      // A foil child already captured the pointer; stealing it would leave
+      // its own hover state stuck at the down-tilt maximum.
+      if (!event.target.closest(".foil")) {
+        try { viewport.setPointerCapture(event.pointerId); } catch (error) { /* optional */ }
+      }
     });
     viewport.addEventListener("pointermove", (event) => {
       if (!drag || drag.id !== event.pointerId || state.gyro) return;
       event.preventDefault();
-      applyTilt(drag.card, (event.clientX - drag.x) / 9, (drag.y - event.clientY) / 9);
+      const dx = event.clientX - drag.x;
+      const dy = event.clientY - drag.y;
+      const armed = coarsePointer() && Math.abs(dx) > 72;
+      if (armed && !drag.armed) haptic(18);
+      drag.armed = armed;
+      drag.lastX = dx;
+      if (!reduceMotion()) {
+        applyTilt(drag.card, dx / 9, -dy / 9);
+        setDrag(drag.card, dx, dy, armed);
+      }
     });
     const end = (event) => {
       document.body.classList.remove("deck-dragging");
       if (drag) {
-        resetTilt(drag.card);
-        const dx = event.clientX - drag.x;
+        const cancelled = event.type === "pointercancel";
+        const dx = (event.clientX ?? drag.x + (drag.lastX || 0)) - drag.x;
         const dt = Math.max(1, performance.now() - drag.at);
-        if (coarsePointer() && Math.abs(dx) > 100 && Math.abs(dx) / dt > 0.45) {
-          cycleStack(dx < 0 ? 1 : -1);
+        const commit = !cancelled && coarsePointer()
+          && (drag.armed || (Math.abs(dx) > 72 && Math.abs(dx) / dt > 0.35));
+        resetTilt(drag.card);
+        if (commit) {
+          clearDrag(drag.card, dx < 0 ? -Math.round(window.innerWidth) : Math.round(window.innerWidth));
+          const flown = drag.card;
+          flyTimer = setTimeout(() => {
+            flyTimer = null;
+            if (!flown.isConnected || !state.stackMode) return;
+            clearDrag(flown);
+            cycleStack(dx < 0 ? 1 : -1);
+          }, 170);
+        } else {
+          clearDrag(drag.card);
         }
       }
       drag = null;
@@ -1222,7 +1287,7 @@
   }
 
   function onDeviceOrientation(event) {
-    if (!state.gyro || !state.stackMode || event.beta == null || event.gamma == null) return;
+    if (!state.gyro || !state.stackMode || reduceMotion() || event.beta == null || event.gamma == null) return;
     const card = stackSections()[state.stackIndex];
     if (card) applyTilt(card, event.gamma / 2.6, (event.beta - 45) / 3.2);
   }

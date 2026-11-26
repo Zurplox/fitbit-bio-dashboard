@@ -644,14 +644,23 @@ body.stack-mode .section {
 body.stack-mode .section:not(.active) > * { visibility: hidden; }
 body.stack-mode .section.active { pointer-events: auto; cursor: pointer; }
 body.stack-mode .section.stack-proxy.active { cursor: grab; }
+body.stack-mode .section.stack-proxy.following { transition: none !important; }
+.swipe-cue {
+  position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
+  padding: 6px 12px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap;
+  color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent);
+  opacity: 0; transition: opacity .12s var(--ease); pointer-events: none;
+}
+body.stack-mode .section.stack-proxy > .swipe-cue { position: absolute; z-index: 2; }
+body.stack-mode .section.stack-proxy.swipe-ready .swipe-cue { opacity: 1; }
 body.deck-dragging, body.deck-dragging * { user-select: none !important; -webkit-user-select: none !important; cursor: grabbing !important; }
 body.stack-mode .section.stack-proxy {
   display: block; top: 50%; left: 50%; width: min(92%, 480px); aspect-ratio: 1.586;
   height: auto; max-height: none; min-height: 0; margin: 0; padding: 0;
   border-radius: 18px; overflow: hidden;
   --tilt-x: 0deg; --tilt-y: 0deg; --shine-x: 50%; --shine-y: 50%; --hue: 0deg;
-  transform: translate(calc(-50% + var(--stack-x, 0px)), calc(-50% + var(--stack-y, 0px)))
-    rotate(var(--stack-r, 0deg)) scale(var(--stack-s, 1))
+  transform: translate(calc(-50% + var(--stack-x, 0px) + var(--drag-x, 0px)), calc(-50% + var(--stack-y, 0px) + var(--drag-y, 0px)))
+    rotate(calc(var(--stack-r, 0deg) + var(--drag-r, 0deg))) scale(var(--stack-s, 1))
     perspective(800px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y));
   touch-action: pan-y;
   transition: transform .38s var(--ease), opacity .28s var(--ease), box-shadow .2s var(--ease);
@@ -809,6 +818,10 @@ body.stack-mode .footer { display: none; }
   .deck-card.foil { transform: translateX(-50%) translate(var(--x), var(--y)) rotate(var(--r)) !important; }
   .confetti, .firework, .flash, .rays, .balloon, .hype-badge { display: none !important; }
   .foil::before, .foil::after { animation: none !important; }
+  body.stack-mode .section.stack-proxy {
+    transform: translate(calc(-50% + var(--stack-x, 0px)), calc(-50% + var(--stack-y, 0px)))
+      rotate(var(--stack-r, 0deg)) scale(var(--stack-s, 1)) !important;
+  }
 }
 
 @media print {
