@@ -47,9 +47,10 @@ A consumer fitness app, not a console or a landing page. Default view is a Pokem
 
 ## Metric vocabulary
 
-- **Recovery** (WHOOP-style %): weighted HRV, resting HR, sleep, breathing against your own baselines.
+- **Recovery** (transparent NOOP-inspired %): robust z-scores of HRV (55%), resting HR (20%), sleep (15%), breathing (5%) and skin-temperature drift (5%) against personal baselines, squashed through a logistic curve. Missing terms drop their weight. Its five drivers stay one card each in Today.
 - **Sleep performance** (WHOOP-style %): hours asleep ÷ tonight's need.
-- **Training load** (Garmin-style): acute:chronic minutes ratio, shown as the ratio itself. The old 0–21 "strain" rescale was dropped because it implied a WHOOP strain score the data cannot produce.
+- **Effort** (transparent NOOP-inspired /100, shown inside the workout card): one-minute HR samples become %HRR zone weights 1–5, TRIMP is summed, then log-mapped against the 7201 ceiling. No proprietary device score is claimed.
+- **Training load** (Garmin-style): acute:chronic minutes ratio, shown as the ratio itself. The old 0-21 "strain" rescale was dropped because it implied a WHOOP strain score the data cannot produce.
 - **Overnight vitals** (Apple Vitals-style table): HRV, resting HR, breathing, SpO₂, skin temperature deviation. Skin temperature has no published threshold here, so it is "Not scored".
 - **Training readiness** (Garmin-style /100): recovery tempered by the load trend.
 - **HRV status** (Garmin-style): 7-night mean ln(RMSSD) vs your 60-night mean ± 0.5 SD (Plews 2013).

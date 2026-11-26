@@ -201,6 +201,22 @@ def _mean(values):
     return round(sum(clean) / len(clean), 1) if clean else None
 
 
+def _spread(series, center, limit=30, minimum=5):
+    """Mean absolute deviation around a personal baseline, from real history.
+
+    NOOP scales its personal z-scores by 1.253 x EWMA absolute deviation; the
+    ratio is applied in `bio_analytics._robust_z`. A short series has no usable
+    personal spread and stays absent rather than scoring against a guess.
+    """
+    if center is None:
+        return None
+    values = [row["value"] for row in series[-limit:] if row.get("value") is not None]
+    if len(values) < minimum:
+        return None
+    deviation = sum(abs(value - center) for value in values) / len(values)
+    return deviation if deviation > 1e-9 else None
+
+
 def build_payload(fetched, dq, demo=False, view="all", gate=True):
     today = fetched["today"]
     need = analytics.sleep_need(
@@ -321,6 +337,11 @@ def build_payload(fetched, dq, demo=False, view="all", gate=True):
         "resp_delta": resp_delta,
         "spo2": spo2_latest["value"] if spo2_latest else None,
         "vo2max": vo2_series[-1]["value"] if vo2_series else None,
+        # Personal spreads make the transparent z-scored recovery possible.
+        "hrv_spread": _spread(hrv_series, hrv_baseline),
+        "rhr_spread": _spread(rhr_series, rhr_baseline),
+        "resp_spread": _spread(resp_series, resp_baseline),
+        "skin_temp_dev": skin_latest["value"] if skin_latest else None,
     }
 
     recovery = analytics.recovery(signals)
@@ -473,6 +494,14 @@ def build_payload(fetched, dq, demo=False, view="all", gate=True):
         "skin_temp": {
             "delta_c": skin_latest["value"] if skin_latest else None,
             "date": skin_latest["date"] if skin_latest else None,
+        },
+        "workout_effort": {
+            "score": analytics.workout_effort(
+                fetched.get("workout_hr") or [],
+                rhr_latest["value"] if rhr_latest else None,
+                (fetched.get("profile") or {}).get("age"),
+            ),
+            "method": "Edwards-style %HRR TRIMP, log-mapped 0-100",
         },
         "recovery": {
             "score": recovery["score"],

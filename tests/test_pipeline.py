@@ -213,6 +213,36 @@ class ScoreTests(unittest.TestCase):
         )
         self.assertGreater(good["score"], bad["score"])
 
+    def test_robust_recovery_needs_a_seeded_hrv_baseline(self):
+        base = {"hrv": 50, "hrv_baseline": 50, "hrv_spread": 5, "rhr": 60,
+                "rhr_baseline": 60, "rhr_spread": 3, "sleep_score": 85}
+        scored = analytics.recovery(base)
+        self.assertTrue(scored["measured"])
+        self.assertEqual(sum(f["weight"] for f in scored["factors"]), 100)
+        self.assertIsNotNone(scored["score"])
+        unseeded = analytics.recovery({k: v for k, v in base.items() if k != "hrv_spread"})
+        self.assertNotIn("skin", [factor["key"] for factor in unseeded["factors"]])
+
+    def test_robust_recovery_responds_to_direction_and_skin(self):
+        base = {"hrv": 50, "hrv_baseline": 50, "hrv_spread": 5, "rhr": 60,
+                "rhr_baseline": 60, "rhr_spread": 3, "sleep_score": 85}
+        good = analytics.recovery(dict(base, hrv=65, rhr=55))
+        bad = analytics.recovery(dict(base, hrv=35, rhr=68))
+        drift = analytics.recovery(dict(base, skin_temp_dev=1.5))
+        self.assertGreater(good["score"], analytics.recovery(base)["score"])
+        self.assertLess(bad["score"], analytics.recovery(base)["score"])
+        self.assertLess(drift["score"], analytics.recovery(base)["score"])
+
+    def test_workout_effort_uses_only_reported_samples(self):
+        samples = [{"bpm": 60 + i} for i in range(10)]
+        self.assertIsNone(analytics.workout_effort(samples, None, 34))
+        self.assertIsNone(analytics.workout_effort([{"bpm": 150}], 60, 34))
+        effort = analytics.workout_effort(samples, 60, 34)
+        self.assertIsNotNone(effort)
+        self.assertGreaterEqual(effort, 0)
+        self.assertLessEqual(effort, 100)
+        self.assertGreater(analytics.workout_effort([{"bpm": 170}] * 10, 60, 34), effort)
+
     def test_readiness_penalises_a_spike(self):
         calm = analytics.readiness(80, 1.0)
         spiked = analytics.readiness(80, 1.8)

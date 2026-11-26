@@ -456,12 +456,112 @@ def training_load(exercise_records, today=None):
 # --------------------------------------------------------------------------
 # Composite scores
 # --------------------------------------------------------------------------
+# Transparent z-score + logistic composite, after NOOP's published approximation
+# (ryanbr/noop, StrandAnalytics/RecoveryScorer.swift). Weights are renormalised
+# over the measured drivers; missing personal spreads drop the term entirely.
+NOOP_WEIGHTS = {"hrv": 0.55, "rhr": 0.20, "sleep": 0.15, "resp": 0.05, "skin": 0.05}
+NOOP_SLEEP_CENTER = 0.85
+NOOP_SLEEP_SCALE = 0.12
+NOOP_SKIN_SCALE_C = 1.0
+NOOP_LOGISTIC_K = 1.6
+NOOP_LOGISTIC_Z0 = -0.20
+
+
+def _robust_z(value, mean, spread):
+    """NOOP's EWMA-spread z: (value - mean) / (1.253 * spread)."""
+    sigma = max(1.253 * spread, 1e-9)
+    return (value - mean) / sigma
+
+
+def _noop_logistic(z):
+    return max(0.0, min(100.0, 100 / (1 + math.exp(-NOOP_LOGISTIC_K * (z - NOOP_LOGISTIC_Z0)))))
+
+
+def _noop_recovery(signals):
+    """HRV-dominant z composite, logistic to 0-100. None when HRV is unseeded."""
+    hrv = signals.get("hrv")
+    hrv_mean = signals.get("hrv_baseline")
+    hrv_spread = signals.get("hrv_spread")
+    if hrv is None or hrv_mean is None or not hrv_spread:
+        return None
+
+    terms = [("hrv", _robust_z(hrv, hrv_mean, hrv_spread), NOOP_WEIGHTS["hrv"])]
+
+    rhr, rhr_mean, rhr_spread = signals.get("rhr"), signals.get("rhr_baseline"), signals.get("rhr_spread")
+    if all(v is not None for v in (rhr, rhr_mean, rhr_spread)) and rhr_spread > 0:
+        terms.append(("rhr", _robust_z(rhr_mean, rhr, rhr_spread), NOOP_WEIGHTS["rhr"]))
+
+    resp, resp_mean, resp_spread = signals.get("resp"), signals.get("resp_baseline"), signals.get("resp_spread")
+    if all(v is not None for v in (resp, resp_mean, resp_spread)) and resp_spread > 0:
+        terms.append(("resp", _robust_z(resp_mean, resp, resp_spread), NOOP_WEIGHTS["resp"]))
+
+    sleep = signals.get("sleep_score")
+    if sleep is not None:
+        terms.append(("sleep", (sleep / 100 - NOOP_SLEEP_CENTER) / NOOP_SLEEP_SCALE, NOOP_WEIGHTS["sleep"]))
+
+    skin = signals.get("skin_temp_dev")
+    if skin is not None:
+        terms.append(("skin", -abs(skin) / NOOP_SKIN_SCALE_C, NOOP_WEIGHTS["skin"]))
+
+    available = sum(w for _, _, w in terms)
+    if available <= 0:
+        return None
+    composite = sum(z * w for _, z, w in terms) / available
+    factors = [
+        {
+            "key": key,
+            "weight": round(100 * w / available),
+            "contribution": round(100 * _noop_logistic(z) * w / available),
+            "read": _factor_read(key, signals),
+        }
+        for key, z, w in terms
+    ]
+    return {"score": round(_noop_logistic(composite)), "factors": factors, "measured": True}
+
+
+def workout_effort(samples, rhr, age=None, min_samples=3):
+    """Edwards-style %HRR TRIMP, log-mapped to 0-100, after NOOP's StrainScorer.
+
+    One-minute samples contribute zone weight 1..5 at 50/60/70/80/90 %HRR;
+    HRmax uses Tanaka (208 - 0.7 x age). Missing RHR or too few samples stay None.
+    """
+    bpms = [row.get("bpm") for row in (samples or []) if row and row.get("bpm") is not None]
+    if rhr is None or len(bpms) < min_samples:
+        return None
+    hrmax = 208 - 0.7 * age if age is not None else 190
+    reserve = hrmax - rhr
+    if reserve <= 0:
+        return None
+    trimp = 0.0
+    for bpm in bpms:
+        pct_hrr = 100 * (bpm - rhr) / reserve
+        if pct_hrr >= 90:
+            weight = 5
+        elif pct_hrr >= 80:
+            weight = 4
+        elif pct_hrr >= 70:
+            weight = 3
+        elif pct_hrr >= 60:
+            weight = 2
+        elif pct_hrr >= 50:
+            weight = 1
+        else:
+            weight = 0
+        trimp += weight
+    return round(max(0.0, min(100.0, 100 * math.log(trimp + 1) / math.log(7201))))
+
+
 def recovery(signals):
     """0-100, from HRV, resting rate, sleep and breathing — each vs the athlete.
 
     Weights are renormalised over the components that were actually measured, so
     a missing breathing reading cannot silently cost ten points.
     """
+    if signals.get("hrv_spread"):
+        scored = _noop_recovery(signals)
+        if scored is not None:
+            return scored
+
     parts = []
 
     hrv_delta = signals.get("hrv_delta_pct")
@@ -512,6 +612,9 @@ def _factor_read(key, signals):
     if key == "resp":
         delta = signals.get("resp_delta")
         return f"{delta:+.1f} brpm vs baseline" if delta is not None else "not measured"
+    if key == "skin":
+        dev = signals.get("skin_temp_dev")
+        return f"{dev:+.1f} °C from your usual" if dev is not None else "not measured"
     return "not measured"
 
 

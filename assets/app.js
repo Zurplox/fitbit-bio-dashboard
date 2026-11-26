@@ -128,7 +128,7 @@
   /* ---------------------------------------------------- plain-English help -- */
   const HELP = {
     scores: "All four scores are calculated here from your own Fitbit measurements by fixed, published rules. They borrow ideas from WHOOP, Apple and Garmin but are not their scores.",
-    recovery: "How ready your body is today, from 0 to 100%. It compares last night's HRV, resting heart rate, sleep and breathing with your own normal. Higher means better recovered.",
+    recovery: "A 0-100 readiness score from last night's HRV, resting heart rate, breathing, sleep and skin temperature. Each reading is turned into a z-score against your own baseline, weighted (HRV 55%, resting HR 20%, sleep 15%, breathing 5%, skin temperature 5%), then mapped through a logistic curve. Missing readings drop their weight instead of being guessed. It is a transparent approximation, not a device's proprietary score.",
     readiness: "Your recovery, adjusted for how quickly your training has been ramping up. A quick answer to: is today a good day to go hard?",
     sleep_perf: "The hours you slept divided by the hours your body needed. 100% means you got all the sleep you needed.",
     load: "Training minutes in the last 7 days compared with your usual week. About 0.8 to 1.3 is a healthy build. Above 1.5 is a sudden jump that raises injury risk.",
@@ -138,6 +138,7 @@
     spo2: "How much oxygen your blood is carrying, measured overnight. 95 to 100% is typical.",
     skin: "How warm your skin was overnight compared with your own usual. It can rise with illness, alcohol, a warm room or the menstrual cycle.",
     stages: "Deep sleep restores the body, REM supports memory and mood, and light sleep makes up the rest. Short wake-ups are normal.",
+    effort: "A 0-100 measure of how hard the workout was on your heart. Each minute of heart rate is placed in a zone of your heart-rate reserve (50/60/70/80/90%), given a weight from 1 to 5, then compressed logarithmically. It uses only the heart-rate samples your device reported and your resting heart rate; it is not Garmin's or WHOOP's score.",
     efficiency: "The share of your time in bed that you were actually asleep.",
     debt: "Sleep you missed compared with your need, added up over the last 14 nights.",
     consistency: "How often you fell asleep within 45 minutes of your usual bedtime. A steadier body clock is linked to better health.",
@@ -428,6 +429,10 @@
       rhr: "Compared with your own 30-day median.",
       sleep: "Measured against tonight's sleep need.",
       resp: "Compared with your own breathing-rate baseline.",
+      skin: "Temperature drift away from your usual overnight baseline.",
+    };
+    const factorLabels = {
+      hrv: "HRV", rhr: "Resting HR", sleep: "Sleep", resp: "Breathing rate", skin: "Skin temp",
     };
     const deckOffsets = [
       { x: -26, y: 16, r: -6 },
@@ -441,7 +446,7 @@
       const points = Number(f.contribution) || 0;
       const score = weight ? Math.max(0, Math.min(100, Math.round(100 * points / weight))) : 0;
       return {
-        key: `factor-${f.key}`, label: labels[f.key] || f.key, help: "factors",
+        key: `factor-${f.key}`, label: factorLabels[f.key] || labels[f.key] || f.key, help: "factors",
         score, read: f.read || "", detail: factorDetail[f.key] || "",
         note: `${Math.round(weight)}% of today's recovery score`,
       };
@@ -1806,6 +1811,8 @@
       latestCard = `<div class="card">
         <div class="card-head"><h3>Latest workout${info("workout")}</h3><span class="faint small">${shortDate(latest.date)} · ${workoutName(latest)}</span></div>
         ${stats}
+        ${data.today && has(data.today.workout_effort && data.today.workout_effort.score)
+          ? `<p class="note">Effort <b>${num(data.today.workout_effort.score)}</b> / 100${info("effort")} · from the reported one-minute heart rate.</p>` : ""}
         ${latest.notes ? `<p class="note">Notes: ${esc(latest.notes)}</p>` : ""}
         ${workoutHrChart(data, zones)}
         ${zoneTable ? `<div class="section-mini">Time in zones</div>${zoneTable}` : ""}

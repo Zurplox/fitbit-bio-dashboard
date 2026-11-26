@@ -56,6 +56,8 @@ Consumer fitness app: quiet top bar, hero with three rings (Recovery, Sleep, Tra
 
 - Recent nights are one `nights-card` in the deck (`data-result-key="recent-nights"`), with all nights as compact rows inside; the old per-night result cards are gone. Tier is taken from the best efficiency. Mobile rows are compacted so all seven fit without scrolling. Deck is now 16 cards instead of 22.
 
+- Research source: `ryanbr/noop` (StrandAnalytics). We implement its published, transparent method independently: robust z-scores (mean + 1.253×MAD spread) weighted HRV .55 / RHR .20 / sleep .15 / resp .05 / skin .05, logistic `100/(1+exp(-1.6(z+0.2)))`; and workout Effort = Edwards-style %HRR zone weights × minutes, log-mapped by ln(7201). No proprietary score or NOOP code is copied. `bio_analytics.recovery()` keeps the legacy linear path when personal spreads are absent; cold-start is honest.
+
 ## Next steps
 - After a real sync, check the Data sources panel for anything still "not measured".
 - Keep `MEMORY.md` short; condense this again if it grows.

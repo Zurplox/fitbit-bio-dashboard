@@ -165,7 +165,8 @@ name and metric counts.
 | Cardio fitness | `daily-vo2-max` | device estimate |
 | Skin temperature | `daily-sleep-temperature-derivations` | nightly deviation from the device's 30-night baseline; hidden when absent |
 | Circadian timing | derived | median onset, spread, alignment |
-| Recovery / readiness / load ratio | derived | thresholds in `bio_policy.py` |
+| Recovery / readiness / load ratio | derived | thresholds in `bio_policy.py`; recovery uses NOOP-style robust z-scores and a logistic map in `bio_analytics.py` |
+| Workout effort / 100 | derived | Edwards-style %HRR TRIMP in `bio_analytics.py`, from reported one-minute HR samples |
 | Correlations | derived | curated pairs, n ≥ 14 and \|r\| ≥ 0.35 |
 | Coaching | derived | one card per domain, each citing its study and its limits |
 
