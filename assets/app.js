@@ -1002,8 +1002,7 @@
     layer.appendChild(toast);
     setTimeout(() => toast.remove(), 3200);
 
-    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) return;
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const cardBox = card.getBoundingClientRect();
     const layerBox = layer.getBoundingClientRect();
     const centerX = cardBox.left + cardBox.width / 2 - layerBox.left;
@@ -1011,29 +1010,36 @@
     const colors = gold ? ["#d4af37", "#f6e27a", "#fff4c2", "#ffdf6e"]
       : ["var(--foil-a)", "var(--foil-b)", "var(--foil-c)", "#ffffff"];
 
+    // One fragment append and one timer per lifetime group: a gold burst used
+    // to schedule 130 individual removals on every revisit.
+    const fragment = document.createDocumentFragment();
+    const groups = [];
+    const group = (nodes, life) => groups.push({ nodes, life });
+
     if (gold) {
       const flash = document.createElement("span");
       flash.className = "flash";
       flash.style.setProperty("--x", `${centerX}px`);
       flash.style.setProperty("--y", `${centerY}px`);
       flash.style.setProperty("--color", colors[1]);
-      layer.appendChild(flash);
-      setTimeout(() => flash.remove(), 1000);
+      fragment.appendChild(flash);
+      group([flash], 1000);
 
       const rays = document.createElement("span");
       rays.className = "rays";
       rays.style.setProperty("--x", `${centerX}px`);
       rays.style.setProperty("--y", `${centerY}px`);
       rays.style.setProperty("--color", colors[1]);
-      layer.appendChild(rays);
-      setTimeout(() => rays.remove(), 1600);
+      fragment.appendChild(rays);
+      group([rays], 1600);
 
       const badge = document.createElement("span");
       badge.className = "hype-badge";
       badge.textContent = "NEAR PERFECT";
-      layer.appendChild(badge);
-      setTimeout(() => badge.remove(), 2600);
+      fragment.appendChild(badge);
+      group([badge], 2600);
 
+      const bursts = [];
       for (let i = 0; i < 7; i += 1) {
         const burst = document.createElement("span");
         burst.className = "firework";
@@ -1042,10 +1048,12 @@
         burst.style.setProperty("--color", colors[i % colors.length]);
         burst.style.setProperty("--ring", `${170 + Math.round(Math.random() * 150)}px`);
         burst.style.setProperty("--delay", `${Math.round(Math.random() * 420)}ms`);
-        layer.appendChild(burst);
-        setTimeout(() => burst.remove(), 2200);
+        fragment.appendChild(burst);
+        bursts.push(burst);
       }
+      group(bursts, 2200);
 
+      const balloons = [];
       for (let i = 0; i < 11; i += 1) {
         const balloon = document.createElement("span");
         balloon.className = "balloon";
@@ -1055,12 +1063,14 @@
         balloon.style.setProperty("--rise", `${Math.round(layerBox.height + 160)}px`);
         balloon.style.setProperty("--delay", `${Math.round(Math.random() * 700)}ms`);
         balloon.style.setProperty("--life", `${3 + Math.random() * 1.4}s`);
-        layer.appendChild(balloon);
-        setTimeout(() => balloon.remove(), 4600);
+        fragment.appendChild(balloon);
+        balloons.push(balloon);
       }
+      group(balloons, 4600);
     }
 
     const pieces = gold ? 110 : 46;
+    const confetti = [];
     for (let i = 0; i < pieces; i += 1) {
       const piece = document.createElement("span");
       piece.className = "confetti";
@@ -1076,9 +1086,13 @@
       piece.style.setProperty("--color", colors[i % colors.length]);
       piece.style.setProperty("--delay", `${Math.round(Math.random() * (gold ? 480 : 260))}ms`);
       piece.style.setProperty("--life", `${2.2 + Math.random() * 0.9}s`);
-      layer.appendChild(piece);
-      setTimeout(() => piece.remove(), 3400);
+      fragment.appendChild(piece);
+      confetti.push(piece);
     }
+    group(confetti, 3400);
+
+    layer.appendChild(fragment);
+    groups.forEach(({ nodes, life }) => setTimeout(() => nodes.forEach((node) => node.remove()), life));
   }
 
   function stackTo(index) {
@@ -1162,7 +1176,7 @@
     }
   }
 
-  function applyTilt(card, x, y) {
+  function applyTilt(card, x, y, foils) {
     if (reduceMotion()) return;
     const tx = clamp(y, -14, 14);
     const ty = clamp(x, -14, 14);
@@ -1172,7 +1186,7 @@
     card.style.setProperty("--shine-y", `${Math.round(50 - tx * 2.6)}%`);
     card.style.setProperty("--hue", `${Math.round(ty * 5)}deg`);
     card.classList.add("charged");
-    card.querySelectorAll(".foil").forEach((foil) => {
+    (foils || card.querySelectorAll(".foil")).forEach((foil) => {
       foil.style.setProperty("--tilt-x", `${tx.toFixed(1)}deg`);
       foil.style.setProperty("--tilt-y", `${ty.toFixed(1)}deg`);
       foil.style.setProperty("--shine-x", `${Math.round(50 + ty * 2.6)}%`);
@@ -1240,7 +1254,8 @@
       const card = stackSections()[state.stackIndex];
       if (!card || !card.classList.contains("stack-proxy")) return;
       if (flyTimer) { clearTimeout(flyTimer); flyTimer = null; }
-      drag = { id: event.pointerId, x: event.clientX, y: event.clientY, card, at: performance.now(), armed: false };
+      drag = { id: event.pointerId, x: event.clientX, y: event.clientY, card,
+        foils: card.querySelectorAll(".foil"), at: performance.now(), armed: false };
       // Pointerdown on text would otherwise start a desktop text selection.
       event.preventDefault();
       const selection = window.getSelection && window.getSelection();
@@ -1263,7 +1278,7 @@
       drag.armed = armed;
       drag.lastX = dx;
       if (!reduceMotion()) {
-        applyTilt(drag.card, dx / 9, -dy / 9);
+        applyTilt(drag.card, dx / 9, -dy / 9, drag.foils);
         setDrag(drag.card, dx, dy, armed);
       }
     });

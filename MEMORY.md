@@ -62,6 +62,8 @@ Consumer fitness app: quiet top bar, hero with three rings (Recovery, Sleep, Tra
 
 - QA fix: `renderActivity()` assumed `training_effect.sessions` was an array; the "other" view ships an integer count when unavailable, so source switching threw and left stale deck DOM. Now normalised with `Array.isArray()`. All four views rebuild their decks correctly.
 
+- Performance QA: DOM 1,243 nodes, DOMContentLoaded 202 ms, vault 512 KB, app.js 115 KB. Optimised celebrations to one DocumentFragment append and one cleanup timer per lifetime group (was ~130 individual timers) and cached `.foil` lists during a drag. Verified 132 particles peak, clean removal back to 1,243 nodes, zero errors.
+
 ## Next steps
 - After a real sync, check the Data sources panel for anything still "not measured".
 - Keep `MEMORY.md` short; condense this again if it grows.
