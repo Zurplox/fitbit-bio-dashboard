@@ -929,8 +929,12 @@
         || (card.dataset.gold === "true" ? "gold" : card.dataset.good === "true" ? "silver" : "");
       const tier = proxy.dataset.tier;
       const score = Number(card.dataset.score);
+      // Factor cards carry no score (their headline is a reading), so a zero
+      // data-score must not mark them as damaged. Only tiered cards are scored.
+      const scoredCard = Boolean(card.dataset.tier) || card.dataset.gold === "true"
+        || card.dataset.good === "true";
       const bad = card.dataset.tone === "bad" || Boolean(card.querySelector(".status.bad"))
-        || (has(score) && score < 50);
+        || (scoredCard && has(score) && score < 50);
       proxy.dataset.state = tier === "gold" ? "gold" : tier === "silver" ? "silver"
         : bad ? "bad" : "plain";
       card.dataset.state = proxy.dataset.state;
@@ -1118,12 +1122,10 @@
       const distance = (position - state.stackIndex + sections.length) % sections.length;
       const depth = Math.min(distance, 3);
       section.classList.toggle("active", distance === 0);
-      section.classList.toggle("next", distance === 1);
-      section.classList.toggle("near", distance > 0 && distance <= 2);
-      section.style.setProperty("--stack-x", `${depth * 10}px`);
-      section.style.setProperty("--stack-y", `${depth * -38}px`);
-      section.style.setProperty("--stack-r", `${depth * 1.2}deg`);
-      section.style.setProperty("--stack-s", String(1 - depth * 0.04));
+      section.style.setProperty("--stack-x", `${depth * 6}px`);
+      section.style.setProperty("--stack-y", `${depth * 6}px`);
+      section.style.setProperty("--stack-r", `${depth * 0.9}deg`);
+      section.style.setProperty("--stack-s", String(1 - depth * 0.01));
       section.style.setProperty("--stack-o", distance <= 3 ? String(1 - depth * 0.14) : "0");
       section.style.setProperty("--stack-z", String(sections.length - depth));
     });
@@ -1166,11 +1168,25 @@
     if (controls) controls.hidden = false;
   }
 
+  // Rotate the deck itself: the front card physically goes to the back (or
+  // the back card to the front). Positions never jump between cards.
+  function rotateStack(card, place) {
+    const viewport = $("stackViewport");
+    if (!card) return;
+    if (place === "back") viewport.appendChild(card);
+    else viewport.insertBefore(card, viewport.firstElementChild);
+    stackTo(0);
+  }
+
   function cycleStack(delta) {
+    const sections = stackSections();
+    const card = delta > 0 ? sections[state.stackIndex]
+      : sections[(state.stackIndex - 1 + sections.length) % sections.length];
     state.navSeq += 1;
     playMove(delta > 0);
     haptic(12);
-    stackTo(state.stackIndex + delta);
+    if (!card) return;
+    rotateStack(card, delta > 0 ? "back" : "front");
   }
 
   function goToSection(id) {
@@ -1180,7 +1196,7 @@
       state.navSeq += 1;
       playMove(index > state.stackIndex);
       haptic(12);
-      stackTo(index);
+      rotateStack(sections[index], "front");
       return;
     }
     // Text-only sections are not deck cards: show them in the scrolling view.

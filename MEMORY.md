@@ -70,6 +70,9 @@ Consumer fitness app: quiet top bar, hero with three rings (Recovery, Sleep, Tra
 
 - Stack preview: `stackTo()` tags depth-1 `.next` and depth-1/2 `.near`; those proxies keep their children visible while deeper ones stay blank, and are fanned upward/right with smaller scale so their top content peeks above the active card instead of appearing suddenly. Navigation/gestures unchanged.
 
+- Deck navigation is now a true rotation: `cycleStack()` moves the front card to the back (`appendChild`) or the back card to the front, then `stackTo(0)`; `goToSection()` moves a chosen card to the front. DOM order no longer shuffles. Compact stacking restored (6px offsets), no fanned peek.
+- Fixed two QA regressions: factor cards with `data-score=0` were being styled as damaged (bad state now requires a real tier or band), and the first rotation attempt moved the *next* card instead of the front one.
+
 ## Next steps
 - After a real sync, check the Data sources panel for anything still "not measured".
 - Keep `MEMORY.md` short; condense this again if it grows.
