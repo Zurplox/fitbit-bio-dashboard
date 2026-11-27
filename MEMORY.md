@@ -66,6 +66,8 @@ Consumer fitness app: quiet top bar, hero with three rings (Recovery, Sleep, Tra
 
 - Today cards no longer display contribution shares as scores. Driver cards headline the reported reading via `figureFromRead()` ("+10%", "7h 56m", "-0.2 °C") with contribution only in the note; load shows ACWR, illness shows "Clear", debt shows "None". Only real-score cards (sleep score, readiness, SpO₂ percentage) show a % headline and foil tier; progress bars only on scored cards.
 
+- Second research reference: `adityaongit/pulse` (which credits NOOP). Adopted only its zone-typical-range method: on the workout zone table, a shaded band marks the 25th–75th percentile of zone shares from at least three comparable sessions in the last 30 days, with a current-share tick. No Pulse code copied. Verified against demo fitbit view (walking: light 26.8–27.1%, moderate 48.3–48.7%).
+
 ## Next steps
 - After a real sync, check the Data sources panel for anything still "not measured".
 - Keep `MEMORY.md` short; condense this again if it grows.

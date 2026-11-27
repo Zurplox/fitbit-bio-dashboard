@@ -152,6 +152,7 @@
     active: "Minutes you moved briskly enough to raise your heart rate. Health guidelines suggest at least 150 a week.",
     workout: "Every measurement the API reported for your most recent session, plus how it compares with your recent sessions of the same kind. Pace and speed are only shown when measured or calculable from distance and time.",
     workout_hr: "One-minute average heart rate during the workout. Each stretch is coloured by the zone your device reported: grey below light, grey-blue light, blue moderate, amber vigorous, red peak. Hover or drag over the line to read any minute; arrow keys work too. If the device sent no samples or no zone limits, the chart says so rather than guessing.",
+    zone_typical: "The shaded band on a zone row is the middle half of that zone's share across your comparable workouts from the last 30 days. Fewer than three sessions means no band is drawn.",
     te: "How hard your workout was for you, Garmin-style. Aerobic counts steady effort (moderate and vigorous heart-rate zones; easy light-zone time doesn't count, as with Fitbit's Active Zone Minutes); anaerobic counts all-out bursts (peak zone). 5.0 means as hard as your toughest recent sessions.",
     heatmap: "Each square is one day. Darker squares mean more training minutes.",
     factors: "Each card shows the reading your device reported and, underneath, how much that driver counts toward today's recovery score. The share is not a sleep or HRV score.",
@@ -1658,6 +1659,32 @@
   }
 
   /* ------------------------------------------------------------ activity -- */
+  // The middle half of recent zone shares, from reported zone minutes only.
+  // Pulse's zone-typical-range method: no band until three comparable sessions.
+  function typicalZoneShares(sessions, latest) {
+    const cutoff = new Date(new Date(`${latest.date}T00:00:00Z`).getTime() - 30 * 86400000)
+      .toISOString().slice(0, 10);
+    const peers = sessions.filter((row) => row.date < latest.date && row.date >= cutoff
+      && (!latest.type || row.type === latest.type) && row.zones
+      && Object.values(row.zones).some((v) => has(v) && v > 0));
+    if (peers.length < 3) return null;
+    const quantile = (values, p) => {
+      const at = (values.length - 1) * p;
+      const lo = Math.floor(at);
+      const hi = Math.ceil(at);
+      return values[lo] + (values[hi] - values[lo]) * (at - lo);
+    };
+    const out = {};
+    ["light", "moderate", "vigorous", "peak"].forEach((key) => {
+      const shares = peers.map((row) => {
+        const total = Object.values(row.zones).reduce((sum, v) => sum + (has(v) ? v : 0), 0);
+        return total > 0 ? 100 * (row.zones[key] || 0) / total : null;
+      }).filter(has).sort((a, b) => a - b);
+      if (shares.length >= 3) out[key] = [quantile(shares, 0.25), quantile(shares, 0.75)];
+    });
+    return Object.keys(out).length ? out : null;
+  }
+
   function renderActivity(data) {
     const t = data.today || {};
     const load = data.load || {};
@@ -1805,11 +1832,18 @@
 
       const zones = latest.zones;
       const zoneTotal = zones ? Object.values(zones).reduce((sum, value) => sum + (value || 0), 0) : 0;
+      const typical = zones && zoneTotal ? typicalZoneShares(dated.slice(0, -1), latest) : null;
       const zoneTable = zones && zoneTotal ? `<div class="data-table">
-        <div class="data-tr zone-tr data-th"><span>Heart-rate zone</span><span>Time</span><span>Share</span></div>
-        ${[["light", "Light"], ["moderate", "Moderate"], ["vigorous", "Vigorous"], ["peak", "Peak"]].map(([key, label]) => `<div class="data-tr zone-tr">
-          <span>${label}</span><b>${hm(zones[key] || 0)}</b><span>${num(Math.round(100 * (zones[key] || 0) / zoneTotal))}%</span>
-        </div>`).join("")}
+        <div class="data-tr zone-tr data-th"><span>Heart-rate zone</span><span>Time</span><span>Share${typical ? `<i class="zone-band-key" aria-hidden="true"></i>` : ""}</span></div>
+        ${[["light", "Light"], ["moderate", "Moderate"], ["vigorous", "Vigorous"], ["peak", "Peak"]].map(([key, label]) => {
+          const share = 100 * (zones[key] || 0) / zoneTotal;
+          const band = typical && typical[key];
+          return `<div class="data-tr zone-tr">
+            <span>${label}</span><b>${hm(zones[key] || 0)}</b>
+            <span class="zone-share">${num(Math.round(share))}%${band
+              ? `<i class="zone-band" style="--lo:${band[0].toFixed(1)}%;--hi:${band[1].toFixed(1)}%;--cur:${share.toFixed(1)}%" aria-hidden="true"></i>` : ""}</span>
+          </div>`;
+        }).join("")}
       </div>` : "";
 
       const teNow = teByDate[latest.date];
@@ -1849,7 +1883,7 @@
           ? `<p class="note">Effort <b>${num(data.today.workout_effort.score)}</b> / 100${info("effort")} · from the reported one-minute heart rate.</p>` : ""}
         ${latest.notes ? `<p class="note">Notes: ${esc(latest.notes)}</p>` : ""}
         ${workoutHrChart(data, zones)}
-        ${zoneTable ? `<div class="section-mini">Time in zones</div>${zoneTable}` : ""}
+        ${zoneTable ? `<div class="section-mini">Time in zones${typical ? info("zone_typical") : ""}</div>${zoneTable}` : ""}
         ${teBlock ? `<div class="section-mini">Training effect</div>${teBlock}` : ""}
         ${compareRows.length ? `<div class="section-mini">Against ${peerLabel}</div>
           <div class="data-table">
