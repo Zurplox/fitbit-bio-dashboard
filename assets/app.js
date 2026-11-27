@@ -154,7 +154,7 @@
     workout_hr: "One-minute average heart rate during the workout. Each stretch is coloured by the zone your device reported: grey below light, grey-blue light, blue moderate, amber vigorous, red peak. Hover or drag over the line to read any minute; arrow keys work too. If the device sent no samples or no zone limits, the chart says so rather than guessing.",
     te: "How hard your workout was for you, Garmin-style. Aerobic counts steady effort (moderate and vigorous heart-rate zones; easy light-zone time doesn't count, as with Fitbit's Active Zone Minutes); anaerobic counts all-out bursts (peak zone). 5.0 means as hard as your toughest recent sessions.",
     heatmap: "Each square is one day. Darker squares mean more training minutes.",
-    factors: "How each signal scored against your own normal, and how much it counts toward your recovery score.",
+    factors: "Each card shows the reading your device reported and, underneath, how much that driver counts toward today's recovery score. The share is not a sleep or HRV score.",
     patterns: "A number from −1 to +1 showing how closely two of your measures move together. Closer to ±1 is stronger. It shows a link, not a cause.",
   };
 
@@ -445,47 +445,58 @@
       { x: 20, y: 12, r: 4.5 },
     ];
 
+    // The headline of every Today card is a reported reading or a real score,
+    // never a contribution share dressed up as a percentage score.
+    const figureFromRead = (read) => {
+      const match = String(read || "").match(/^(.+?)\s+(?:vs|against|from)\b/i);
+      return match ? match[1].trim() : String(read || "").trim();
+    };
     const deckItems = factors.map((f) => {
       const weight = Number(f.weight) || 0;
-      const points = Number(f.contribution) || 0;
-      const score = weight ? Math.max(0, Math.min(100, Math.round(100 * points / weight))) : 0;
       return {
         key: `factor-${f.key}`, label: factorLabels[f.key] || labels[f.key] || f.key, help: "factors",
-        score, read: f.read || "", detail: factorDetail[f.key] || "",
+        figure: figureFromRead(f.read), unit: "", tier: "", score: 0,
+        read: f.read || "", detail: factorDetail[f.key] || "",
         note: `${Math.round(weight)}% of today's recovery score`,
       };
     });
 
     if (perf !== null) deckItems.push({
       key: "sleep-performance", label: "Sleep score", help: "sleep_perf",
-      score: Math.round(perf), read: `${hm(sleep.minutes)} of ${hm(sleep.need_minutes)} needed`,
+      figure: String(Math.round(perf)), unit: "%", score: Math.round(perf), tier: tierOf(perf),
+      read: `${hm(sleep.minutes)} of ${hm(sleep.need_minutes)} needed`,
       detail: "Duration against need, efficiency and stage balance.", note: "Sleep score",
     });
     if (has(readiness.score)) deckItems.push({
       key: "readiness", label: "Training readiness", help: "readiness",
-      score: Math.round(readiness.score), read: bandLabel(readiness.band),
+      figure: String(Math.round(readiness.score)), unit: "%", score: Math.round(readiness.score),
+      tier: tierOf(readiness.score), read: bandLabel(readiness.band),
       detail: "Recovery tempered by the load trend.", note: "Today's readiness",
     });
     if (has(load.acwr)) deckItems.push({
       key: "load", label: "Training load", help: "load",
-      score: tone(load.acwr_band) === "good" ? 100 : 60,
+      figure: load.acwr.toFixed(2), unit: "", score: 0,
+      tier: tone(load.acwr_band) === "good" ? "silver" : "",
       read: `${load.acwr.toFixed(2)} · ${bandLabel(load.acwr_band)}`,
       detail: "This week's minutes against your usual week.", note: "Acute : chronic",
     });
     if (has(today.spo2 && today.spo2.pct)) deckItems.push({
       key: "spo2", label: "Blood oxygen", help: "spo2",
-      score: today.spo2.pct >= 97 ? 100 : today.spo2.pct >= 95 ? 82 : 60,
+      figure: num(today.spo2.pct, 1), unit: "%", score: 0,
+      tier: tone(today.spo2.band) === "good" ? "silver" : "",
       read: `${num(today.spo2.pct, 1)}% overnight`,
       detail: "Nightly average oxygen saturation.", note: "Measured overnight",
     });
     if (has(sleep.debt_minutes) && sleep.debt_minutes === 0) deckItems.push({
       key: "sleep-debt", label: "Sleep debt", help: "debt",
-      score: 100, read: "None", detail: "No accumulated need across 14 nights.", note: "Sleep need",
+      figure: "None", unit: "", score: 0, tier: "silver",
+      read: "None", detail: "No accumulated need across 14 nights.", note: "Sleep need",
     });
     const illness = data.clinical && data.clinical.illness;
     if (illness && illness.level === "none") deckItems.push({
       key: "illness", label: "Illness watch", help: "recovery",
-      score: 100, read: illness.headline, detail: "No early-illness pattern in the measured signals.", note: "Measured signals",
+      figure: "Clear", unit: "", score: 0, tier: "silver",
+      read: illness.headline, detail: "No early-illness pattern in the measured signals.", note: "Measured signals",
     });
 
     const deck = deckItems.length ? `<div class="deck-section">
@@ -493,10 +504,11 @@
       <div class="deck" id="factorDeck" role="list" aria-label="Today's measurements">
         ${deckItems.map((item, index) => {
           const score = Math.max(0, Math.min(100, Number(item.score) || 0));
-          const foil = score >= 80;
-          const gold = score >= 92;
-          const silver = foil && !gold;
-          const tier = gold ? "gold" : silver ? "silver" : "none";
+          const tier = item.tier || "";
+          const gold = tier === "gold";
+          const silver = tier === "silver";
+          const foil = gold || silver;
+          const scored = item.unit === "%";
           const offset = deckOffsets[index % deckOffsets.length];
           return `<button class="deck-card${foil ? " foil" : ""}${gold ? " gold" : ""}${silver ? " silver" : ""}" type="button" role="listitem" data-index="${index}"
             data-foil="${foil}" data-good="${foil}" data-gold="${gold}" data-tier="${tier}" data-score="${score}"
@@ -505,14 +517,14 @@
             aria-label="${esc(item.label)}: ${esc(item.read)}">
             <span class="deck-top">
               <span class="deck-num">${String(index + 1).padStart(2, "0")} / ${String(deckItems.length).padStart(2, "0")}</span>
-              <span class="deck-score">${score}<small>%</small></span>
+              <span class="deck-score${scored ? "" : " text"}">${esc(item.figure)}${scored ? `<small>%</small>` : ""}</span>
             </span>
-            ${foil ? `<span class="foil-badge">${gold ? "Near perfect" : "Silver tier"}</span>` : ""}
+            ${foil && scored ? `<span class="foil-badge">${gold ? "Near perfect" : "Silver tier"}</span>` : ""}
             <span class="deck-label">${esc(item.label)}</span>
             <span class="deck-weight">${esc(item.note)}</span>
             <span class="deck-read">${esc(item.read)}</span>
             <span class="deck-detail">${esc(item.detail)}</span>
-            <span class="progress"><i style="width:${score}%"></i></span>
+            ${scored ? `<span class="progress"><i style="width:${score}%"></i></span>` : ""}
           </button>`;
         }).join("")}
       </div>

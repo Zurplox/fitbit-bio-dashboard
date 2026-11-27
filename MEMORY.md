@@ -64,6 +64,8 @@ Consumer fitness app: quiet top bar, hero with three rings (Recovery, Sleep, Tra
 
 - Performance QA: DOM 1,243 nodes, DOMContentLoaded 202 ms, vault 512 KB, app.js 115 KB. Optimised celebrations to one DocumentFragment append and one cleanup timer per lifetime group (was ~130 individual timers) and cached `.foil` lists during a drag. Verified 132 particles peak, clean removal back to 1,243 nodes, zero errors.
 
+- Today cards no longer display contribution shares as scores. Driver cards headline the reported reading via `figureFromRead()` ("+10%", "7h 56m", "-0.2 °C") with contribution only in the note; load shows ACWR, illness shows "Clear", debt shows "None". Only real-score cards (sleep score, readiness, SpO₂ percentage) show a % headline and foil tier; progress bars only on scored cards.
+
 ## Next steps
 - After a real sync, check the Data sources panel for anything still "not measured".
 - Keep `MEMORY.md` short; condense this again if it grows.

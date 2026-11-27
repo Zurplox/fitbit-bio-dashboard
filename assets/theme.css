@@ -508,6 +508,7 @@ a { color: inherit; }
 .deck-num { font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; }
 .deck-score { font-size: 30px; font-weight: 600; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
 .deck-score small { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 2px; }
+.deck-score.text { font-size: 21px; letter-spacing: -0.02em; white-space: nowrap; }
 .deck-label { font-size: 24px; font-weight: 600; letter-spacing: -0.03em; }
 .deck-weight { font-size: 12px; color: var(--muted); }
 .deck-read { font-size: 15px; color: var(--muted); margin-top: 6px; }
