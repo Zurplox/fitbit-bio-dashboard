@@ -68,6 +68,8 @@ Consumer fitness app: quiet top bar, hero with three rings (Recovery, Sleep, Tra
 
 - Second research reference: `adityaongit/pulse` (which credits NOOP). Adopted only its zone-typical-range method: on the workout zone table, a shaded band marks the 25th–75th percentile of zone shares from at least three comparable sessions in the last 30 days, with a current-share tick. No Pulse code copied. Verified against demo fitbit view (walking: light 26.8–27.1%, moderate 48.3–48.7%).
 
+- Stack preview: `stackTo()` tags depth-1 `.next` and depth-1/2 `.near`; those proxies keep their children visible while deeper ones stay blank, and are fanned upward/right with smaller scale so their top content peeks above the active card instead of appearing suddenly. Navigation/gestures unchanged.
+
 ## Next steps
 - After a real sync, check the Data sources panel for anything still "not measured".
 - Keep `MEMORY.md` short; condense this again if it grows.

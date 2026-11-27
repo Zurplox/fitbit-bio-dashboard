@@ -1118,10 +1118,12 @@
       const distance = (position - state.stackIndex + sections.length) % sections.length;
       const depth = Math.min(distance, 3);
       section.classList.toggle("active", distance === 0);
-      section.style.setProperty("--stack-x", `${depth * 6}px`);
-      section.style.setProperty("--stack-y", `${depth * 6}px`);
-      section.style.setProperty("--stack-r", `${depth * 0.9}deg`);
-      section.style.setProperty("--stack-s", String(1 - depth * 0.01));
+      section.classList.toggle("next", distance === 1);
+      section.classList.toggle("near", distance > 0 && distance <= 2);
+      section.style.setProperty("--stack-x", `${depth * 10}px`);
+      section.style.setProperty("--stack-y", `${depth * -38}px`);
+      section.style.setProperty("--stack-r", `${depth * 1.2}deg`);
+      section.style.setProperty("--stack-s", String(1 - depth * 0.04));
       section.style.setProperty("--stack-o", distance <= 3 ? String(1 - depth * 0.14) : "0");
       section.style.setProperty("--stack-z", String(sections.length - depth));
     });

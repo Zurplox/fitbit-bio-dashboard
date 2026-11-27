@@ -648,6 +648,9 @@ body.stack-mode .section {
   transition: transform .38s var(--ease), opacity .28s var(--ease);
 }
 body.stack-mode .section:not(.active) > * { visibility: hidden; }
+/* The next cards keep their faces visible: their top edges peek above the
+   active card so the wording is already there before the card comes forward. */
+body.stack-mode .section.stack-proxy.near > * { visibility: visible; }
 body.stack-mode .section.active { pointer-events: auto; cursor: pointer; }
 body.stack-mode .section.stack-proxy.active { cursor: grab; }
 body.stack-mode .section.stack-proxy.following { transition: none !important; }
